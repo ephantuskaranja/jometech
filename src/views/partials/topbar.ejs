@@ -1,0 +1,36 @@
+<header class="jt-topbar">
+  <button class="btn jt-icon-btn d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open menu">
+    <i class="bi bi-list"></i>
+  </button>
+
+  <%# Global search: the box is in place now; results arrive with the customers & vehicles module. %>
+  <form class="jt-search" role="search" id="global-search-form">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input class="form-control" type="search" name="q" id="global-search" autocomplete="off"
+           placeholder="Search reg no., chassis, phone, job no. or customer" aria-label="Search">
+    <kbd class="d-none d-md-inline">/</kbd>
+  </form>
+
+  <div class="jt-topbar-end">
+    <span class="jt-site-pill" title="Current site">
+      <span class="jt-dot"></span><span class="d-none d-md-inline"><%= site.name %></span>
+    </span>
+
+    <div class="dropdown">
+      <button class="btn jt-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Change theme" title="Theme">
+        <i class="bi bi-circle-half" data-theme-icon></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end jt-theme-menu">
+        <li><h6 class="dropdown-header">Theme</h6></li>
+        <li><button class="dropdown-item" type="button" data-theme-value="light"><i class="bi bi-sun"></i>Light<i class="bi bi-check2 jt-check"></i></button></li>
+        <li><button class="dropdown-item" type="button" data-theme-value="dark"><i class="bi bi-moon-stars"></i>Dark<i class="bi bi-check2 jt-check"></i></button></li>
+        <li><button class="dropdown-item" type="button" data-theme-value="system"><i class="bi bi-circle-half"></i>Match device<i class="bi bi-check2 jt-check"></i></button></li>
+      </ul>
+    </div>
+
+    <div class="jt-me">
+      <span class="jt-avatar"><%= user.initials %></span>
+      <span class="jt-me-text d-none d-md-block"><%= user.name %><small><%= user.role %></small></span>
+    </div>
+  </div>
+</header>

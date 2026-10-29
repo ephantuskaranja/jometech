@@ -1,0 +1,269 @@
+/*
+  Jome-Tech styles.
+  1. Theme tokens: Bootstrap's own CSS variables are overridden so every
+     Bootstrap component picks up the Jome-Tech look in light and dark.
+  2. Bootstrap component tweaks (buttons, forms, cards, dropdowns).
+  3. App shell: sidebar, top bar, content area.
+  4. Shared pieces: page header, KPI tile, empty state, plate, "auto" tag.
+  Prefix for our own classes: jt-
+*/
+
+/* ---------- 1. Theme tokens ---------- */
+:root,
+[data-bs-theme="light"] {
+  --jt-surface: #ffffff;
+  --jt-primary-hover: #1b3374;
+  --jt-on-primary: #ffffff;
+  --jt-brand: #e2580e;
+  --jt-side-bg: #131922;
+  --jt-side-ink: #c5cdd8;
+  --jt-side-ink-2: #808b9b;
+  --jt-side-hover: #1b2230;
+  --jt-side-active: #222b3a;
+  --jt-side-line: #222a36;
+  --jt-plate-bg: #f5c518;
+  --jt-plate-ink: #111111;
+  --jt-shadow: 0 1px 2px rgb(16 24 40 / .05), 0 1px 3px rgb(16 24 40 / .06);
+
+  --bs-font-sans-serif: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --bs-font-monospace: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --jt-font-display: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --bs-body-font-size: .9375rem;
+  --bs-border-radius: .625rem;
+  --bs-border-radius-sm: .5rem;
+  --bs-border-radius-lg: .75rem;
+
+  --bs-body-bg: #f4f5f7;
+  --bs-body-bg-rgb: 244, 245, 247;
+  --bs-body-color: #141a22;
+  --bs-body-color-rgb: 20, 26, 34;
+  --bs-emphasis-color: #0b0f14;
+  --bs-secondary-color: #4a5563;
+  --bs-tertiary-color: #7a8494;
+  --bs-secondary-bg: #e9ecf0;
+  --bs-tertiary-bg: #f0f2f5;
+  --bs-border-color: #e2e5ea;
+  --bs-border-color-translucent: rgb(16 24 40 / .1);
+
+  --bs-primary: #23408e;
+  --bs-primary-rgb: 35, 64, 142;
+  --bs-primary-bg-subtle: #e8edf8;
+  --bs-primary-border-subtle: #c3cfee;
+  --bs-primary-text-emphasis: #23408e;
+  --bs-link-color: #23408e;
+  --bs-link-color-rgb: 35, 64, 142;
+  --bs-link-hover-color: #1b3374;
+  --bs-link-hover-color-rgb: 27, 51, 116;
+  --bs-focus-ring-color: rgb(35 64 142 / .25);
+
+  --bs-success: #157f4a;
+  --bs-success-rgb: 21, 127, 74;
+  --bs-success-bg-subtle: #e2f3e9;
+  --bs-success-text-emphasis: #116a3d;
+  --bs-warning: #9a5800;
+  --bs-warning-rgb: 154, 88, 0;
+  --bs-warning-bg-subtle: #fcf0da;
+  --bs-warning-text-emphasis: #8a4f00;
+  --bs-danger: #b42318;
+  --bs-danger-rgb: 180, 35, 24;
+  --bs-danger-bg-subtle: #fce7e5;
+  --bs-danger-text-emphasis: #9b1e14;
+}
+
+[data-bs-theme="dark"] {
+  --jt-surface: #151a21;
+  --jt-primary-hover: #a3bcf5;
+  --jt-on-primary: #0e1217;
+  --jt-brand: #f07a3a;
+  --jt-shadow: 0 1px 2px rgb(0 0 0 / .4);
+  /* --jt-side-* are not redefined: the sidebar is dark in both themes. */
+
+  --bs-body-bg: #0e1217;
+  --bs-body-bg-rgb: 14, 18, 23;
+  --bs-body-color: #e8ecf1;
+  --bs-body-color-rgb: 232, 236, 241;
+  --bs-emphasis-color: #ffffff;
+  --bs-secondary-color: #a9b3c1;
+  --bs-tertiary-color: #7c8696;
+  --bs-secondary-bg: #222933;
+  --bs-tertiary-bg: #1b212a;
+  --bs-border-color: #262e39;
+  --bs-border-color-translucent: rgb(255 255 255 / .08);
+
+  --bs-primary: #86a5f0;
+  --bs-primary-rgb: 134, 165, 240;
+  --bs-primary-bg-subtle: #1c2740;
+  --bs-primary-border-subtle: #2c3d63;
+  --bs-primary-text-emphasis: #a3bcf5;
+  --bs-link-color: #86a5f0;
+  --bs-link-color-rgb: 134, 165, 240;
+  --bs-link-hover-color: #a3bcf5;
+  --bs-link-hover-color-rgb: 163, 188, 245;
+  --bs-focus-ring-color: rgb(134 165 240 / .3);
+
+  --bs-success: #4cc38a;
+  --bs-success-rgb: 76, 195, 138;
+  --bs-success-bg-subtle: #12291d;
+  --bs-success-text-emphasis: #6fd3a2;
+  --bs-warning: #e9a23b;
+  --bs-warning-rgb: 233, 162, 59;
+  --bs-warning-bg-subtle: #2b2112;
+  --bs-warning-text-emphasis: #f0b65f;
+  --bs-danger: #f07167;
+  --bs-danger-rgb: 240, 113, 103;
+  --bs-danger-bg-subtle: #2e1716;
+  --bs-danger-text-emphasis: #f48f87;
+}
+
+/* ---------- 2. Bootstrap component tweaks ---------- */
+body { -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 { font-family: var(--jt-font-display); letter-spacing: -.01em; text-wrap: balance; }
+h1, .h1 { font-size: 1.75rem; font-weight: 600; }
+.h6, h6 { font-weight: 600; }
+.font-monospace, code, kbd { font-family: var(--bs-font-monospace); }
+.tabular, td, th { font-variant-numeric: tabular-nums; }
+
+.btn { --bs-btn-font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; }
+.btn-primary {
+  --bs-btn-color: var(--jt-on-primary);
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-color: var(--jt-on-primary);
+  --bs-btn-hover-bg: var(--jt-primary-hover);
+  --bs-btn-hover-border-color: var(--jt-primary-hover);
+  --bs-btn-active-color: var(--jt-on-primary);
+  --bs-btn-active-bg: var(--jt-primary-hover);
+  --bs-btn-active-border-color: var(--jt-primary-hover);
+  --bs-btn-disabled-color: var(--jt-on-primary);
+  --bs-btn-disabled-bg: var(--bs-primary);
+  --bs-btn-disabled-border-color: var(--bs-primary);
+  --bs-btn-focus-shadow-rgb: var(--bs-primary-rgb);
+}
+.btn-outline-secondary {
+  --bs-btn-color: var(--bs-body-color);
+  --bs-btn-bg: var(--jt-surface);
+  --bs-btn-border-color: var(--bs-border-color);
+  --bs-btn-hover-color: var(--bs-body-color);
+  --bs-btn-hover-bg: var(--bs-tertiary-bg);
+  --bs-btn-hover-border-color: var(--bs-tertiary-color);
+  --bs-btn-active-color: var(--bs-body-color);
+  --bs-btn-active-bg: var(--bs-secondary-bg);
+  --bs-btn-active-border-color: var(--bs-tertiary-color);
+  --bs-btn-disabled-color: var(--bs-secondary-color);
+  --bs-btn-disabled-bg: var(--jt-surface);
+  --bs-btn-disabled-border-color: var(--bs-border-color);
+}
+.btn-lg { --bs-btn-padding-y: .7rem; --bs-btn-font-size: 1rem; }
+
+.form-control, .form-select { border-color: var(--bs-border-color); background-color: var(--jt-surface); min-height: 2.75rem; }
+.form-control:focus, .form-select:focus { border-color: var(--bs-primary); box-shadow: 0 0 0 .25rem var(--bs-focus-ring-color); background-color: var(--jt-surface); }
+.form-label { font-size: .8125rem; font-weight: 600; color: var(--bs-secondary-color); }
+
+.card { --bs-card-bg: var(--jt-surface); --bs-card-border-color: var(--bs-border-color); --bs-card-cap-bg: transparent; --bs-card-cap-padding-y: 1rem; --bs-card-cap-padding-x: 1.125rem; box-shadow: var(--jt-shadow); }
+.list-group { --bs-list-group-bg: transparent; --bs-list-group-border-color: var(--bs-border-color); }
+
+.dropdown-menu { --bs-dropdown-bg: var(--jt-surface); --bs-dropdown-border-color: var(--bs-border-color); --bs-dropdown-link-active-bg: var(--bs-primary-bg-subtle); --bs-dropdown-link-active-color: var(--bs-primary-text-emphasis); --bs-dropdown-header-color: var(--bs-tertiary-color); box-shadow: 0 12px 32px -8px rgb(16 24 40 / .22); padding: .375rem; }
+.dropdown-item { border-radius: .4375rem; display: flex; align-items: center; gap: .625rem; padding-block: .5rem; }
+.dropdown-header { font-size: .6875rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+
+/* ---------- 3. App shell ---------- */
+.jt-skip { position: absolute; z-index: 1100; left: 1rem; top: 1rem; background: var(--jt-surface); padding: .5rem 1rem; border-radius: var(--bs-border-radius); }
+
+.jt-shell { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100vh; }
+.jt-main { min-width: 0; display: flex; flex-direction: column; }
+
+/* Sidebar: the outer <aside> is the grid column; the inner panel is Bootstrap's offcanvas. */
+.jt-side { display: contents; }
+.jt-side-panel {
+  --bs-offcanvas-bg: var(--jt-side-bg);
+  --bs-offcanvas-width: 272px;
+  color: var(--jt-side-ink);
+  display: flex; flex-direction: column;
+  padding: 1.125rem .75rem 1rem;
+  overflow-y: auto;
+}
+@media (min-width: 992px) {
+  .jt-shell { grid-template-columns: 248px minmax(0, 1fr); }
+  .jt-side { display: block; background: var(--jt-side-bg); }
+  .jt-side-panel { position: sticky; top: 0; height: 100vh; }
+}
+
+.jt-brand { display: flex; align-items: center; gap: .625rem; padding: .25rem .5rem 1.25rem; }
+.jt-brand-mark { width: 2rem; height: 2rem; border-radius: .5rem; background: var(--jt-brand); color: #fff; display: grid; place-items: center; font-family: var(--jt-font-display); font-weight: 700; font-size: .875rem; flex: none; }
+.jt-brand-name { display: block; font-family: var(--jt-font-display); font-weight: 700; color: #fff; font-size: 1.02rem; line-height: 1.1; }
+.jt-brand-sub { display: block; font-size: .72rem; color: var(--jt-side-ink-2); }
+
+.jt-nav-group { margin-top: .875rem; }
+.jt-nav-label { font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--jt-side-ink-2); padding: 0 .625rem .375rem; font-weight: 600; }
+.jt-nav-link { position: relative; display: flex; align-items: center; gap: .7rem; padding: .5rem .625rem; border-radius: .4375rem; color: var(--jt-side-ink); text-decoration: none; font-size: .875rem; }
+.jt-nav-link .bi { font-size: 1.05rem; line-height: 1; }
+a.jt-nav-link:hover { background: var(--jt-side-hover); color: #fff; }
+.jt-nav-link.active { background: var(--jt-side-active); color: #fff; }
+.jt-nav-link.active::before { content: ""; position: absolute; left: -.75rem; top: .5rem; bottom: .5rem; width: 3px; border-radius: 0 3px 3px 0; background: var(--jt-brand); }
+.jt-nav-link.is-soon { color: var(--jt-side-ink-2); cursor: default; }
+.jt-soon { margin-left: auto; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--jt-side-line); border-radius: 99px; padding: 0 .4rem; line-height: 1.1rem; }
+.jt-side-foot { margin-top: auto; padding: .875rem .625rem 0; border-top: 1px solid var(--jt-side-line); font-size: .75rem; color: var(--jt-side-ink-2); }
+
+/* Top bar */
+.jt-topbar { position: sticky; top: 0; z-index: 1020; display: flex; align-items: center; gap: .75rem; height: 3.75rem; padding: 0 1.5rem; background: var(--jt-surface); border-bottom: 1px solid var(--bs-border-color); }
+.jt-icon-btn { --bs-btn-padding-x: 0; --bs-btn-padding-y: 0; width: 2.375rem; height: 2.375rem; color: var(--bs-secondary-color); font-size: 1.15rem; border: 0; }
+.jt-icon-btn:hover, .jt-icon-btn[aria-expanded="true"] { background: var(--bs-tertiary-bg); color: var(--bs-body-color); }
+.jt-search { position: relative; flex: 1; max-width: 35rem; }
+.jt-search .form-control { min-height: 2.5rem; height: 2.5rem; padding-left: 2.4rem; padding-right: 2.5rem; background: var(--bs-tertiary-bg); }
+.jt-search .form-control:focus { background: var(--jt-surface); }
+.jt-search > .bi { position: absolute; left: .8rem; top: 50%; transform: translateY(-50%); color: var(--bs-tertiary-color); }
+.jt-search kbd { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); background: none; color: var(--bs-tertiary-color); border: 1px solid var(--bs-border-color); font-size: .7rem; padding: 0 .4rem; }
+.jt-topbar-end { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+.jt-site-pill { display: inline-flex; align-items: center; gap: .5rem; height: 2.25rem; padding: 0 .75rem; border: 1px solid var(--bs-border-color); border-radius: 99px; font-size: .85rem; white-space: nowrap; }
+.jt-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--bs-success); }
+.jt-theme-menu .jt-check { margin-left: auto; visibility: hidden; }
+.jt-theme-menu .active .jt-check { visibility: visible; }
+.jt-me { display: flex; align-items: center; gap: .625rem; }
+.jt-avatar { width: 2.125rem; height: 2.125rem; border-radius: 50%; display: grid; place-items: center; background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); font-weight: 600; font-size: .8rem; flex: none; }
+.jt-me-text { line-height: 1.2; font-size: .85rem; }
+.jt-me-text small { display: block; color: var(--bs-tertiary-color); font-size: .75rem; }
+
+.jt-content { width: 100%; max-width: 80rem; margin: 0 auto; padding: 1.75rem 1.5rem 2.5rem; }
+
+@media (max-width: 575.98px) {
+  .jt-topbar { padding: 0 1rem; gap: .5rem; }
+  .jt-content { padding: 1.25rem 1rem 2rem; }
+  h1, .h1 { font-size: 1.45rem; }
+}
+
+/* ---------- 4. Shared pieces ---------- */
+.jt-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.jt-page-header h1 { margin: .25rem 0 .375rem; }
+.jt-crumb { font-size: .8rem; color: var(--bs-tertiary-color); }
+.jt-page-sub { color: var(--bs-secondary-color); max-width: 64ch; margin: 0; }
+.jt-page-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.jt-kpi { padding: 1rem 1.125rem; display: grid; gap: .25rem; }
+.jt-kpi-label { font-size: .82rem; color: var(--bs-secondary-color); font-weight: 500; display: flex; align-items: center; gap: .5rem; }
+.jt-kpi-label .bi { color: var(--bs-tertiary-color); }
+.jt-kpi-value { font-family: var(--jt-font-display); font-weight: 600; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.jt-kpi-foot { font-size: .8rem; color: var(--bs-tertiary-color); }
+
+.jt-empty { display: grid; justify-items: center; align-content: center; text-align: center; gap: .375rem; padding: 2.5rem 1.5rem; color: var(--bs-secondary-color); }
+.jt-empty > .bi { font-size: 1.75rem; color: var(--bs-tertiary-color); }
+.jt-empty h3, .jt-empty .h6 { color: var(--bs-body-color); margin: .25rem 0 0; }
+.jt-empty p { max-width: 42ch; margin: 0; }
+
+.jt-error { min-height: 60vh; gap: .75rem; }
+.jt-error-code { font-family: var(--bs-font-monospace); font-size: .85rem; color: var(--bs-tertiary-color); letter-spacing: .1em; }
+.jt-error .btn { margin-top: .75rem; }
+
+.jt-steps .list-group-item { display: flex; align-items: center; gap: .625rem; color: var(--bs-secondary-color); padding: .75rem 1.125rem; }
+.jt-steps .bi { color: var(--bs-tertiary-color); }
+.jt-steps .is-done { color: var(--bs-body-color); }
+.jt-steps .is-done .bi { color: var(--bs-success); }
+
+/* Vehicle reg plate (Kenyan rear-plate yellow in both themes, like the real thing). */
+.jt-plate { display: inline-block; font-family: var(--bs-font-monospace); font-weight: 600; font-size: .82rem; letter-spacing: .05em; background: var(--jt-plate-bg); color: var(--jt-plate-ink); border: 1px solid rgb(0 0 0 / .35); border-radius: 4px; padding: 0 .45rem; line-height: 1.35rem; white-space: nowrap; }
+
+/* Marks a field the system filled in for the user. */
+.jt-auto { display: inline-flex; align-items: center; gap: .2rem; font-size: .68rem; font-weight: 600; color: var(--bs-primary-text-emphasis); background: var(--bs-primary-bg-subtle); border-radius: .3rem; padding: 0 .375rem; line-height: 1.1rem; text-transform: uppercase; letter-spacing: .05em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

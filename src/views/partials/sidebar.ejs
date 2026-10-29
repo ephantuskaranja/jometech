@@ -1,0 +1,38 @@
+<%#
+  On large screens this is a fixed column. Below 992px Bootstrap's
+  .offcanvas-lg turns the same markup into a slide-in menu (opened by the
+  menu button in the top bar). data-bs-theme="dark" keeps it dark in both themes.
+%>
+<aside class="jt-side" aria-label="Main navigation">
+  <div class="offcanvas-lg offcanvas-start jt-side-panel" tabindex="-1" id="sidebar" data-bs-theme="dark">
+    <div class="jt-brand">
+      <span class="jt-brand-mark">JT</span>
+      <span>
+        <span class="jt-brand-name">Jome-Tech</span>
+        <span class="jt-brand-sub">Fabrication &amp; Workshop</span>
+      </span>
+      <button type="button" class="btn-close d-lg-none ms-auto" data-bs-dismiss="offcanvas" aria-label="Close menu"></button>
+    </div>
+
+    <nav class="jt-nav">
+      <% nav.forEach((group) => { %>
+        <div class="jt-nav-group">
+          <div class="jt-nav-label"><%= group.label %></div>
+          <% group.items.forEach((item) => { %>
+            <% if (item.ready) { const active = isActive(item.href, path); %>
+              <a class="jt-nav-link<%= active ? ' active' : '' %>" href="<%= item.href %>"<%- active ? ' aria-current="page"' : '' %>>
+                <i class="bi bi-<%= item.icon %>" aria-hidden="true"></i><span><%= item.label %></span>
+              </a>
+            <% } else { %>
+              <span class="jt-nav-link is-soon" aria-disabled="true">
+                <i class="bi bi-<%= item.icon %>" aria-hidden="true"></i><span><%= item.label %></span><span class="jt-soon">Soon</span>
+              </span>
+            <% } %>
+          <% }) %>
+        </div>
+      <% }) %>
+    </nav>
+
+    <div class="jt-side-foot">v0.1 · <%= site.name %></div>
+  </div>
+</aside>

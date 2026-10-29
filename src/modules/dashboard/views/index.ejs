@@ -1,0 +1,53 @@
+<div class="jt-page-header">
+  <div>
+    <div class="jt-crumb"><%= today %> · <%= site.name %></div>
+    <h1><%= greeting %></h1>
+    <p class="jt-page-sub">The skeleton is running. Each module appears here as its step is built.</p>
+  </div>
+  <div class="jt-page-actions">
+    <button class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-inbox"></i>New enquiry</button>
+    <button class="btn btn-primary" type="button" disabled><i class="bi bi-truck"></i>Check in vehicle</button>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <% [
+    { icon: 'truck', label: 'In the workshop', foot: 'vehicles' },
+    { icon: 'calendar3', label: 'Due this week', foot: 'jobs' },
+    { icon: 'file-earmark-text', label: 'Awaiting your approval', foot: 'quotations and requests' },
+    { icon: 'stack', label: 'Low stock', foot: 'items below reorder level' },
+  ].forEach((k) => { %>
+    <div class="col-6 col-xl-3">
+      <div class="card jt-kpi h-100">
+        <div class="jt-kpi-label"><i class="bi bi-<%= k.icon %>"></i><%= k.label %></div>
+        <div class="jt-kpi-value">—</div>
+        <div class="jt-kpi-foot"><%= k.foot %></div>
+      </div>
+    </div>
+  <% }) %>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <section class="card h-100">
+      <div class="card-header"><h2 class="h6 mb-0">My tasks</h2></div>
+      <div class="card-body jt-empty">
+        <i class="bi bi-check2-circle"></i>
+        <h3 class="h6">No tasks yet</h3>
+        <p>Approvals, jobs to move on and goods to receive will be listed here with a button for each.</p>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-4">
+    <section class="card h-100">
+      <div class="card-header"><h2 class="h6 mb-0">Build progress</h2></div>
+      <ol class="list-group list-group-flush jt-steps">
+        <li class="list-group-item is-done"><i class="bi bi-check-circle-fill"></i>Skeleton, layout and theme switch</li>
+        <li class="list-group-item"><i class="bi bi-circle"></i>Database connection and migrations</li>
+        <li class="list-group-item"><i class="bi bi-circle"></i>Users, login, roles and sites</li>
+        <li class="list-group-item"><i class="bi bi-circle"></i>UI kit and form partials</li>
+        <li class="list-group-item"><i class="bi bi-circle"></i>Customers and vehicles</li>
+      </ol>
+    </section>
+  </div>
+</div>
