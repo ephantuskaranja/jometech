@@ -25,7 +25,7 @@ Goals: lightweight and fast, built with tools the developer already knows (vanil
 | Interactivity | **Alpine.js** (~15 KB) | Adds small behaviours straight in the HTML (`x-data`, `x-show`, `@click`), such as quotation line totals, show/hide sections and repeating rows. It is plain JS and can be learned in an afternoon. |
 | Smart dropdowns | **Tom Select** | Searchable, typeahead selects with remote search and "create new" built in. It drives the prefill experience. Has a Bootstrap 5 theme. |
 | DB access | **Knex.js** + `mysql2` | A plain-JS query builder with **migrations and seeds** included. Reads close to SQL, and raw SQL is easy for reports. |
-| Database | **MySQL 8.4 LTS** (InnoDB, utf8mb4) in production | As requested. Development currently runs on MySQL 9.3; use only SQL that works on both. |
+| Database | **MySQL 8.4 LTS** (InnoDB, utf8mb4) in production | As requested. The server currently runs MySQL 8.0 (end of life April 2026; upgrade to 8.4 before go-live) and development runs 9.3, so use only SQL that works on all of them. |
 | Validation | **Zod** | Works in plain JS. One schema per form gives clear error messages. |
 | Auth / security | `express-session` + `express-mysql-session`, **argon2** passwords, **helmet**, **csrf-sync**, `express-rate-limit` | Session cookies suit server-rendered apps, and CSRF protection is needed because the app posts forms. |
 | Uploads / photos | **multer** + **sharp** (resize/compress phone photos) to local disk, behind a small `storage.js` wrapper (S3 later) | |

@@ -10,7 +10,12 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test"
+    "test": "node --env-file-if-exists=.env --test",
+    "db:migrate": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:latest",
+    "db:rollback": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:rollback",
+    "db:status": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:list",
+    "db:make": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:make",
+    "db:seed": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js seed:run"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
@@ -23,6 +28,8 @@
     "express": "^5.3.0",
     "express-ejs-layouts": "^2.5.1",
     "helmet": "^8.3.0",
+    "knex": "^3.3.0",
+    "mysql2": "^3.24.6",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0"
   },

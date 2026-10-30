@@ -7,16 +7,33 @@ The project plan is in [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
 ## Requirements
 
 - Node.js 24 or later
-- MySQL 8.4 LTS in production. Development also runs on MySQL 9.x; keep SQL to features both versions have.
+- MySQL: the server runs 8.0 (upgrade to 8.4 LTS planned), development runs 9.x. Keep SQL to features both versions have.
 
 ## Run it
 
 ```bash
 npm install
-cp .env.example .env     # then edit .env
+cp .env.example .env     # then fill in the DB_* settings
+npm run db:migrate       # create / update the tables
+npm run db:seed          # starter data (safe to run again)
 npm run dev              # http://localhost:3000, restarts when a file changes
-npm test                 # runs everything in test/
+npm test                 # runs everything in test/ (needs the database)
 ```
+
+## Database
+
+| Command | What it does |
+|---|---|
+| `npm run db:make -- create_customers` | New migration file in `db/migrations/`, from `db/migration.stub` |
+| `npm run db:migrate` | Run migrations not yet applied |
+| `npm run db:rollback` | Undo the last batch of migrations |
+| `npm run db:status` | List applied and pending migrations |
+| `npm run db:seed` | Run `db/seeds/` |
+
+- Connection settings: `knexfile.js`, shared by the app and these commands. The app imports the pool from `src/core/db.js`.
+- Build every table with `tableDefaults()` and `timestamps()` from `src/core/schema.js`.
+- Dates are stored in UTC. DECIMAL values come back as strings so money keeps exact cents.
+- Never edit a migration that has already run on the server; add a new one.
 
 ## Stack
 
@@ -26,6 +43,7 @@ npm test                 # runs everything in test/
 | Pages | EJS templates + `express-ejs-layouts` |
 | UI | Bootstrap 5.3, Bootstrap Icons, Alpine.js |
 | Fonts | Archivo (headings), Figtree (text), IBM Plex Mono (numbers, codes), served locally from `@fontsource` |
+| Database | MySQL via Knex.js (query builder, migrations, seeds) + mysql2 |
 | Logging | pino + pino-http |
 | Tests | `node --test` + supertest |
 

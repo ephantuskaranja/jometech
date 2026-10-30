@@ -1,0 +1,16 @@
+import { tableDefaults, timestamps } from '../../src/core/schema.js';
+
+/** @param {import('knex').Knex} knex */
+export async function up(knex) {
+  await knex.schema.createTable('table_name', (t) => {
+    tableDefaults(t);
+    t.increments('id');
+
+    timestamps(t, knex);
+  });
+}
+
+/** @param {import('knex').Knex} knex */
+export async function down(knex) {
+  await knex.schema.dropTable('table_name');
+}

@@ -1,9 +1,11 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
+import { db } from '../src/core/db.js';
 
 const app = createApp();
+after(() => db.destroy());
 
 test('dashboard renders inside the layout', async () => {
   const res = await request(app).get('/').expect(200);
@@ -13,9 +15,10 @@ test('dashboard renders inside the layout', async () => {
   assert.match(res.text, /aria-current="page"/);
 });
 
-test('health check answers', async () => {
-  const res = await request(app).get('/health').expect(200);
-  assert.deepEqual(res.body, { ok: true });
+test('health check reports the database state', async () => {
+  const res = await request(app).get('/health');
+  assert.ok([200, 503].includes(res.status));
+  assert.ok(['up', 'down'].includes(res.body.db));
 });
 
 test('unknown page shows the 404 page', async () => {

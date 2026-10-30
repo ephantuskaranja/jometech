@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { config } from './config.js';
 import { logger } from './core/logger.js';
+import { dbIsUp } from './core/db.js';
 import { nav, isActive } from './core/nav.js';
 import { router as dashboardRoutes } from './modules/dashboard/routes.js';
 
@@ -67,7 +68,11 @@ export function createApp() {
   });
 
   // ---- Routes ----
-  app.get('/health', (req, res) => res.json({ ok: true }));
+  // For uptime monitors: 503 when the database can't be reached.
+  app.get('/health', async (req, res) => {
+    const dbUp = await dbIsUp();
+    res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
+  });
   app.use(dashboardRoutes);
 
   // ---- 404 and errors ----
