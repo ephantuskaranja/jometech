@@ -42,7 +42,7 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt update && sudo apt install -y caddy
 ```
 
-If nginx or Apache already serves other sites on ports 80/443, don't install Caddy: add a reverse proxy for the domain to `127.0.0.1:3000` in that web server instead (with HTTPS, e.g. certbot).
+If nginx already serves other sites on ports 80/443 (as on the Switch Reality server), don't install Caddy: use [deploy/nginx.conf](../deploy/nginx.conf) in step 9 instead. It only forwards requests to the app; a PHP-style config (`root …/public`, `index.php`, `fastcgi_pass`) returns **403** because there is no `index.php`.
 
 ### 3. Create the app user and folder
 
@@ -130,6 +130,10 @@ sudo chmod 440 /etc/sudoers.d/jometech
 ```
 
 ### 9. HTTPS
+
+**Server already uses nginx:** follow the commands at the top of [deploy/nginx.conf](../deploy/nginx.conf) (copy, enable, `nginx -t`, reload, `certbot --nginx`), then skip to step 10.
+
+**Otherwise, Caddy:**
 
 ```bash
 sudo nano /opt/jometech/deploy/Caddyfile        # replace app.example.co.ke with your domain
