@@ -1,0 +1,7 @@
+<% if (flash) { %>
+  <div class="alert alert-<%= flash.type === 'error' ? 'danger' : flash.type %> alert-dismissible jt-flash" role="status">
+    <i class="bi bi-<%= flash.type === 'success' ? 'check-circle' : 'info-circle' %>"></i>
+    <span><%= flash.text %></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<% } %>

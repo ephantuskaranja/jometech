@@ -21,3 +21,8 @@ test('sites table has the starter site', async () => {
   assert.ok(site, 'run: npm run db:seed');
   assert.equal(site.is_active, 1);
 });
+
+test('the six built-in roles are seeded', async () => {
+  const keys = (await db('roles').orderBy('id').select('key')).map((r) => r.key);
+  assert.deepEqual(keys, ['admin', 'manager', 'supervisor', 'sales', 'storekeeper', 'technician']);
+});

@@ -12,9 +12,29 @@
   </form>
 
   <div class="jt-topbar-end">
-    <span class="jt-site-pill" title="Current site">
-      <span class="jt-dot"></span><span class="d-none d-md-inline"><%= site.name %></span>
-    </span>
+    <%# Current site. A dropdown only when the user works at more than one. %>
+    <% if (!site) { %>
+      <span class="jt-site-pill text-warning-emphasis" title="Ask an administrator to give you a site"><i class="bi bi-exclamation-triangle"></i><span class="d-none d-md-inline">No site</span></span>
+    <% } else if (user.sites.length === 1) { %>
+      <span class="jt-site-pill" title="Current site"><span class="jt-dot"></span><span class="d-none d-md-inline"><%= site.name %></span></span>
+    <% } else { %>
+      <div class="dropdown">
+        <button class="jt-site-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Change site">
+          <span class="jt-dot"></span><span class="d-none d-md-inline"><%= site.name %></span><i class="bi bi-chevron-down small"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <h6 class="dropdown-header">Working at</h6>
+          <% user.sites.forEach((s) => { %>
+            <form method="post" action="/account/site">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="site_id" value="<%= s.id %>">
+              <input type="hidden" name="next" value="<%= path %>">
+              <button class="dropdown-item<%= s.id === site.id ? ' active' : '' %>" type="submit"><%= s.name %><% if (s.id === site.id) { %><i class="bi bi-check2 ms-auto"></i><% } %></button>
+            </form>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
 
     <div class="dropdown">
       <button class="btn jt-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Change theme" title="Theme">
@@ -28,9 +48,27 @@
       </ul>
     </div>
 
-    <div class="jt-me">
-      <span class="jt-avatar"><%= user.initials %></span>
-      <span class="jt-me-text d-none d-md-block"><%= user.name %><small><%= user.role %></small></span>
+    <div class="dropdown">
+      <button class="btn jt-me" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
+        <span class="jt-avatar"><%= user.initials %></span>
+        <span class="jt-me-text d-none d-md-block"><%= user.name %><small><%= user.roleNames %></small></span>
+        <i class="bi bi-chevron-down small d-none d-md-inline"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li class="jt-me-head">
+          <strong><%= user.name %></strong>
+          <span><%= formatPhone(user.phone) %></span>
+          <span><%= user.roleNames %></span>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="/account/password"><i class="bi bi-key"></i>Change password</a></li>
+        <li>
+          <form method="post" action="/logout">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i>Log out</button>
+          </form>
+        </li>
+      </ul>
     </div>
   </div>
 </header>

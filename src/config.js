@@ -11,6 +11,8 @@ export const config = {
   isTest: Boolean(process.env.NODE_TEST_CONTEXT),
   port: Number(process.env.PORT ?? 3000),
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  // Signs the login cookie. Must be long and random on the server.
+  sessionSecret: process.env.SESSION_SECRET ?? (env === 'production' ? undefined : 'dev-only-not-secret'),
   appName: 'Jome-Tech',
   timezone: 'Africa/Nairobi',
   db: {
@@ -21,3 +23,7 @@ export const config = {
     password: process.env.DB_PASSWORD ?? '',
   },
 };
+
+if (!config.sessionSecret) {
+  throw new Error('SESSION_SECRET is missing from .env. Generate one with: node -e "console.log(crypto.randomBytes(32).toString(\'hex\'))"');
+}

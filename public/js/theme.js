@@ -4,8 +4,8 @@
 // the page is drawn; that's what stops a white flash in dark mode.
 // Bootstrap 5.3 does the rest: every component reads data-bs-theme on <html>.
 //
-// The choice is kept in this browser for now. Once login exists it will also
-// be saved to the user's account so it follows them to other devices.
+// The choice is kept in this browser and, when logged in, saved to the
+// account so it follows the user to other devices.
 (() => {
   const KEY = 'jt-theme';
   const ICONS = { light: 'bi-sun', dark: 'bi-moon-stars', system: 'bi-circle-half' };
@@ -35,6 +35,21 @@
     });
   };
 
+  // The page says which theme is saved on the account (empty before login).
+  // It wins over this browser's copy, e.g. after choosing Dark on another device.
+  const accountTheme = document.documentElement.dataset.userTheme;
+  if (accountTheme) save(accountTheme);
+
+  const saveToAccount = (mode) => {
+    if (accountTheme === undefined || accountTheme === '') return; // not logged in
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    fetch('/account/theme', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': token },
+      body: JSON.stringify({ theme: mode }),
+    }).catch(() => { /* offline: the browser copy still works */ });
+  };
+
   apply(read());
 
   // Follow the device when it switches (e.g. at sunset) if "Match device" is chosen.
@@ -51,5 +66,6 @@
     save(mode);
     apply(mode);
     showChoice(mode);
+    saveToAccount(mode);
   });
 })();

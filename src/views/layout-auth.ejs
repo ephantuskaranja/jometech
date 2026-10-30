@@ -1,0 +1,25 @@
+<!doctype html>
+<%# Layout for pages shown before login: no sidebar, centred card. %>
+<html lang="en" data-bs-theme="light">
+<head>
+<%- include('partials/head') %>
+</head>
+<body class="jt-auth-body">
+  <main class="jt-auth" id="main">
+    <div class="jt-auth-brand">
+      <span class="jt-brand-mark">JT</span>
+      <span>
+        <span class="jt-auth-name">Jome-Tech</span>
+        <span class="jt-auth-sub">Fabrication &amp; Workshop</span>
+      </span>
+    </div>
+    <%- body %>
+    <div class="jt-auth-theme" role="group" aria-label="Theme">
+      <button type="button" class="btn btn-sm" data-theme-value="light" title="Light"><i class="bi bi-sun"></i><span class="visually-hidden">Light</span></button>
+      <button type="button" class="btn btn-sm" data-theme-value="dark" title="Dark"><i class="bi bi-moon-stars"></i><span class="visually-hidden">Dark</span></button>
+      <button type="button" class="btn btn-sm" data-theme-value="system" title="Match device"><i class="bi bi-circle-half"></i><span class="visually-hidden">Match device</span></button>
+    </div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

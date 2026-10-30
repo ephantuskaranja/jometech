@@ -1,6 +1,6 @@
 <div class="jt-page-header">
   <div>
-    <div class="jt-crumb"><%= today %> · <%= site.name %></div>
+    <div class="jt-crumb"><%= today %><%= site ? ` · ${site.name}` : '' %></div>
     <h1><%= greeting %></h1>
     <p class="jt-page-sub">The skeleton is running. Each module appears here as its step is built.</p>
   </div>
@@ -44,7 +44,7 @@
       <ol class="list-group list-group-flush jt-steps">
         <li class="list-group-item is-done"><i class="bi bi-check-circle-fill"></i>Skeleton, layout and theme switch</li>
         <li class="list-group-item is-done"><i class="bi bi-check-circle-fill"></i>Database connection and migrations</li>
-        <li class="list-group-item"><i class="bi bi-circle"></i>Users, login, roles and sites</li>
+        <li class="list-group-item is-done"><i class="bi bi-check-circle-fill"></i>Users, login, roles and sites</li>
         <li class="list-group-item"><i class="bi bi-circle"></i>UI kit and form partials</li>
         <li class="list-group-item"><i class="bi bi-circle"></i>Customers and vehicles</li>
       </ol>

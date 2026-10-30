@@ -267,3 +267,28 @@ a.jt-nav-link:hover { background: var(--jt-side-hover); color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ---------- 5. Account, login, messages ---------- */
+[x-cloak] { display: none !important; }
+
+button.jt-site-pill { background: var(--jt-surface); color: inherit; }
+button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
+.jt-me { --bs-btn-padding-x: .375rem; --bs-btn-padding-y: .25rem; border: 0; text-align: left; color: inherit; }
+.jt-me:hover, .jt-me[aria-expanded="true"] { background: var(--bs-tertiary-bg); }
+.jt-me-head { display: grid; gap: .1rem; padding: .5rem .75rem .25rem; font-size: .85rem; min-width: 14rem; }
+.jt-me-head span { color: var(--bs-tertiary-color); font-size: .8rem; }
+
+.jt-flash { display: flex; align-items: center; gap: .625rem; }
+.jt-narrow { max-width: 30rem; }
+
+.jt-auth-body { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem 1rem; }
+.jt-auth { width: 100%; max-width: 25rem; display: grid; gap: 1.25rem; }
+.jt-auth-brand { display: flex; align-items: center; justify-content: center; gap: .75rem; }
+.jt-auth-brand .jt-brand-mark { width: 2.5rem; height: 2.5rem; font-size: 1rem; border-radius: .625rem; }
+.jt-auth-name { display: block; font-family: var(--jt-font-display); font-weight: 700; font-size: 1.25rem; line-height: 1.1; }
+.jt-auth-sub { display: block; font-size: .8rem; color: var(--bs-tertiary-color); }
+.jt-auth-card .card-body { padding: 1.75rem; }
+.jt-auth-help { text-align: center; font-size: .85rem; color: var(--bs-tertiary-color); margin: 0; }
+.jt-auth-theme { display: flex; justify-content: center; gap: .25rem; }
+.jt-auth-theme .btn { color: var(--bs-tertiary-color); border: 0; }
+.jt-auth-theme .btn.active { color: var(--bs-body-color); background: var(--bs-tertiary-bg); }

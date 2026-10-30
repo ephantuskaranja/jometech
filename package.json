@@ -10,28 +10,35 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --env-file-if-exists=.env --test",
+    "test": "node --env-file-if-exists=.env --test --test-concurrency=1 --test-timeout=30000 \"test/**/*.test.js\"",
     "db:migrate": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:latest",
     "db:rollback": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:rollback",
     "db:status": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:list",
     "db:make": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:make",
-    "db:seed": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js seed:run"
+    "db:seed": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js seed:run",
+    "user:create": "node --env-file-if-exists=.env scripts/create-user.js"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
     "@fontsource/figtree": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "alpinejs": "^3.17.5",
+    "argon2": "^0.45.1",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
+    "csrf-sync": "^4.2.1",
     "ejs": "^7.0.2",
     "express": "^5.3.0",
     "express-ejs-layouts": "^2.5.1",
+    "express-mysql-session": "^3.0.3",
+    "express-rate-limit": "^8.7.2",
+    "express-session": "^1.19.0",
     "helmet": "^8.3.0",
     "knex": "^3.3.0",
     "mysql2": "^3.24.6",
     "pino": "^10.4.0",
-    "pino-http": "^11.0.0"
+    "pino-http": "^11.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "pino-pretty": "^13.2.0",

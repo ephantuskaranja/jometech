@@ -33,6 +33,6 @@
       <% }) %>
     </nav>
 
-    <div class="jt-side-foot">v0.1 · <%= site.name %></div>
+    <div class="jt-side-foot">v0.1<%= site ? ` · ${site.name}` : '' %></div>
   </div>
 </aside>

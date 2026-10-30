@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
   const now = new Date();
   res.render('dashboard/views/index', {
     title: 'Dashboard',
-    greeting: greeting(now),
+    greeting: `${greeting(now)}, ${req.user.name.split(' ')[0]}`,
     today: now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: config.timezone }),
   });
 });

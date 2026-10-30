@@ -1,28 +1,29 @@
-import { test, after } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { db } from '../src/core/db.js';
+import { makeUser, loginAs, cleanup } from './helpers.js';
 
 const app = createApp();
-after(() => db.destroy());
+let admin;
+before(async () => { admin = await loginAs(app, await makeUser(1, ['admin'])); });
+after(cleanup);
 
 test('dashboard renders inside the layout', async () => {
-  const res = await request(app).get('/').expect(200);
+  const res = await admin.get('/').expect(200);
   assert.match(res.text, /<title>Dashboard · Jome-Tech<\/title>/);
   assert.match(res.text, /id="sidebar"/);
   assert.match(res.text, /data-theme-value="dark"/);
   assert.match(res.text, /aria-current="page"/);
 });
 
-test('health check reports the database state', async () => {
-  const res = await request(app).get('/health');
-  assert.ok([200, 503].includes(res.status));
-  assert.ok(['up', 'down'].includes(res.body.db));
+test('health check reports the database is up', async () => {
+  const res = await request(app).get('/health').expect(200);
+  assert.deepEqual(res.body, { ok: true, db: 'up' });
 });
 
 test('unknown page shows the 404 page', async () => {
-  const res = await request(app).get('/no-such-page').expect(404);
+  const res = await admin.get('/no-such-page').expect(404);
   assert.match(res.text, /Page not found/);
 });
 

@@ -1,0 +1,21 @@
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <title><%= title === appName ? appName : `${title} · ${appName}` %></title>
+
+  <%# Must run before the CSS so the page never flashes the wrong theme. %>
+  <script src="/js/theme.js"></script>
+
+  <link rel="stylesheet" href="/vendor/fonts/archivo/500.css">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/600.css">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/500.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/vendor/fonts/ibm-plex-mono/500.css">
+  <link rel="stylesheet" href="/vendor/fonts/ibm-plex-mono/600.css">
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+
+  <script defer src="/vendor/alpinejs/cdn.min.js"></script>
