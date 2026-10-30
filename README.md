@@ -25,7 +25,8 @@ npm test                 # runs every *.test.js in test/ (needs the database)
 
 - People log in with their **phone number** (any format: `0712 345 678`, `+254712345678`) or email, plus a password.
 - Admins manage people at **System → Users** (`/admin/users`): add (a temporary password is shown once), edit roles and sites, reset password, switch off. Nobody can remove their own Admin role or switch themselves off, and the last admin can't be removed.
-- `npm run user:create` adds a user from the terminal (for the first admin). Run it with an existing phone number to reset that person's password.
+- **First admin:** `npm run db:seed` creates one while no admin exists, and they must change the password at first login. Development uses **0711 000 000 / jometech-admin-1**; on the server, set `ADMIN_PHONE` and `ADMIN_PASSWORD` in `.env` (see `.env.example`).
+- `npm run user:create` adds a user from the terminal. Run it with an existing phone number to reset that person's password.
 - **Roles → permissions**: the permission keys and the six built-in roles (Admin, Manager, Supervisor, Sales, Storekeeper, Technician) are in `src/core/permissions.js`. Admins can do everything.
 - Protect a route with `can('permission.key')` from `src/core/auth.js`. The sidebar hides items the user can't use (`permission` in `src/core/nav.js`).
 - **Sites**: Admins and Managers see every site; everyone else sees the sites they're assigned to. `req.site` is the current site, chosen in the top bar.

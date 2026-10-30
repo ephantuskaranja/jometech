@@ -98,6 +98,9 @@ PORT=3000
 DB_USERNAME=jometech
 DB_PASSWORD=the password from step 5
 SESSION_SECRET=the long random value
+ADMIN_NAME=Your Name
+ADMIN_PHONE=07xx xxx xxx          # the first admin's login
+ADMIN_PASSWORD=a temporary password   # you must change it at first login
 ```
 ```bash
 chmod 600 .env
@@ -110,8 +113,7 @@ Still as `jometech` in `/opt/jometech`:
 ```bash
 npm ci --omit=dev
 npm run db:migrate
-npm run db:seed
-npm run user:create          # your admin account: name, phone number, password, role "admin"
+npm run db:seed              # also creates the first admin from ADMIN_* in .env
 exit
 ```
 
@@ -135,7 +137,7 @@ sudo cp /opt/jometech/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 
-Open `https://your-domain` and log in. The login cookie only works over **https**, so logging in at `http://<ip>:3000` will not work in production. That is deliberate.
+Open `https://your-domain` and log in with `ADMIN_PHONE` and `ADMIN_PASSWORD`; you'll be asked to choose a new password. Then add everyone else under **Users**, and remove `ADMIN_PASSWORD` from `.env` (the seed only uses it while no admin exists). The login cookie only works over **https**, so logging in at `http://<ip>:3000` will not work in production. That is deliberate.
 
 ### 10. Firewall
 
