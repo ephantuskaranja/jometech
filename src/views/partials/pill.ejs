@@ -1,0 +1,4 @@
+<%#
+  Status pill. tone: ok (green) | warn (amber) | bad (red) | info (blue) | neutral (grey, default)
+  include('partials/pill', { text: 'Active', tone: 'ok' })
+%><span class="jt-pill jt-pill-<%= locals.tone ?? 'neutral' %>"><%= text %></span>

@@ -1,0 +1,4 @@
+<%#
+  Vehicle registration in the yellow Kenyan rear-plate style.
+  include('partials/plate', { reg: 'KDA 123A' })   size: 'lg' for page headers
+%><span class="jt-plate<%= locals.size === 'lg' ? ' jt-plate-lg' : '' %>"><%= reg %></span>

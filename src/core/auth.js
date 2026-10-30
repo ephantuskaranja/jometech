@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import argon2 from 'argon2';
 import { db } from './db.js';
 import { httpError } from './validate.js';
@@ -12,6 +13,16 @@ export async function verifyPassword(hash, plain) {
   } catch {
     return false; // malformed hash
   }
+}
+
+/**
+ * Temporary password an admin reads out or sends to someone, e.g. "k7mq-x2pd-9fha".
+ * No 0/o, 1/l/i, so it's easy to read and type on a phone.
+ */
+export function generateTempPassword() {
+  const letters = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const group = () => Array.from({ length: 4 }, () => letters[randomInt(letters.length)]).join('');
+  return `${group()}-${group()}-${group()}`;
 }
 
 // Checked when nobody has the phone number entered, so a wrong phone number

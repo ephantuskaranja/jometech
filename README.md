@@ -24,7 +24,8 @@ npm test                 # runs every *.test.js in test/ (needs the database)
 ## Users and access
 
 - People log in with their **phone number** (any format: `0712 345 678`, `+254712345678`) or email, plus a password.
-- `npm run user:create` adds a user. Run it with an existing phone number to reset that person's password.
+- Admins manage people at **System → Users** (`/admin/users`): add (a temporary password is shown once), edit roles and sites, reset password, switch off. Nobody can remove their own Admin role or switch themselves off, and the last admin can't be removed.
+- `npm run user:create` adds a user from the terminal (for the first admin). Run it with an existing phone number to reset that person's password.
 - **Roles → permissions**: the permission keys and the six built-in roles (Admin, Manager, Supervisor, Sales, Storekeeper, Technician) are in `src/core/permissions.js`. Admins can do everything.
 - Protect a route with `can('permission.key')` from `src/core/auth.js`. The sidebar hides items the user can't use (`permission` in `src/core/nav.js`).
 - **Sites**: Admins and Managers see every site; everyone else sees the sites they're assigned to. `req.site` is the current site, chosen in the top bar.
@@ -52,7 +53,7 @@ npm test                 # runs every *.test.js in test/ (needs the database)
 |---|---|
 | Server | Express 5, plain JavaScript (ES modules), no build step |
 | Pages | EJS templates + `express-ejs-layouts` |
-| UI | Bootstrap 5.3, Bootstrap Icons, Alpine.js |
+| UI | Bootstrap 5.3, Bootstrap Icons, Alpine.js, Tom Select (searchable dropdowns) |
 | Fonts | Archivo (headings), Figtree (text), IBM Plex Mono (numbers, codes), served locally from `@fontsource` |
 | Database | MySQL via Knex.js (query builder, migrations, seeds) + mysql2 |
 | Login | express-session + express-mysql-session, argon2, csrf-sync, express-rate-limit |
@@ -79,6 +80,20 @@ public/
   js/app.js          small shared behaviours
 test/                *.test.js files; helpers.js creates and removes test users (phones 0700 000 0xx)
 ```
+
+## Building screens: the UI kit
+
+Open **`/dev/ui`** (in development, or as an admin on the server). It shows every building block, with the line to copy:
+
+| Partial | Use |
+|---|---|
+| `partials/page-header` | Breadcrumb, title, one-line explanation, action buttons |
+| `partials/field` | Any input: text, tel, email, number, money (KES), date, textarea, select, searchable select (Tom Select, optionally loading from a URL) |
+| `partials/choices` | Big tappable checkboxes / radios, for up to ~8 options |
+| `partials/pill`, `partials/plate` | Status pill; yellow reg plate |
+| `partials/empty` | Empty list or no search results |
+
+CSS patterns: `jt-fields` (two-column form grid), `jt-toolbar` + `jt-table` (list pages), `jt-savebar` (sticky Save at the bottom). Formatting in views: `fmt.money()`, `fmt.date()`, `fmt.dateTime()`, `fmt.phone()`. The users module (`src/modules/users`) is the worked example of a list + form screen.
 
 ## Theme
 

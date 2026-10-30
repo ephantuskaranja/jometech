@@ -1,0 +1,39 @@
+<%#
+  A group of tappable cards: checkboxes (pick several) or radios (pick one).
+  Big touch targets for tablets; better than a dropdown when there are few options.
+
+  include('partials/choices', { name: 'roles', label: 'Role', multiple: true,
+        options: [{ value: 'sales', label: 'Sales', hint: 'Customers, quotations' }],
+        value: values.roles, error: errors.roles, required: true })
+
+  options   [{ value, label, hint? }]
+  value     chosen value, or an array when multiple
+  multiple  true → checkboxes; otherwise radios
+  columns   cards per row on wide screens (default 3)
+  model     Alpine variable to bind with x-model (optional), e.g. 'roles'
+%>
+<%
+  const chosen = [].concat(locals.value ?? []).map(String);
+  const groupId = `g-${name}`;
+  const err = locals.error;
+%>
+<fieldset class="jt-field" <%- err ? `aria-describedby="${groupId}-error"` : '' %>>
+  <legend class="form-label">
+    <%= label %><% if (locals.required) { %><span class="jt-req" aria-hidden="true">*</span><% } %>
+    <% if (locals.auto) { %><span class="jt-auto"><i class="bi bi-lightning-charge-fill"></i><%= locals.auto === true ? 'auto' : locals.auto %></span><% } %>
+  </legend>
+  <div class="jt-choices<%= err ? ' is-invalid' : '' %>" style="--jt-cols: <%= locals.columns ?? 3 %>">
+    <% options.forEach((o, i) => { const id = `${groupId}-${i}`; %>
+      <label class="jt-choice" for="<%= id %>">
+        <input class="form-check-input" type="<%= locals.multiple ? 'checkbox' : 'radio' %>" id="<%= id %>" name="<%= name %>"
+               value="<%= o.value %>"<%= chosen.includes(String(o.value)) ? ' checked' : '' %><% if (locals.model) { %> x-model="<%= locals.model %>"<% } %>>
+        <span>
+          <span class="jt-choice-label"><%= o.label %></span>
+          <% if (o.hint) { %><span class="jt-choice-hint"><%= o.hint %></span><% } %>
+        </span>
+      </label>
+    <% }) %>
+  </div>
+  <% if (err) { %><div class="jt-error-text" id="<%= groupId %>-error"><%= err %></div><% } %>
+  <% if (locals.hint) { %><div class="form-text"><%= locals.hint %></div><% } %>
+</fieldset>

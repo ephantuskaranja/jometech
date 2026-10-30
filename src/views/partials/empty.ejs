@@ -1,0 +1,10 @@
+<%#
+  Empty list or no search results. Says what would appear and how to add the first one.
+  include('partials/empty', { icon: 'people', heading: 'No users yet', text: '…', action: { label: 'Add user', href: '/admin/users/new' } })
+%>
+<div class="jt-empty">
+  <i class="bi bi-<%= locals.icon ?? 'inbox' %>"></i>
+  <h3 class="h6"><%= heading %></h3>
+  <% if (locals.text) { %><p><%= text %></p><% } %>
+  <% if (locals.action) { %><a class="btn btn-primary btn-sm mt-2" href="<%= action.href %>"><i class="bi bi-plus-lg"></i><%= action.label %></a><% } %>
+</div>

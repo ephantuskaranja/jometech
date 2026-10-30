@@ -1,0 +1,83 @@
+<%#
+  One form field: label, input, hint and error message, always laid out the same way.
+
+  include('partials/field', { name: 'phone', label: 'Phone number', type: 'tel',
+        value: values.phone, error: errors.phone, required: true, hint: 'Their login name' })
+
+  name, label           required
+  type                  text (default) | tel | email | number | money | date | password | textarea | select
+  value                 current value (for select with multiple: an array)
+  error                 message shown under the field, turns it red
+  required              adds the red * (the server still validates)
+  hint                  grey help text under the field
+  auto                  true or a short word: shows the blue "auto" tag for prefilled values
+  placeholder, autocomplete, inputmode, rows, id, class (for the wrapper)
+  select only: options  [{ value, label }] or plain strings
+               blank    text of an empty first option, e.g. 'Choose a supplier'
+               searchable  true → Tom Select (type to filter)
+               url      Tom Select loads options from this JSON endpoint as you type
+               multiple true → several values
+%>
+<%
+  const fieldType = locals.type ?? 'text';
+  const fieldId = locals.id ?? `f-${name}`;
+  const err = locals.error;
+  const val = locals.value ?? '';
+  // Attributes shared by every input type are built once here. esc() matters:
+  // error messages and placeholders can contain what the user typed.
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const describedBy = [locals.hint && `${fieldId}-hint`, err && `${fieldId}-error`].filter(Boolean).join(' ');
+  const common = `id="${esc(fieldId)}" name="${esc(name)}"${describedBy ? ` aria-describedby="${esc(describedBy)}"` : ''}${locals.required ? ' required' : ''}${err ? ' aria-invalid="true"' : ''}`;
+  const inputClass = `form-control${err ? ' is-invalid' : ''}${locals.auto ? ' jt-prefilled' : ''}`;
+  const extra = [
+    locals.placeholder ? `placeholder="${esc(locals.placeholder)}"` : '',
+    locals.autocomplete ? `autocomplete="${esc(locals.autocomplete)}"` : '',
+  ].filter(Boolean).join(' ');
+  const errorHtml = err ? `<div class="invalid-feedback" id="${esc(fieldId)}-error">${esc(err)}</div>` : '';
+%>
+<div class="jt-field<%= locals.class ? ` ${locals.class}` : '' %>">
+  <label class="form-label" for="<%= fieldId %>">
+    <%= label %><% if (locals.required) { %><span class="jt-req" aria-hidden="true">*</span><% } %>
+    <% if (locals.auto) { %><span class="jt-auto" title="Filled in for you. Change it if it's wrong."><i class="bi bi-lightning-charge-fill"></i><%= locals.auto === true ? 'auto' : locals.auto %></span><% } %>
+  </label>
+
+  <% if (fieldType === 'textarea') { %>
+    <textarea class="<%= inputClass %>" <%- common %> rows="<%= locals.rows ?? 3 %>" <%- extra %>><%= val %></textarea>
+    <%- errorHtml %>
+
+  <% } else if (fieldType === 'select') { %>
+    <%
+      const opts = (locals.options ?? []).map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+      const chosen = [].concat(val).map(String);
+    %>
+    <select class="form-select<%= err ? ' is-invalid' : '' %>" <%- common %>
+      <%= locals.multiple ? 'multiple' : '' %>
+      <% if (locals.searchable || locals.url) { %>data-tom-select<% } %>
+      <% if (locals.url) { %>data-tom-url="<%= locals.url %>"<% } %>
+      <% if (locals.blank) { %>data-placeholder="<%= locals.blank %>"<% } %>>
+      <% if (locals.blank) { %><option value=""><%= locals.blank %></option><% } %>
+      <% opts.forEach((o) => { %>
+        <option value="<%= o.value %>"<%= chosen.includes(String(o.value)) ? ' selected' : '' %>><%= o.label %></option>
+      <% }) %>
+    </select>
+    <%- errorHtml %>
+
+  <% } else if (fieldType === 'money') { %>
+    <div class="input-group has-validation">
+      <span class="input-group-text">KES</span>
+      <input class="<%= inputClass %> text-end jt-num" type="text" inputmode="decimal" value="<%= val %>" <%- common %> <%- extra %>>
+      <%- errorHtml %>
+    </div>
+
+  <% } else { %>
+    <%
+      const htmlType = { tel: 'tel', email: 'email', date: 'date', password: 'password', number: 'text' }[fieldType] ?? 'text';
+      const mode = locals.inputmode ?? { tel: 'tel', number: 'decimal', email: 'email' }[fieldType];
+    %>
+    <input class="<%= inputClass %><%= fieldType === 'number' ? ' text-end jt-num' : '' %>" type="<%= htmlType %>" value="<%= val %>"
+      <%- mode ? `inputmode="${mode}"` : '' %> <%- common %> <%- extra %>>
+    <%- errorHtml %>
+  <% } %>
+
+  <% if (locals.hint) { %><div class="form-text" id="<%= fieldId %>-hint"><%= locals.hint %></div><% } %>
+</div>

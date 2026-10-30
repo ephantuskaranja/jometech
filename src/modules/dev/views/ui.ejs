@@ -1,0 +1,178 @@
+<%# Living style guide. Every example is the real partial, so this page shows exactly what screens get. %>
+<%- include('partials/page-header', {
+  crumb: ['Developer', 'UI kit'],
+  heading: 'UI kit',
+  sub: 'The building blocks for every screen. Copy the include under each example. Switch the theme in the top bar to check both looks.',
+}) %>
+
+<nav class="jt-kit-row mb-4" aria-label="Sections">
+  <% ['Colours', 'Buttons', 'Status', 'Fields', 'Choices', 'Dropdowns', 'List page', 'Messages', 'Save bar'].forEach((s) => { %>
+    <a class="btn btn-outline-secondary btn-sm" href="#<%= s.toLowerCase().replace(' ', '-') %>"><%= s %></a>
+  <% }) %>
+</nav>
+
+<div class="d-grid gap-4">
+
+  <section class="card" id="colours">
+    <div class="card-header"><h2 class="h6 mb-0">Colours</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-swatches">
+        <% [['Primary', '--bs-primary'], ['Brand', '--jt-brand'], ['Page', '--bs-body-bg'], ['Surface', '--jt-surface'], ['Text', '--bs-body-color'], ['Muted text', '--bs-tertiary-color'], ['Border', '--bs-border-color'], ['Success', '--bs-success'], ['Warning', '--bs-warning'], ['Danger', '--bs-danger']].forEach(([label, token]) => { %>
+          <div class="jt-swatch"><i style="background: var(<%= token %>)"></i><span><%= label %><br><%= token %></span></div>
+        <% }) %>
+      </div>
+      <p class="mb-0 text-body-secondary small">Defined once at the top of <code>public/css/app.css</code>, for light and dark. Use Bootstrap classes (<code>text-body-secondary</code>, <code>bg-body-tertiary</code>) or these variables; never a hex colour in a page.</p>
+    </div>
+  </section>
+
+  <section class="card" id="buttons">
+    <div class="card-header"><h2 class="h6 mb-0">Buttons</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-kit-row">
+        <button class="btn btn-primary" type="button"><i class="bi bi-check2"></i>Save</button>
+        <button class="btn btn-outline-secondary" type="button">Cancel</button>
+        <button class="btn btn-success btn-lg" type="button"><i class="bi bi-check2"></i>Welding done → Assembly</button>
+        <button class="btn btn-outline-danger" type="button"><i class="bi bi-trash"></i>Delete</button>
+        <button class="btn btn-primary btn-sm" type="button"><i class="bi bi-plus-lg"></i>Add line</button>
+        <button class="btn btn-primary" type="button" disabled>Disabled</button>
+      </div>
+      <p class="mb-0 text-body-secondary small">One <strong>primary</strong> button per page: the thing most people came to do. Big green button for moving a job on. Icons from <a href="https://icons.getbootstrap.com" target="_blank" rel="noopener">Bootstrap Icons</a>.</p>
+    </div>
+  </section>
+
+  <section class="card" id="status">
+    <div class="card-header"><h2 class="h6 mb-0">Status, plates and the “auto” tag</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-kit-row">
+        <%- include('partials/pill', { text: 'Approved', tone: 'ok' }) %>
+        <%- include('partials/pill', { text: 'Awaiting approval', tone: 'warn' }) %>
+        <%- include('partials/pill', { text: 'QC failed', tone: 'bad' }) %>
+        <%- include('partials/pill', { text: 'In progress', tone: 'info' }) %>
+        <%- include('partials/pill', { text: 'Draft' }) %>
+      </div>
+      <div class="jt-kit-row">
+        <%- include('partials/plate', { reg: 'KDA 123A' }) %>
+        <%- include('partials/plate', { reg: 'ZE 4512' }) %>
+        <%- include('partials/plate', { reg: 'KCX 482B', size: 'lg' }) %>
+        <span class="jt-auto"><i class="bi bi-lightning-charge-fill"></i>auto</span>
+      </div>
+<pre class="small mb-0 bg-body-tertiary p-3 rounded"><code>&lt;%- include('partials/pill', { text: 'Approved', tone: 'ok' }) %&gt;      tone: ok | warn | bad | info | (grey)
+&lt;%- include('partials/plate', { reg: vehicle.reg_no }) %&gt;          size: 'lg' in page headers</code></pre>
+    </div>
+  </section>
+
+  <section class="card" id="fields">
+    <div class="card-header"><h2 class="h6 mb-0">Fields</h2></div>
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-lg-6 d-grid gap-3">
+          <h3 class="h6 text-body-secondary mb-0">Normal</h3>
+          <%- include('partials/field', { id: 'k-name', name: 'name', label: 'Customer name', required: true, placeholder: 'e.g. Mwangi Transporters' }) %>
+          <%- include('partials/field', { id: 'k-phone', name: 'phone', label: 'Phone number', type: 'tel', required: true, placeholder: '0712 345 678', hint: 'Number pad opens on phones.' }) %>
+          <%- include('partials/field', { id: 'k-site', name: 'site', label: 'Site', value: site?.name ?? 'Main workshop', auto: true, hint: 'Filled in from where you are working.' }) %>
+          <%- include('partials/field', { id: 'k-amount', name: 'amount', label: 'Amount', type: 'money', value: '12,500.00' }) %>
+          <div class="jt-fields">
+            <%- include('partials/field', { id: 'k-qty', name: 'qty', label: 'Quantity', type: 'number', value: '14' }) %>
+            <%- include('partials/field', { id: 'k-date', name: 'date', label: 'Due date', type: 'date' }) %>
+          </div>
+          <%- include('partials/field', { id: 'k-notes', name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Anything the workshop should know' }) %>
+        </div>
+        <div class="col-lg-6 d-grid gap-3 align-content-start">
+          <h3 class="h6 text-body-secondary mb-0">After a failed save</h3>
+          <%- include('partials/field', { id: 'k-name-e', name: 'name', label: 'Customer name', required: true, error: errors.name }) %>
+          <%- include('partials/field', { id: 'k-phone-e', name: 'phone', label: 'Phone number', type: 'tel', required: true, value: '07123', error: errors.phone }) %>
+          <%- include('partials/field', { id: 'k-amount-e', name: 'amount', label: 'Amount', type: 'money', value: 'abc', error: errors.amount }) %>
+          <p class="text-body-secondary small mb-0">Errors sit under the field and say how to fix it. Everything the user typed stays in the form.</p>
+        </div>
+      </div>
+<pre class="small mt-4 mb-0 bg-body-tertiary p-3 rounded"><code>&lt;%- include('partials/field', {
+      name: 'phone', label: 'Phone number', type: 'tel',     // text | tel | email | number | money | date | password | textarea | select
+      value: values.phone, error: errors.phone, required: true,
+      hint: 'They log in with this number.', auto: true }) %&gt;   // auto: shows the blue "auto" tag</code></pre>
+    </div>
+  </section>
+
+  <section class="card" id="choices">
+    <div class="card-header"><h2 class="h6 mb-0">Choices</h2></div>
+    <div class="card-body d-grid gap-4">
+      <%- include('partials/choices', { name: 'reason', label: 'Reason for visit', required: true, columns: 5,
+        options: ['New body build', 'Repair', 'Modification', 'Painting', 'Inspection only'].map((o) => ({ value: o, label: o })), value: 'Repair' }) %>
+      <%- include('partials/choices', { name: 'reason2', label: 'Reason for visit (with error)', required: true, columns: 5, error: errors.reason,
+        options: ['New body build', 'Repair', 'Modification', 'Painting', 'Inspection only'].map((o) => ({ value: o, label: o })) }) %>
+      <%- include('partials/choices', { name: 'k-roles', label: 'Several allowed', multiple: true,
+        options: [{ value: 'a', label: 'Supervisor', hint: 'Jobs, check-in, attendance' }, { value: 'b', label: 'Storekeeper', hint: 'Inventory, receiving goods' }, { value: 'c', label: 'Technician', hint: 'Own tasks and photos' }], value: ['c'] }) %>
+<pre class="small mb-0 bg-body-tertiary p-3 rounded"><code>&lt;%- include('partials/choices', { name: 'reason', label: 'Reason for visit', required: true,
+      options: [{ value: 'repair', label: 'Repair', hint: 'optional' }], value: values.reason,
+      multiple: false, columns: 5, error: errors.reason }) %&gt;</code></pre>
+      <p class="text-body-secondary small mb-0">Use cards instead of a dropdown when there are up to about 8 options: one tap, and everything is visible.</p>
+    </div>
+  </section>
+
+  <section class="card" id="dropdowns">
+    <div class="card-header"><h2 class="h6 mb-0">Dropdowns</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { id: 'k-plain', name: 'unit', label: 'Plain select', type: 'select', options: ['pcs', 'length', 'sheet', 'kg', 'litre'], value: 'length' }) %>
+        <%- include('partials/field', { id: 'k-search', name: 'supplier', label: 'Searchable', type: 'select', searchable: true, blank: 'Type to search suppliers', options: suppliers }) %>
+        <%- include('partials/field', { id: 'k-remote', name: 'supplier2', label: 'Searches the server as you type', type: 'select', url: '/dev/ui/suppliers', blank: 'Type 2 letters, e.g. st', hint: 'For long lists: customers, vehicles, items.' }) %>
+        <%- include('partials/field', { id: 'k-multi', name: 'suppliers', label: 'Several values', type: 'select', searchable: true, multiple: true, options: suppliers, value: ['Mabati Steel Mills'] }) %>
+      </div>
+<pre class="small mb-0 bg-body-tertiary p-3 rounded"><code>&lt;%- include('partials/field', { name: 'supplier_id', label: 'Supplier', type: 'select',
+      searchable: true, options: suppliers.map((s) =&gt; ({ value: s.id, label: s.name })) }) %&gt;
+// Long lists: url: '/api/suppliers' answers ?q=… with [{ "value": 12, "label": "Mabati Steel Mills" }]</code></pre>
+    </div>
+  </section>
+
+  <section id="list-page">
+    <div class="card">
+      <div class="card-header"><h2 class="h6 mb-0">List page</h2></div>
+      <form class="jt-toolbar" onsubmit="return false">
+        <div class="jt-search"><i class="bi bi-search" aria-hidden="true"></i><input class="form-control" type="search" placeholder="Search jobs" aria-label="Search jobs"></div>
+        <nav class="jt-seg" aria-label="Show"><a href="#list-page" class="active">Open</a><a href="#list-page">Done</a><a href="#list-page">All</a></nav>
+        <span class="jt-count">3 jobs</span>
+      </form>
+      <div class="table-responsive">
+        <table class="table jt-table">
+          <thead><tr><th>Job</th><th>Vehicle</th><th>Customer</th><th class="text-end">Quoted (KES)</th><th>Stage</th></tr></thead>
+          <tbody>
+            <tr><td><a class="jt-row-link font-monospace" href="#list-page">JOB-2026-0147</a></td><td><%- include('partials/plate', { reg: 'KCX 482B' }) %></td><td>Rift Valley Haulage<span class="jt-sub">14 ft dropside</span></td><td class="text-end"><%= fmt.money(453560) %></td><td><%- include('partials/pill', { text: 'Welding', tone: 'info' }) %></td></tr>
+            <tr><td><a class="jt-row-link font-monospace" href="#list-page">JOB-2026-0139</a></td><td><%- include('partials/plate', { reg: 'KCY 907M' }) %></td><td>Nyeri Fresh Dairies<span class="jt-sub">Insulated box body</span></td><td class="text-end"><%= fmt.money(1284000) %></td><td><%- include('partials/pill', { text: 'Rework', tone: 'bad' }) %></td></tr>
+            <tr><td><a class="jt-row-link font-monospace" href="#list-page">JOB-2026-0136</a></td><td><%- include('partials/plate', { reg: 'KCU 210T' }) %></td><td>Kiambu County<span class="jt-sub">Pickup canopy</span></td><td class="text-end"><%= fmt.money(186500) %></td><td><%- include('partials/pill', { text: 'Ready', tone: 'ok' }) %></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <%- include('partials/empty', { icon: 'search', heading: 'No jobs match “KDB”', text: 'Check the spelling, or search by job number instead.' }) %>
+    </div>
+    <p class="text-body-secondary small mt-2 mb-0">Example rows. Money: <code>fmt.money(value)</code>; dates: <code>fmt.date()</code>, <code>fmt.dateTime()</code>; phones: <code>fmt.phone()</code>. The whole row is clickable through the <code>jt-row-link</code> in its first cell.</p>
+  </section>
+
+  <section class="card" id="messages">
+    <div class="card-header"><h2 class="h6 mb-0">Messages</h2></div>
+    <div class="card-body d-grid gap-2">
+      <div class="alert alert-success jt-flash mb-0"><i class="bi bi-check-circle"></i><span>Checked in KDA 123A as CHK-2026-0412.</span></div>
+      <div class="alert alert-warning jt-flash mb-0"><i class="bi bi-exclamation-triangle"></i><span>Flat bar 50×6: only 4 in store, the job needs 10.</span></div>
+      <div class="alert alert-danger jt-flash mb-0"><i class="bi bi-x-circle"></i><span>That phone number and password don’t match. Check both and try again.</span></div>
+      <div class="alert alert-info jt-flash mb-0"><i class="bi bi-info-circle"></i><span>Admins and managers see every site.</span></div>
+<pre class="small mb-0 mt-2 bg-body-tertiary p-3 rounded"><code>// After saving, before the redirect: shown once at the top of the next page
+req.session.flash = { type: 'success', text: 'Checked in KDA 123A as CHK-2026-0412.' };   // success | warning | info | error</code></pre>
+    </div>
+  </section>
+
+  <section id="save-bar">
+    <div class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Save bar</h2></div>
+      <div class="card-body">
+        <p class="mb-0 text-body-secondary">Long forms end with this bar. It sticks to the bottom of the screen, so Save is always one tap away on a tablet.</p>
+      </div>
+    </div>
+    <div class="jt-savebar">
+      <span class="jt-savebar-note"><i class="bi bi-check2"></i>Draft saved on this device</span>
+      <div class="jt-savebar-actions">
+        <button class="btn btn-outline-secondary" type="button">Save &amp; create enquiry</button>
+        <button class="btn btn-primary" type="button"><i class="bi bi-check2"></i>Check in</button>
+      </div>
+    </div>
+  </section>
+</div>

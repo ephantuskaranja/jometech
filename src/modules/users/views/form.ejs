@@ -1,0 +1,129 @@
+<%# Add and edit use this same form. `account` is the person being edited (null when adding). %>
+<%
+  const editing = Boolean(account);
+  const isSelf = editing && account.id === user.id;
+  const locked = editing && account.locked_until && account.locked_until > new Date();
+%>
+<%- include('partials/page-header', {
+  crumb: ['System', { label: 'Users', href: '/admin/users' }, editing ? account.name : 'Add user'],
+  heading: editing ? account.name : 'Add user',
+  sub: editing
+    ? 'Change their details, roles and sites. Changes apply the next time they open a page.'
+    : 'Name, phone number and role are enough. You’ll get a temporary password to give them.',
+}) %>
+
+<% if (tempPassword) { %>
+  <section class="card border-primary mb-4">
+    <div class="card-body d-grid gap-2">
+      <h2 class="h6 mb-0"><i class="bi bi-key me-1"></i>Temporary password for <%= account.name %></h2>
+      <div class="jt-secret">
+        <code><%= tempPassword %></code>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-copy="<%= tempPassword %>"><i class="bi bi-copy"></i>Copy</button>
+      </div>
+      <p class="mb-0 text-body-secondary">Give it to them with their phone number, <strong><%= fmt.phone(account.phone) %></strong>. They’ll choose their own password when they first log in. It won’t be shown again.</p>
+    </div>
+  </section>
+<% } %>
+
+<div class="row g-4">
+  <div class="<%= editing ? 'col-lg-8' : 'col-xl-9' %>">
+    <form method="post" action="<%= editing ? `/admin/users/${account.id}` : '/admin/users' %>" novalidate id="user-form"
+          x-data="{ roles: <%= JSON.stringify(values.roles) %>, allSiteRoles: <%= JSON.stringify(allSiteRoles) %>, more: <%= values.email ? 'true' : 'false' %>,
+                    get seesAllSites() { return this.roles.some((r) => this.allSiteRoles.includes(r)) } }">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <section class="card mb-4">
+        <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+        <div class="card-body jt-fields">
+          <%- include('partials/field', { name: 'name', label: 'Full name', value: values.name, error: errors.name, required: true, autocomplete: 'off', placeholder: 'e.g. Kamau Njoroge' }) %>
+          <%- include('partials/field', { name: 'phone', label: 'Phone number', type: 'tel', value: editing && !errors.phone && values.phone === account.phone ? fmt.phone(values.phone) : values.phone, error: errors.phone, required: true, hint: 'They log in with this number.', placeholder: '0712 345 678', autocomplete: 'off' }) %>
+          <div class="jt-full">
+            <button class="btn btn-link p-0 jt-more" type="button" @click="more = !more" :aria-expanded="more">
+              More details (optional) <i class="bi" :class="more ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            </button>
+          </div>
+          <div class="jt-full jt-fields" x-show="more" x-cloak>
+            <%- include('partials/field', { name: 'email', label: 'Email', type: 'email', value: values.email, error: errors.email, hint: 'They can log in with this too.', autocomplete: 'off' }) %>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mb-4">
+        <div class="card-header"><h2 class="h6 mb-0">What they can do</h2></div>
+        <div class="card-body">
+          <%- include('partials/choices', { name: 'roles', label: 'Role', multiple: true, model: 'roles', options: roleOptions, value: values.roles, error: errors.roles, required: true, hint: 'Most people need one role. Pick more only if they really do both jobs.' }) %>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Where they work</h2></div>
+        <div class="card-body">
+          <div class="alert alert-info mb-0 d-flex gap-2" x-show="seesAllSites" x-cloak>
+            <i class="bi bi-info-circle"></i><span>Admins and managers see every site, so there’s nothing to choose here.</span>
+          </div>
+          <div x-show="!seesAllSites">
+            <%- include('partials/choices', { name: 'sites', label: 'Sites', multiple: true, options: siteOptions, value: values.sites, error: errors.sites, required: true, auto: !editing && values.sites.length ? 'your site' : false }) %>
+          </div>
+        </div>
+      </section>
+
+      <div class="jt-savebar">
+        <span class="jt-savebar-note"><i class="bi bi-shield-check"></i><%= editing ? 'Saving keeps their password as it is.' : 'A temporary password is made when you save.' %></span>
+        <div class="jt-savebar-actions">
+          <a class="btn btn-outline-secondary" href="/admin/users">Cancel</a>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= editing ? 'Save changes' : 'Add user' %></button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <% if (editing) { %>
+    <aside class="col-lg-4 d-grid gap-4 align-content-start">
+      <section class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h2 class="h6 mb-0">Account</h2>
+          <% if (!account.is_active) { %><%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %>
+          <% } else if (locked) { %><%- include('partials/pill', { text: 'Locked', tone: 'warn' }) %>
+          <% } else { %><%- include('partials/pill', { text: 'Active', tone: 'ok' }) %><% } %>
+        </div>
+        <div class="card-body">
+          <dl class="jt-kv">
+            <div><dt>Last login</dt><dd><%= account.last_login_at ? fmt.dateTime(account.last_login_at) : 'Never' %></dd></div>
+            <div><dt>Added</dt><dd><%= fmt.date(account.created_at) %></dd></div>
+            <% if (account.must_change_password) { %><div><dt>Password</dt><dd>Temporary, not yet changed</dd></div><% } %>
+            <% if (locked) { %><div><dt>Locked until</dt><dd><%= fmt.time(account.locked_until) %></dd></div><% } %>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-body d-grid gap-3">
+          <form method="post" action="/admin/users/<%= account.id %>/reset-password" class="d-grid gap-1">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-key"></i>Reset password</button>
+            <span class="form-text">Makes a new temporary password<%= locked ? ' and unlocks the account' : '' %>.</span>
+          </form>
+
+          <% if (!isSelf) { %>
+            <form method="post" action="/admin/users/<%= account.id %>/status" class="d-grid gap-1" x-data="{ sure: false }">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="active" value="<%= account.is_active ? '0' : '1' %>">
+              <% if (account.is_active) { %>
+                <button class="btn btn-outline-danger" type="button" x-show="!sure" @click="sure = true"><i class="bi bi-person-slash"></i>Switch off account</button>
+                <div class="d-grid gap-2" x-show="sure" x-cloak>
+                  <span class="small">They’ll be logged out and can’t log in. Their records stay.</span>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-danger flex-fill" type="submit">Switch off</button>
+                    <button class="btn btn-outline-secondary" type="button" @click="sure = false">Keep</button>
+                  </div>
+                </div>
+              <% } else { %>
+                <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-person-check"></i>Switch account back on</button>
+              <% } %>
+            </form>
+          <% } %>
+        </div>
+      </section>
+    </aside>
+  <% } %>
+</div>

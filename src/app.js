@@ -8,11 +8,14 @@ import { logger } from './core/logger.js';
 import { dbIsUp } from './core/db.js';
 import { navFor, isActive } from './core/nav.js';
 import { formatPhone } from './core/phone.js';
+import { fmt } from './core/format.js';
 import { sessionMiddleware, csrfProtection, generateCsrfToken } from './core/session.js';
 import { attachUser, requireLogin } from './core/auth.js';
 import { router as authRoutes } from './modules/auth/routes.js';
 import { router as accountRoutes } from './modules/account/routes.js';
 import { router as dashboardRoutes } from './modules/dashboard/routes.js';
+import { router as userRoutes } from './modules/users/routes.js';
+import { router as devRoutes } from './modules/dev/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -49,7 +52,7 @@ export function createApp() {
   app.use((req, res, next) => {
     Object.assign(res.locals, {
       appName: config.appName, title: config.appName, path: req.path,
-      isActive, formatPhone, nav: [], user: null, site: null, flash: null, csrfToken: '',
+      isActive, formatPhone, fmt, nav: [], user: null, site: null, flash: null, csrfToken: '',
     });
     next();
   });
@@ -70,6 +73,7 @@ export function createApp() {
   vendor('/vendor/bootstrap', 'bootstrap/dist');
   vendor('/vendor/bootstrap-icons', 'bootstrap-icons/font');
   vendor('/vendor/alpinejs', 'alpinejs/dist');
+  vendor('/vendor/tom-select', 'tom-select/dist');
   vendor('/vendor/fonts', '@fontsource');
 
   // For uptime monitors: 503 when the database can't be reached.
@@ -98,6 +102,8 @@ export function createApp() {
   app.use(requireLogin);        // everything below needs a logged-in user
   app.use(accountRoutes);
   app.use(dashboardRoutes);
+  app.use(userRoutes);
+  app.use(devRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

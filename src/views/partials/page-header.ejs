@@ -1,0 +1,27 @@
+<%#
+  Top of every page: breadcrumb, title, one-line explanation, action buttons.
+
+  include('partials/page-header', {
+        crumb: ['System', 'Users'], heading: 'Users', sub: 'Who can log in and what they can do.',
+        actions: [{ label: 'Add user', href: '/admin/users/new', icon: 'plus-lg', primary: true }] })
+%>
+<div class="jt-page-header">
+  <div>
+    <% if (locals.crumb) { %>
+      <div class="jt-crumb">
+        <% [].concat(crumb).forEach((c, i) => { %><% if (i) { %><i class="bi bi-chevron-right"></i><% } %><% if (typeof c === 'object') { %><a href="<%= c.href %>"><%= c.label %></a><% } else { %><span><%= c %></span><% } %><% }) %>
+      </div>
+    <% } %>
+    <h1><%= heading %></h1>
+    <% if (locals.sub) { %><p class="jt-page-sub"><%= sub %></p><% } %>
+  </div>
+  <% if (locals.actions?.length) { %>
+    <div class="jt-page-actions">
+      <% actions.forEach((a) => { %>
+        <a class="btn <%= a.primary ? 'btn-primary' : 'btn-outline-secondary' %>" href="<%= a.href %>">
+          <% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+</div>

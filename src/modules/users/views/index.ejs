@@ -1,0 +1,57 @@
+<%- include('partials/page-header', {
+  crumb: ['System', 'Users'],
+  heading: 'Users',
+  sub: 'Who can log in, what they can do and at which sites.',
+  actions: [{ label: 'Add user', href: '/admin/users/new', icon: 'person-plus', primary: true }],
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/admin/users">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name, phone or email" aria-label="Search users">
+    </div>
+    <input type="hidden" name="status" value="<%= status %>">
+    <nav class="jt-seg" aria-label="Show">
+      <% [['active', 'Active'], ['inactive', 'Switched off'], ['all', 'All']].forEach(([key, label]) => { %>
+        <a href="?status=<%= key %><%= q ? `&q=${encodeURIComponent(q)}` : '' %>" class="<%= status === key ? 'active' : '' %>"<%- status === key ? ' aria-current="true"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'user' : 'users' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <% if (q) { %>
+      <%- include('partials/empty', { icon: 'search', heading: `No one matches “${q}”`, text: 'Check the spelling, or search by phone number instead.' }) %>
+    <% } else { %>
+      <%- include('partials/empty', { icon: 'people', heading: 'No users here', text: 'People you add can log in with their phone number.', action: { label: 'Add user', href: '/admin/users/new' } }) %>
+    <% } %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead>
+          <tr><th>Name</th><th>Phone</th><th>Role</th><th class="d-none d-md-table-cell">Sites</th><th class="d-none d-lg-table-cell">Last login</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <% list.forEach((u) => { %>
+            <tr>
+              <td>
+                <a class="jt-row-link" href="/admin/users/<%= u.id %>"><%= u.name %></a>
+                <% if (u.email) { %><span class="jt-sub"><%= u.email %></span><% } %>
+              </td>
+              <td class="font-monospace small text-nowrap"><%= fmt.phone(u.phone) %></td>
+              <td><%= u.roleNames.join(', ') || '—' %></td>
+              <td class="d-none d-md-table-cell text-body-secondary"><%= u.allSites ? 'All sites' : (u.siteNames.join(', ') || '—') %></td>
+              <td class="d-none d-lg-table-cell text-body-secondary text-nowrap"><%= u.last_login_at ? fmt.dateTime(u.last_login_at) : 'Never' %></td>
+              <td>
+                <% if (!u.is_active) { %><%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %>
+                <% } else if (u.locked_until && u.locked_until > now) { %><%- include('partials/pill', { text: `Locked till ${fmt.time(u.locked_until)}`, tone: 'warn' }) %>
+                <% } else { %><%- include('partials/pill', { text: 'Active', tone: 'ok' }) %><% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

@@ -39,7 +39,8 @@ export const nav = [
   {
     label: 'System',
     items: [
-      { label: 'Settings & backups', href: '/admin', icon: 'sliders', permission: ['users.manage', 'system.settings', 'system.backup.manage'] },
+      { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },
+      { label: 'Settings & backups', href: '/admin/settings', icon: 'sliders', permission: ['system.settings', 'system.backup.manage'] },
     ],
   },
 ];

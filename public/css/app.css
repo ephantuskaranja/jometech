@@ -292,3 +292,97 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-auth-theme { display: flex; justify-content: center; gap: .25rem; }
 .jt-auth-theme .btn { color: var(--bs-tertiary-color); border: 0; }
 .jt-auth-theme .btn.active { color: var(--bs-body-color); background: var(--bs-tertiary-bg); }
+
+/* ---------- 6. UI kit pieces (see /dev/ui) ---------- */
+.jt-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; }
+.jt-crumb a { color: inherit; text-decoration: none; }
+.jt-crumb a:hover { color: var(--bs-body-color); text-decoration: underline; }
+.jt-crumb .bi { font-size: .65rem; }
+
+/* Fields */
+.jt-field { display: grid; gap: .375rem; min-width: 0; margin: 0; border: 0; padding: 0; }
+.jt-field .form-label { display: flex; align-items: center; gap: .375rem; margin: 0; float: none; width: auto; }
+.jt-req { color: var(--bs-danger); margin-left: .125rem; }
+.jt-prefilled { background-color: var(--bs-tertiary-bg); }
+.jt-num { font-variant-numeric: tabular-nums; }
+.form-text { margin: 0; color: var(--bs-tertiary-color); font-size: .8rem; }
+.jt-error-text { color: var(--bs-danger-text-emphasis); font-size: .82rem; }
+.jt-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.125rem; }
+.jt-fields > .jt-full { grid-column: 1 / -1; }
+@media (max-width: 575.98px) { .jt-fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* Choice cards (big checkboxes / radios) */
+.jt-choices { display: grid; grid-template-columns: repeat(var(--jt-cols, 3), minmax(0, 1fr)); gap: .625rem; }
+@media (max-width: 767.98px) { .jt-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .jt-choices { grid-template-columns: minmax(0, 1fr); } }
+.jt-choice { display: flex; align-items: flex-start; gap: .625rem; padding: .7rem .8rem; min-height: 3rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); background: var(--jt-surface); cursor: pointer; }
+.jt-choice:hover { border-color: var(--bs-tertiary-color); }
+.jt-choice:has(input:checked) { border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem var(--bs-focus-ring-color); }
+.jt-choice .form-check-input { margin-top: .15rem; flex: none; }
+.jt-choice-label { display: block; font-weight: 600; }
+.jt-choice-hint { display: block; font-size: .8rem; color: var(--bs-tertiary-color); line-height: 1.35; }
+.jt-choices.is-invalid .jt-choice { border-color: var(--bs-danger); }
+
+/* Pills */
+.jt-pill { display: inline-flex; align-items: center; gap: .375rem; font-size: .78rem; font-weight: 600; padding: .1rem .6rem; border-radius: 99px; white-space: nowrap; background: var(--bs-tertiary-bg); color: var(--bs-secondary-color); }
+.jt-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: currentColor; }
+.jt-pill-ok { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+.jt-pill-warn { background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+.jt-pill-bad { background: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+.jt-pill-info { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+.jt-plate-lg { font-size: 1.1rem; line-height: 1.9rem; padding: 0 .65rem; border-width: 2px; }
+
+/* List pages: toolbar + table in one card */
+.jt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; padding: .875rem 1.125rem; border-bottom: 1px solid var(--bs-border-color); }
+.jt-toolbar .jt-search { max-width: 22rem; }
+.jt-toolbar .jt-count { margin-left: auto; color: var(--bs-tertiary-color); font-size: .85rem; }
+.jt-seg { display: inline-flex; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); overflow: hidden; }
+.jt-seg a { padding: .45rem .8rem; font-size: .85rem; font-weight: 600; color: var(--bs-secondary-color); text-decoration: none; border-left: 1px solid var(--bs-border-color); }
+.jt-seg a:first-child { border-left: 0; }
+.jt-seg a:hover { background: var(--bs-tertiary-bg); color: var(--bs-body-color); }
+.jt-seg a.active { background: var(--bs-primary); color: var(--jt-on-primary); }
+.jt-table { --bs-table-bg: transparent; margin: 0; }
+.jt-table th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--bs-tertiary-color); font-weight: 600; padding: .65rem 1.125rem; white-space: nowrap; border-bottom-color: var(--bs-border-color); }
+.jt-table td { padding: .8rem 1.125rem; vertical-align: middle; border-bottom-color: var(--bs-border-color); }
+.jt-table tbody tr:last-child td { border-bottom: 0; }
+.jt-table tbody tr:hover td { background: var(--bs-tertiary-bg); }
+.jt-table tr { position: relative; }
+.jt-table .jt-row-link { color: inherit; font-weight: 600; text-decoration: none; }
+.jt-table .jt-row-link::after { content: ""; position: absolute; inset: 0; } /* whole row is clickable */
+.jt-sub { display: block; font-size: .8rem; color: var(--bs-tertiary-color); font-weight: 400; }
+
+/* Sticky save bar at the bottom of long forms */
+.jt-savebar { position: sticky; bottom: 0; z-index: 1010; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1.25rem; padding: .75rem 1rem; padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)); background: var(--jt-surface); border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius-lg); box-shadow: 0 12px 32px -8px rgb(16 24 40 / .22); }
+.jt-savebar-note { color: var(--bs-tertiary-color); font-size: .85rem; display: flex; align-items: center; gap: .375rem; }
+.jt-savebar-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 575.98px) { .jt-savebar-actions { margin-left: 0; width: 100%; } .jt-savebar-actions .btn { flex: 1; } }
+
+/* Shown once after creating a user or resetting a password */
+.jt-secret { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.jt-secret code { font-size: 1.35rem; font-weight: 600; letter-spacing: .06em; color: var(--bs-body-color); background: var(--bs-tertiary-bg); padding: .25rem .75rem; border-radius: var(--bs-border-radius-sm); }
+
+/* Key/value list (account details etc.) */
+.jt-kv { display: grid; margin: 0; }
+.jt-kv > div { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid var(--bs-border-color); }
+.jt-kv > div:last-child { border-bottom: 0; }
+.jt-kv dt { font-weight: 400; color: var(--bs-tertiary-color); }
+.jt-kv dd { margin: 0; text-align: right; font-weight: 500; }
+
+/* Tom Select: follow the Jome-Tech colours in both themes */
+.ts-wrapper .ts-control, .ts-wrapper.single.input-active .ts-control { background: var(--jt-surface); border-color: var(--bs-border-color); color: var(--bs-body-color); min-height: 2.75rem; }
+.ts-wrapper.focus .ts-control { border-color: var(--bs-primary); box-shadow: 0 0 0 .25rem var(--bs-focus-ring-color); }
+.form-select.is-invalid + .ts-wrapper .ts-control, .ts-wrapper.is-invalid .ts-control { border-color: var(--bs-danger); }
+.ts-control input { color: var(--bs-body-color); }
+.ts-control input::placeholder { color: var(--bs-tertiary-color); }
+.ts-dropdown { background: var(--jt-surface); border-color: var(--bs-border-color); color: var(--bs-body-color); border-radius: var(--bs-border-radius); box-shadow: 0 12px 32px -8px rgb(16 24 40 / .22); }
+.ts-dropdown .option, .ts-dropdown .no-results, .ts-dropdown .create { padding: .5rem .75rem; }
+.ts-dropdown .active { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+.ts-dropdown .create { color: var(--bs-primary-text-emphasis); font-weight: 600; }
+.ts-wrapper.multi .ts-control > div { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); border: 0; border-radius: .35rem; }
+
+/* UI kit page only */
+.jt-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .75rem; }
+.jt-swatch { border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); overflow: hidden; font-size: .78rem; }
+.jt-swatch i { display: block; height: 3rem; }
+.jt-swatch span { display: block; padding: .4rem .6rem; font-family: var(--bs-font-monospace); color: var(--bs-secondary-color); }
+.jt-kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; }
