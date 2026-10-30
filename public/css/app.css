@@ -189,7 +189,7 @@ h1, .h1 { font-size: 1.75rem; font-weight: 600; }
 }
 
 .jt-brand { display: flex; align-items: center; gap: .625rem; padding: .25rem .5rem 1.25rem; }
-.jt-brand-mark { width: 2rem; height: 2rem; border-radius: .5rem; background: var(--jt-brand); color: #fff; display: grid; place-items: center; font-family: var(--jt-font-display); font-weight: 700; font-size: .875rem; flex: none; }
+.jt-brand-mark { width: 2rem; height: 2rem; flex: none; }
 .jt-brand-name { display: block; font-family: var(--jt-font-display); font-weight: 700; color: #fff; font-size: 1.02rem; line-height: 1.1; }
 .jt-brand-sub { display: block; font-size: .72rem; color: var(--jt-side-ink-2); }
 
@@ -283,8 +283,8 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 
 .jt-auth-body { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem 1rem; }
 .jt-auth { width: 100%; max-width: 25rem; display: grid; gap: 1.25rem; }
-.jt-auth-brand { display: flex; align-items: center; justify-content: center; gap: .75rem; }
-.jt-auth-brand .jt-brand-mark { width: 2.5rem; height: 2.5rem; font-size: 1rem; border-radius: .625rem; }
+.jt-auth-brand { display: flex; flex-direction: column; align-items: center; gap: .75rem; text-align: center; }
+.jt-auth-art { width: 5.5rem; height: 5.5rem; border-radius: 1.25rem; box-shadow: 0 .75rem 2rem -1rem rgba(11, 26, 92, .6); }
 .jt-auth-name { display: block; font-family: var(--jt-font-display); font-weight: 700; font-size: 1.25rem; line-height: 1.1; }
 .jt-auth-sub { display: block; font-size: .8rem; color: var(--bs-tertiary-color); }
 .jt-auth-card .card-body { padding: 1.75rem; }

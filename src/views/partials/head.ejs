@@ -2,6 +2,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<%= csrfToken %>">
   <title><%= title === appName ? appName : `${title} · ${appName}` %></title>
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/brand/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0b1a5c">
 
   <%# Must run before the CSS so the page never flashes the wrong theme. %>
   <script src="/js/theme.js"></script>
