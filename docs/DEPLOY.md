@@ -12,11 +12,11 @@ If the tests fail, nothing is deployed. Watch progress in the repository's **Act
 
 | Piece | Where |
 |---|---|
-| App code | `/opt/jometech` (a git clone, owned by user `jometech`) |
-| Settings | `/opt/jometech/.env` (never committed) |
+| App code | `/var/www/apps/jometech` (a git clone, owned by user `jometech`) |
+| Settings | `/var/www/apps/jometech/.env` (never committed) |
 | Runs as | systemd service `jometech` → `node src/server.js` on port 3000 (local only) |
 | HTTPS | Caddy, `/etc/caddy/Caddyfile` → `127.0.0.1:3000` |
-| Backups before each deploy | `/opt/jometech/storage/backups/` (last 10) |
+| Backups before each deploy | `/var/www/apps/jometech/storage/backups/` (last 10) |
 
 Commands below are for Ubuntu 24.04, run as a user with `sudo` (or root). Lines starting with `#` are notes.
 
@@ -48,7 +48,7 @@ If nginx already serves other sites on ports 80/443 (as on the Switch Reality se
 
 ```bash
 sudo adduser --disabled-password --gecos "Jome-Tech app" jometech
-sudo mkdir -p /opt/jometech && sudo chown jometech:jometech /opt/jometech
+sudo mkdir -p /var/www/apps/jometech && sudo chown jometech:jometech /var/www/apps/jometech
 ```
 
 ### 4. Let the server pull from GitHub (read-only deploy key)
@@ -63,7 +63,7 @@ cat ~/.ssh/github.pub
 On GitHub: **repository → Settings → Deploy keys → Add deploy key**, paste the key, leave "Allow write access" **off**. Then, still as `jometech`:
 
 ```bash
-git clone git@github.com:ephantuskaranja/jometech.git /opt/jometech     # answer "yes" to the fingerprint
+git clone git@github.com:ephantuskaranja/jometech.git /var/www/apps/jometech     # answer "yes" to the fingerprint
 exit
 ```
 
@@ -85,7 +85,7 @@ The server runs MySQL 8.0, which reached end of life in April 2026. Upgrade to 8
 
 ```bash
 sudo -iu jometech
-cd /opt/jometech
+cd /var/www/apps/jometech
 cp .env.example .env
 node -e "console.log(crypto.randomBytes(32).toString('hex'))"    # copy this for SESSION_SECRET
 nano .env
@@ -108,7 +108,7 @@ chmod 600 .env
 
 ### 7. First install, database tables, first admin
 
-Still as `jometech` in `/opt/jometech`:
+Still as `jometech` in `/var/www/apps/jometech`:
 
 ```bash
 npm ci --omit=dev
@@ -120,7 +120,7 @@ exit
 ### 8. Run it as a service
 
 ```bash
-sudo cp /opt/jometech/deploy/jometech.service /etc/systemd/system/
+sudo cp /var/www/apps/jometech/deploy/jometech.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now jometech
 curl http://127.0.0.1:3000/health        # {"ok":true,"db":"up"}
@@ -136,8 +136,8 @@ sudo chmod 440 /etc/sudoers.d/jometech
 **Otherwise, Caddy:**
 
 ```bash
-sudo nano /opt/jometech/deploy/Caddyfile        # replace app.example.co.ke with your domain
-sudo cp /opt/jometech/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /var/www/apps/jometech/deploy/Caddyfile        # replace app.example.co.ke with your domain
+sudo cp /var/www/apps/jometech/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 
@@ -189,8 +189,8 @@ Push to `master` (or GitHub → Actions → **Test and deploy** → Run workflow
 - **Deploy:** `git push`. Watch the **Actions** tab; the deploy step prints each stage.
 - **Logs:** `journalctl -u jometech -f`
 - **Restart by hand:** `sudo systemctl restart jometech`
-- **Deploy by hand** (e.g. GitHub is down): `sudo -iu jometech /opt/jometech/scripts/deploy.sh`
-- **Never edit files in `/opt/jometech` on the server.** The deploy pulls with `--ff-only` and stops if the server copy differs. Change code on your PC and push.
+- **Deploy by hand** (e.g. GitHub is down): `sudo -iu jometech /var/www/apps/jometech/scripts/deploy.sh`
+- **Never edit files in `/var/www/apps/jometech` on the server.** The deploy pulls with `--ff-only` and stops if the server copy differs. Change code on your PC and push.
 
 ## When something goes wrong
 
@@ -200,6 +200,6 @@ Push to `master` (or GitHub → Actions → **Test and deploy** → Run workflow
 - **Restore the database from before a deploy:**
   ```bash
   sudo systemctl stop jometech
-  gunzip < /opt/jometech/storage/backups/pre-deploy-YYYYMMDD-HHMMSS.sql.gz | mysql -u jometech -p jometech
+  gunzip < /var/www/apps/jometech/storage/backups/pre-deploy-YYYYMMDD-HHMMSS.sql.gz | mysql -u jometech -p jometech
   sudo systemctl start jometech
   ```

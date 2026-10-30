@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Updates the app on the server. Run as the app user from the app folder:
-#   /opt/jometech/scripts/deploy.sh
+#   /var/www/apps/jometech/scripts/deploy.sh
 # GitHub Actions runs it after every push to master (.github/workflows/deploy.yml).
 #
 # 1. backs up the database (kept in storage/backups/, last 10)

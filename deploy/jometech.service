@@ -9,7 +9,7 @@ Wants=mysql.service
 [Service]
 Type=simple
 User=jometech
-WorkingDirectory=/opt/jometech
+WorkingDirectory=/var/www/apps/jometech
 ExecStart=/usr/bin/node --env-file=.env src/server.js
 Restart=always
 RestartSec=3
