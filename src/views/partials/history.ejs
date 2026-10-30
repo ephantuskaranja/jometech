@@ -1,0 +1,52 @@
+<%#
+  History of one record (from the audit trail), newest first.
+  include('partials/history', { entries, labels: { name: 'Name', roles: 'Role' } })
+
+  entries   from history(entity, id) in src/core/audit.js
+  labels    field → label people understand; fields not listed use their own name
+%>
+<%
+  const phrases = {
+    create: 'added this',
+    update: 'changed',
+    delete: 'deleted this',
+    password_reset: 'reset the password',
+    password_changed: 'changed their password',
+    switched_off: 'switched the account off',
+    switched_on: 'switched the account back on',
+    login: 'logged in',
+    locked: 'locked after too many wrong passwords',
+  };
+  const show = (v) => {
+    if (v === null || v === undefined || v === '') return '—';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return fmt.dateTime(v);
+    return v;
+  };
+  const fieldLabels = locals.labels ?? {};
+%>
+<% if (!entries.length) { %>
+  <p class="text-body-secondary small mb-0">No changes recorded yet.</p>
+<% } else { %>
+  <ol class="jt-timeline">
+    <% entries.forEach((e) => { const changes = Object.entries(e.changes ?? {}); %>
+      <li class="jt-timeline-item<%= e.action === 'login' ? ' is-quiet' : '' %>">
+        <div><strong><%= e.by ?? 'System' %></strong> <%= phrases[e.action] ?? e.action.replaceAll('_', ' ') %></div>
+        <% if (changes.length) { %>
+          <ul class="jt-changes">
+            <% changes.forEach(([field, [before, after]]) => { %>
+              <li>
+                <span class="jt-changes-field"><%= fieldLabels[field] ?? field.replaceAll('_', ' ') %></span>
+                <% if (e.action === 'create') { %><%= show(after) %>
+                <% } else { %><span class="jt-changes-old"><%= show(before) %></span> <i class="bi bi-arrow-right"></i> <%= show(after) %><% } %>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+        <% if (e.summary) { %><div class="small text-body-secondary"><%= e.summary %></div><% } %>
+        <time class="small text-body-tertiary" datetime="<%= new Date(e.created_at).toISOString() %>"><%= fmt.dateTime(e.created_at) %></time>
+      </li>
+    <% }) %>
+  </ol>
+<% } %>

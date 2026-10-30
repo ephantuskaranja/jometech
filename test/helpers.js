@@ -11,7 +11,7 @@ export const PASSWORD = 'workshop-test-1';
 export async function makeUser(phoneSuffix, roles, extra = {}) {
   const phone = `07000000${String(phoneSuffix).padStart(2, '0')}`;
   const site = await db('sites').where({ code: 'MAIN' }).first('id');
-  await createUser({ name: `Test ${roles.join(' ')}`, phone, password: PASSWORD, roles, siteIds: [site.id], ...extra });
+  await createUser({ name: `Test ${roles.join(' ')}`, phone, password: PASSWORD, roles, siteIds: [site.id], ...extra }, { user: null });
   return phone;
 }
 
@@ -29,7 +29,9 @@ export async function loginAs(app, phone, password = PASSWORD) {
 }
 
 export async function cleanup() {
-  await db('users').where('phone', 'like', '+25470000%').delete();
+  const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
+  await db('audit_log').where({ entity: 'user' }).whereIn('entity_id', ids).delete();
+  await db('users').whereIn('id', ids).delete();
   await sessionStore.close();
   await db.destroy();
 }

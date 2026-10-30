@@ -21,6 +21,9 @@ const output = new Writable({
   },
 });
 output.columns = stdout.columns;
+// The history records changes made here as "System".
+const CLI = { user: null };
+
 const rl = readline.createInterface({ input: stdin, output, terminal: stdin.isTTY });
 
 // Typed (or piped) lines wait in a queue until a question takes them, so
@@ -87,7 +90,7 @@ try {
   if (existing) {
     const yes = (await ask(`${formatPhone(phone)} already belongs to ${existing.name}. Reset their password? (y/N): `)).trim().toLowerCase() === 'y';
     if (yes) {
-      await resetPassword(existing.id, await askPassword(), { mustChangePassword: false });
+      await resetPassword(existing.id, await askPassword(), CLI, { mustChangePassword: false, summary: 'Reset with npm run user:create' });
       console.log(`\nPassword reset for ${existing.name}. Any lock on the account is cleared.\n`);
     }
   } else {
@@ -116,7 +119,7 @@ try {
     }
 
     const password = await askPassword();
-    await createUser({ name, phone, email, password, roles, siteIds });
+    await createUser({ name, phone, email, password, roles, siteIds }, CLI, 'Created with npm run user:create');
     console.log(`\nCreated ${name}. Log in with ${formatPhone(phone)} and the password you just set.\n`);
   }
 } catch (err) {

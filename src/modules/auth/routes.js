@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { db } from '../../core/db.js';
+import { audit } from '../../core/audit.js';
 import { burnPasswordCheck, safeNextUrl, verifyPassword } from '../../core/auth.js';
 import { normalizePhone } from '../../core/phone.js';
 import { check } from '../../core/validate.js';
@@ -70,6 +71,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       failed_logins: lock ? 0 : failed,
       locked_until: lock ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000) : null,
     });
+    if (lock) await audit(db, { user: null, ip: req.ip }, { entity: 'user', id: user.id, action: 'locked', summary: `Locked for ${LOCK_MINUTES} minutes` });
     return fail(lock ? `Too many wrong passwords. The account is locked for ${LOCK_MINUTES} minutes.` : WRONG);
   }
 
@@ -77,6 +79,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   if (!user.is_active) return fail('This account is switched off. Ask an administrator to switch it back on.');
 
   await db('users').where({ id: user.id }).update({ failed_logins: 0, locked_until: null, last_login_at: new Date() });
+  await audit(db, { user: { id: user.id }, ip: req.ip }, { entity: 'user', id: user.id, action: 'login' });
 
   // New session id on login, so a session id planted before login is useless.
   await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));

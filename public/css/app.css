@@ -386,3 +386,18 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-swatch i { display: block; height: 3rem; }
 .jt-swatch span { display: block; padding: .4rem .6rem; font-family: var(--bs-font-monospace); color: var(--bs-secondary-color); }
 .jt-kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; }
+
+/* ---------- 7. History (audit trail) ---------- */
+.jt-timeline { list-style: none; margin: 0; padding: 0; display: grid; }
+.jt-timeline-item { position: relative; padding: 0 0 1rem 1.375rem; display: grid; gap: .2rem; font-size: .875rem; }
+.jt-timeline-item::before { content: ""; position: absolute; left: .3rem; top: 1.1rem; bottom: 0; width: 2px; background: var(--bs-border-color); }
+.jt-timeline-item:last-child { padding-bottom: 0; }
+.jt-timeline-item:last-child::before { display: none; }
+.jt-timeline-item::after { content: ""; position: absolute; left: 0; top: .35rem; width: .75rem; height: .75rem; border-radius: 50%; background: var(--jt-surface); border: 2px solid var(--bs-primary); }
+.jt-timeline-item.is-quiet::after { border-color: var(--bs-border-color); }
+.jt-timeline-item:first-child::after { background: var(--bs-primary); }
+.jt-changes { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+.jt-changes-field { color: var(--bs-tertiary-color); margin-right: .25rem; }
+.jt-changes-field::after { content: ":"; }
+.jt-changes-old { color: var(--bs-tertiary-color); text-decoration: line-through; }
+.jt-changes .bi { font-size: .7rem; color: var(--bs-tertiary-color); }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../../core/db.js';
+import { audit } from '../../core/audit.js';
 import { hashPassword, safeNextUrl, verifyPassword } from '../../core/auth.js';
 import { check } from '../../core/validate.js';
 
@@ -32,9 +33,10 @@ router.post('/account/password', async (req, res) => {
     return renderPassword(req, res, 422, { current: 'That isn’t your current password' });
   }
 
-  await db('users').where({ id: req.user.id }).update({
-    password_hash: await hashPassword(data.password),
-    must_change_password: false,
+  const newHash = await hashPassword(data.password);
+  await db.transaction(async (trx) => {
+    await trx('users').where({ id: req.user.id }).update({ password_hash: newHash, must_change_password: false });
+    await audit(trx, req, { entity: 'user', id: req.user.id, action: 'password_changed', summary: 'Chose their own password' });
   });
   req.session.flash = { type: 'success', text: 'Password changed. Use the new one next time you log in.' };
   res.redirect('/');

@@ -86,6 +86,12 @@ test('editing changes roles and sites', async () => {
   assert.equal(res.status, 302);
   const roles = await db('user_roles').join('roles', 'roles.id', 'role_id').where({ user_id: user.id }).orderBy('roles.key').pluck('key');
   assert.deepEqual(roles, ['sales', 'storekeeper']);
+
+  // The edit page's history says who changed what.
+  const page = (await admin.get(`/admin/users/${user.id}`)).text;
+  assert.match(page, /<strong>Test admin<\/strong> changed/);
+  assert.match(page, /Role<\/span>\s*<span class="jt-changes-old">Storekeeper<\/span> <i class="bi bi-arrow-right"><\/i> Sales, Storekeeper/);
+  assert.match(page, /<strong>Test admin<\/strong> added this/);
 });
 
 test('you can’t remove your own admin role or switch yourself off', async () => {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { can, generateTempPassword } from '../../core/auth.js';
+import { history } from '../../core/audit.js';
 import { normalizePhone } from '../../core/phone.js';
 import { check, httpError } from '../../core/validate.js';
 import * as users from './service.js';
@@ -32,6 +33,7 @@ async function renderForm(req, res, { status = 200, user = null, values, errors 
     values,
     errors,
     tempPassword,
+    entries: user ? await history('user', user.id, { limit: 30 }) : [],
     roleOptions: options.roles.map((r) => ({ value: r.key, label: r.name, hint: r.description })),
     allSiteRoles: options.roles.filter((r) => r.all_sites).map((r) => r.key),
     siteOptions: options.sites.map((s) => ({ value: s.id, label: s.name })),
@@ -76,7 +78,7 @@ router.post('/admin/users', async (req, res) => {
 
   const password = generateTempPassword();
   try {
-    const id = await users.createUser({ ...data, siteIds: data.sites, password, mustChangePassword: true });
+    const id = await users.createUser({ ...data, siteIds: data.sites, password, mustChangePassword: true }, req);
     req.session.tempPassword = { userId: id, password };
     req.session.flash = { type: 'success', text: `${data.name} added.` };
     res.redirect(`/admin/users/${id}`);
@@ -115,7 +117,7 @@ router.post('/admin/users/:id', async (req, res) => {
   if (more) return renderForm(req, res, { status: 422, user: account, values, errors: more });
 
   try {
-    await users.updateUser(account.id, { ...data, siteIds: data.sites });
+    await users.updateUser(account.id, { ...data, siteIds: data.sites }, req);
   } catch (err) {
     if (!err.field) throw err;
     return renderForm(req, res, { status: 422, user: account, values, errors: { [err.field]: err.message } });
@@ -129,7 +131,7 @@ router.post('/admin/users/:id', async (req, res) => {
 router.post('/admin/users/:id/reset-password', async (req, res) => {
   const account = await loadAccount(req);
   const password = generateTempPassword();
-  await users.resetPassword(account.id, password, { mustChangePassword: true });
+  await users.resetPassword(account.id, password, req, { mustChangePassword: true });
   req.session.tempPassword = { userId: account.id, password };
   req.session.flash = { type: 'success', text: `New temporary password made for ${account.name}. Any lock on the account is cleared.` };
   res.redirect(`/admin/users/${account.id}`);
@@ -144,7 +146,7 @@ router.post('/admin/users/:id/status', async (req, res) => {
   } else if (!active && account.roleKeys.includes('admin') && (await users.otherActiveAdmins(account.id)) === 0) {
     req.session.flash = { type: 'warning', text: 'This is the only admin. Make someone else an admin first.' };
   } else {
-    await users.setActive(account.id, active);
+    await users.setActive(account.id, active, req);
     req.session.flash = { type: 'success', text: active ? `${account.name} can log in again.` : `${account.name} is switched off and logged out. Their history is kept.` };
   }
   res.redirect(`/admin/users/${account.id}`);

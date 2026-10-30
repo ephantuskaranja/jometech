@@ -124,6 +124,13 @@
           <% } %>
         </div>
       </section>
+
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+        <div class="card-body">
+          <%- include('partials/history', { entries, labels: { name: 'Name', phone: 'Phone', email: 'Email', roles: 'Role', sites: 'Sites' } }) %>
+        </div>
+      </section>
     </aside>
   <% } %>
 </div>

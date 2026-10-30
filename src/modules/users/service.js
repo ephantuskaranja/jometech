@@ -1,19 +1,31 @@
 import { db } from '../../core/db.js';
+import { audit } from '../../core/audit.js';
 import { hashPassword } from '../../core/auth.js';
 import { normalizePhone } from '../../core/phone.js';
 import { httpError } from '../../core/validate.js';
 
 // Business rules for user accounts. Routes (routes.js) and the
 // `npm run user:create` command both go through these functions.
+// `actor` is who is making the change: `req` in a route, { user: null } in a script.
+
+/** What the history shows for a user: readable names, not ids. */
+async function snapshot(trx, id) {
+  const user = await trx('users').where({ id }).first('name', 'phone', 'email');
+  const roles = await trx('user_roles').join('roles', 'roles.id', 'user_roles.role_id').where({ user_id: id }).orderBy('roles.id').pluck('roles.name');
+  const sites = await trx('user_sites').join('sites', 'sites.id', 'user_sites.site_id').where({ user_id: id }).orderBy('sites.name').pluck('sites.name');
+  return { ...user, roles, sites };
+}
 
 /**
  * Creates a user with roles and sites in one transaction.
  *
  * @param {{ name: string, phone: string, email?: string|null, password: string,
  *           roles: string[], siteIds?: number[], mustChangePassword?: boolean }} input
+ * @param {object} actor
+ * @param {string} [summary] extra note for the history
  * @returns {Promise<number>} new user id
  */
-export async function createUser(input) {
+export async function createUser(input, actor, summary = null) {
   const phone = normalizePhone(input.phone);
   if (!phone) throw httpError(422, `"${input.phone}" isn't a phone number. Use a format like 0712 345 678.`);
 
@@ -34,6 +46,7 @@ export async function createUser(input) {
 
     await trx('user_roles').insert(roleIds.map((roleId) => ({ user_id: id, role_id: roleId })));
     if (siteIds.length) await trx('user_sites').insert(siteIds.map((siteId) => ({ user_id: id, site_id: siteId })));
+    await audit(trx, actor, { entity: 'user', id, action: 'create', after: await snapshot(trx, id), summary });
     return id;
   });
 }
@@ -43,13 +56,14 @@ export async function createUser(input) {
  * @param {number} id
  * @param {{ name: string, phone: string, email?: string|null, roles: string[], siteIds: number[] }} input
  */
-export async function updateUser(id, input) {
+export async function updateUser(id, input, actor) {
   const phone = normalizePhone(input.phone);
   if (!phone) throw httpError(422, `"${input.phone}" isn't a phone number. Use a format like 0712 345 678.`);
 
   await db.transaction(async (trx) => {
     const current = await trx('users').where({ id }).first('default_site_id');
     if (!current) throw httpError(404, 'That user no longer exists.');
+    const before = await snapshot(trx, id);
     await assertPhoneFree(trx, phone, id);
     await assertEmailFree(trx, input.email, id);
     const roleIds = await roleIdsFor(trx, input.roles);
@@ -66,24 +80,32 @@ export async function updateUser(id, input) {
     await trx('user_roles').insert(roleIds.map((roleId) => ({ user_id: id, role_id: roleId })));
     await trx('user_sites').where({ user_id: id }).delete();
     if (input.siteIds.length) await trx('user_sites').insert(input.siteIds.map((siteId) => ({ user_id: id, site_id: siteId })));
+    await audit(trx, actor, { entity: 'user', id, action: 'update', before, after: await snapshot(trx, id) });
   });
 }
 
 /** Sets a new password, clears any lock, and (optionally) asks for a change at next login. */
-export async function resetPassword(userId, password, { mustChangePassword = true } = {}) {
-  await db('users').where({ id: userId }).update({
-    password_hash: await hashPassword(password),
-    must_change_password: mustChangePassword,
-    failed_logins: 0,
-    locked_until: null,
+export async function resetPassword(userId, password, actor, { mustChangePassword = true, summary = null } = {}) {
+  const hash = await hashPassword(password);
+  await db.transaction(async (trx) => {
+    await trx('users').where({ id: userId }).update({
+      password_hash: hash,
+      must_change_password: mustChangePassword,
+      failed_logins: 0,
+      locked_until: null,
+    });
+    await audit(trx, actor, { entity: 'user', id: userId, action: 'password_reset', summary });
   });
 }
 
 /** Switches an account off (can't log in) or back on. Nothing is deleted. */
-export async function setActive(userId, active) {
-  await db('users').where({ id: userId }).update({ is_active: active });
-  // Switching off also ends their open sessions straight away.
-  if (!active) await db('sessions').whereRaw("JSON_EXTRACT(data, '$.userId') = ?", [userId]).delete();
+export async function setActive(userId, active, actor) {
+  await db.transaction(async (trx) => {
+    await trx('users').where({ id: userId }).update({ is_active: active });
+    // Switching off also ends their open sessions straight away.
+    if (!active) await trx('sessions').whereRaw("JSON_EXTRACT(data, '$.userId') = ?", [userId]).delete();
+    await audit(trx, actor, { entity: 'user', id: userId, action: active ? 'switched_on' : 'switched_off' });
+  });
 }
 
 /**

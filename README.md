@@ -81,6 +81,24 @@ public/
 test/                *.test.js files; helpers.js creates and removes test users (phones 0700 000 0xx)
 ```
 
+## History and document numbers
+
+Every service function that changes data does both of these inside one `db.transaction()`:
+
+```js
+import { audit } from '../../core/audit.js';
+import { nextNumber } from '../../core/numbering.js';
+
+await db.transaction(async (trx) => {
+  const number = await nextNumber(trx, 'job');                 // 'JOB-2026-0148'
+  const [id] = await trx('jobs').insert({ number, ... });
+  await audit(trx, req, { entity: 'job', id, action: 'create', after: { number, ... } });
+});
+```
+
+- **History** (`src/core/audit.js`): `audit()` stores who, when, from which IP, and `{ field: [before, after] }` for what changed. Pass readable values (role names, not ids). Passwords are never stored. Show it with `include('partials/history', { entries: await history('job', id) })`. Rows are never edited or deleted.
+- **Numbers** (`src/core/numbering.js`): formats for every document type are in `NUMBER_FORMATS` (e.g. `JOB-2026-0001`, restarting each January in Nairobi time; `CUS-0001` never restarts). Must be called inside the transaction: a failed save hands the number back, so there are no gaps, and two people saving at once get different numbers.
+
 ## Building screens: the UI kit
 
 Open **`/dev/ui`** (in development, or as an admin on the server). It shows every building block, with the line to copy:
