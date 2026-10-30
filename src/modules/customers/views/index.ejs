@@ -1,0 +1,46 @@
+<%- include('partials/page-header', {
+  crumb: ['Sales', 'Customers'],
+  heading: 'Customers',
+  sub: 'People and organisations who bring vehicles in.',
+  actions: user.can('customers.manage') ? [{ label: 'Add customer', href: '/customers/new', icon: 'person-plus', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/customers">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name, phone, CUS number or KRA PIN" aria-label="Search customers">
+    </div>
+    <nav class="jt-seg" aria-label="Category">
+      <% [['', 'All'], ...categories.map((c) => [c.value, c.label])].forEach(([key, label]) => { %>
+        <a href="?category=<%= key %><%= q ? `&q=${encodeURIComponent(q)}` : '' %>" class="<%= category === key ? 'active' : '' %>"><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'customer' : 'customers' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <% if (q) { %>
+      <%- include('partials/empty', { icon: 'search', heading: `No customer matches “${q}”`, text: 'Check the spelling, or search by phone number.', action: user.can('customers.manage') ? { label: `Add “${q}”`, href: `/customers/new?name=${encodeURIComponent(q)}` } : null }) %>
+    <% } else { %>
+      <%- include('partials/empty', { icon: 'people', heading: 'No customers yet', text: 'Add a customer with just a name and phone number. Everything else can wait.', action: user.can('customers.manage') ? { label: 'Add customer', href: '/customers/new' } : null }) %>
+    <% } %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Customer</th><th>Phone</th><th class="d-none d-md-table-cell">Town</th><th class="text-end">Vehicles</th><th class="d-none d-lg-table-cell">Number</th></tr></thead>
+        <tbody>
+          <% list.forEach((c) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/customers/<%= c.id %>"><%= c.name %></a><span class="jt-sub"><%= categoryLabel(c.category) %></span></td>
+              <td class="font-monospace small text-nowrap"><%= fmt.phone(c.phone) %></td>
+              <td class="d-none d-md-table-cell text-body-secondary"><%= c.town ?? '—' %></td>
+              <td class="text-end"><%= c.vehicle_count %></td>
+              <td class="d-none d-lg-table-cell font-monospace small text-body-secondary"><%= c.number %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

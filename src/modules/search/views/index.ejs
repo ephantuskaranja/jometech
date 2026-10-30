@@ -1,0 +1,28 @@
+<%- include('partials/page-header', {
+  crumb: ['Search'],
+  heading: q ? `Results for “${q}”` : 'Search',
+  sub: 'Vehicles by reg or chassis number; customers by name, phone, CUS number or KRA PIN.',
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/search">
+    <div class="jt-search" style="max-width: 30rem">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="e.g. KDA123A, 0712 345 678, Mwangi" aria-label="Search" autofocus>
+    </div>
+    <span class="jt-count"><%= results.length %> found</span>
+  </form>
+  <% if (results.length === 0) { %>
+    <%- include('partials/empty', { icon: 'search', heading: q ? 'Nothing found' : 'Type something to search', text: q ? 'Try the reg number without spaces, the last digits of the chassis, or a phone number.' : '' }) %>
+  <% } else { %>
+    <div class="list-group list-group-flush">
+      <% results.forEach((r) => { %>
+        <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="<%= r.url %>">
+          <% if (r.plate) { %><%- include('partials/plate', { reg: r.plate }) %><% } else { %><i class="bi bi-<%= r.type === 'customer' ? 'person' : 'truck' %> text-body-tertiary"></i><% } %>
+          <span class="d-grid"><span class="fw-semibold"><%= r.title %></span><small class="text-body-secondary"><%= r.sub %></small></span>
+          <span class="ms-auto small text-body-tertiary"><%= r.meta %></span>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+</section>

@@ -1,0 +1,85 @@
+<%# Add and edit vehicle or trailer. Required: reg or chassis number, customer, type. %>
+<%
+  const editing = Boolean(vehicle);
+  const hasMore = Boolean(values.make || values.model || values.year || values.body_type || values.colour || values.notes || errors.year);
+  const backUrl = editing ? `/vehicles/${vehicle.id}` : (customer ? `/customers/${customer.id}?tab=vehicles` : '/vehicles');
+%>
+<%- include('partials/page-header', {
+  crumb: ['Sales', { label: 'Vehicles', href: '/vehicles' }, editing ? (vehicle.reg_no ?? vehicle.chassis_no) : 'Add vehicle'],
+  heading: editing ? `Edit ${vehicle.reg_no ?? vehicle.chassis_no}` : 'Add vehicle',
+  sub: 'Reg number (or chassis number for a new trailer), owner and type. The rest can be filled in later.',
+}) %>
+
+<form method="post" action="<%= editing ? `/vehicles/${vehicle.id}` : '/vehicles' %>" novalidate class="col-xl-9"
+      x-data="vehicleForm({ vehicleId: <%= editing ? vehicle.id : 'null' %>, contacts: <%= JSON.stringify(contactOptions) %>, contactId: '<%= values.contact_id ?? '' %>' })"
+      x-init="checkDuplicate()">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Vehicle</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'reg_no', label: 'Reg number', value: values.reg_no, error: errors.reg_no, placeholder: 'KDA 123A', autocomplete: 'off',
+              hint: 'Tidied as you type: kda123a becomes KDA 123A.', attrs: 'x-ref="reg" @blur="tidyReg($el)" style="text-transform: uppercase"' }) %>
+        <%- include('partials/field', { name: 'chassis_no', label: 'Chassis number', value: values.chassis_no, error: errors.chassis_no, autocomplete: 'off',
+              hint: 'Enough on its own for a trailer without plates.', attrs: 'x-ref="chassis" @blur="$el.value = $el.value.toUpperCase().replace(/[\\s-]/g, \'\'); checkDuplicate()" style="text-transform: uppercase"' }) %>
+      </div>
+      <div class="jt-warn-box" x-show="duplicate" x-cloak>
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Already registered: <strong x-text="duplicate?.reg_no ?? duplicate?.chassis_no"></strong>, owned by <span x-text="duplicate?.customer_name"></span>. <a :href="`/vehicles/${duplicate?.id}`">Open it</a></span>
+      </div>
+      <% if (existingId) { %><div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span><a href="/vehicles/<%= existingId %>">Open the existing vehicle</a></span></div><% } %>
+
+      <%- include('partials/choices', { name: 'type', label: 'Type', required: true, options: types, value: values.type, columns: 4 }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Owner</h2></div>
+    <div class="card-body jt-fields">
+      <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', options: customerOption, value: values.customer_id,
+            error: errors.customer_id, required: true, blank: 'Type a name, phone or CUS number', auto: customer && !editing ? 'from customer' : false,
+            hint: 'Not found? Type the name and choose “Add new customer”.', attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
+
+      <div class="jt-field">
+        <label class="form-label" for="f-contact_id">Brought in by <span class="text-body-tertiary fw-normal">(contact person)</span></label>
+        <select class="form-select<%= errors.contact_id ? ' is-invalid' : '' %>" id="f-contact_id" name="contact_id" x-model="contactId" :disabled="contacts.length === 0">
+          <option value="" x-text="contacts.length ? 'Nobody in particular' : 'This customer has no contacts yet'"></option>
+          <template x-for="c in contacts" :key="c.value">
+            <option :value="String(c.value)" x-text="c.label" :selected="String(c.value) === contactId"></option>
+          </template>
+        </select>
+        <% if (errors.contact_id) { %><div class="invalid-feedback"><%= errors.contact_id %></div><% } %>
+        <div class="form-text">E.g. the company’s salesman who drives it in. Add contacts on the customer’s page.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" x-data="{ more: <%= hasMore %> }">
+    <div class="card-body d-grid gap-3">
+      <div>
+        <button class="btn btn-link p-0" type="button" @click="more = !more" :aria-expanded="more">
+          More details (optional) <i class="bi" :class="more ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+        </button>
+      </div>
+      <div class="jt-fields" x-show="more" x-cloak>
+        <%- include('partials/field', { name: 'make', label: 'Make', value: values.make, error: errors.make, placeholder: 'e.g. Isuzu' }) %>
+        <%- include('partials/field', { name: 'model', label: 'Model', value: values.model, error: errors.model, placeholder: 'e.g. FRR 90' }) %>
+        <%- include('partials/field', { name: 'year', label: 'Year', type: 'number', inputmode: 'numeric', value: values.year, error: errors.year, placeholder: 'e.g. 2019' }) %>
+        <%- include('partials/field', { name: 'colour', label: 'Colour', value: values.colour, error: errors.colour }) %>
+        <%- include('partials/field', { name: 'body_type', label: 'Body', value: values.body_type, error: errors.body_type, class: 'jt-full', placeholder: 'e.g. Dropside 14 ft, bare chassis, skeletal 40 ft' }) %>
+        <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', value: values.notes, error: errors.notes, class: 'jt-full', rows: 2 }) %>
+      </div>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-lightning-charge"></i>Next time, check-in only needs the reg number.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= backUrl %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= editing ? 'Save changes' : 'Add vehicle' %></button>
+    </div>
+  </div>
+</form>
+
+<%- include('customers/views/quick-add') %>

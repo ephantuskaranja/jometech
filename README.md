@@ -81,6 +81,15 @@ public/
 test/                *.test.js files; helpers.js creates and removes test users (phones 0700 000 0xx)
 ```
 
+## Customers and vehicles
+
+- **Customers** (`/customers`): only name and phone are required; the number (`CUS-0001`), type Individual and Cash terms are filled in. Companies, government and NGOs have **contact people** (salesman, fleet manager, accounts…); the first can be entered on the add form.
+- **Vehicles** (`/vehicles`): reg **or** chassis number (trailers often have only a chassis), owner and type. A vehicle can name the contact who brings it in. Reg plates are stored as `KDA 123A` however they're typed (`src/core/vehicle-format.js`, same rules in `public/js/app.js`).
+- **Warnings while typing**: a phone number that already belongs to a customer, and a reg/chassis already registered.
+- **Add in place**: in the vehicle form's customer dropdown, type a new name and choose "Add new customer"; a small window saves it and selects it (`customers/views/quick-add.ejs`).
+- **Global search** (top bar): reg in any format, chassis, phone, customer name, `CUS` number or KRA PIN. One exact hit opens it directly.
+- Who sees what: `src/core/access.js`. Supervisors can add vehicles (and quick-add customers) for check-in; editing customers needs `customers.manage`.
+
 ## History and document numbers
 
 Every service function that changes data does both of these inside one `db.transaction()`:

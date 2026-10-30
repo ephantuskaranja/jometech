@@ -1,0 +1,155 @@
+<%# Customer detail: key facts and actions, then tabs. %>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Sales <i class="bi bi-chevron-right"></i><a href="/customers">Customers</a><i class="bi bi-chevron-right"></i><span class="font-monospace"><%= customer.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1><%= customer.name %></h1>
+        <div class="jt-meta">
+          <span><%- include('partials/pill', { text: categoryLabel(customer.category), tone: customer.category === 'individual' ? 'neutral' : 'info' }) %></span>
+          <span><i class="bi bi-telephone"></i><span class="font-monospace"><%= fmt.phone(customer.phone) %></span></span>
+          <% if (customer.email) { %><span><i class="bi bi-envelope"></i><%= customer.email %></span><% } %>
+          <% if (customer.town) { %><span><i class="bi bi-geo-alt"></i><%= customer.town %></span><% } %>
+          <span><i class="bi bi-cash-coin"></i><%= creditLabel(customer.credit_days) %></span>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <% if (canEdit) { %><a class="btn btn-outline-secondary" href="/customers/<%= customer.id %>/edit"><i class="bi bi-pencil"></i>Edit</a><% } %>
+        <% if (canAddVehicle) { %><a class="btn btn-primary" href="/vehicles/new?customer_id=<%= customer.id %>"><i class="bi bi-truck"></i>Add vehicle</a><% } %>
+      </div>
+    </div>
+  </div>
+  <nav class="nav nav-tabs jt-tabs">
+    <% [['overview', 'Overview'], ['vehicles', 'Vehicles', vehicles.length], ['contacts', 'Contacts', contacts.length], ['history', 'History']].forEach(([key, label, count]) => { %>
+      <a class="nav-link<%= tab === key ? ' active' : '' %>" href="?tab=<%= key %>"<%- tab === key ? ' aria-current="page"' : '' %>><%= label %><% if (count !== undefined) { %> <span class="badge rounded-pill"><%= count %></span><% } %></a>
+    <% }) %>
+  </nav>
+</section>
+
+<% if (tab === 'overview') { %>
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <section class="card h-100">
+        <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+        <div class="card-body">
+          <dl class="jt-kv">
+            <div><dt>Customer number</dt><dd class="font-monospace"><%= customer.number %></dd></div>
+            <div><dt>KRA PIN</dt><dd class="font-monospace"><%= customer.kra_pin ?? '—' %></dd></div>
+            <div><dt>Address</dt><dd><%= customer.address ?? '—' %></dd></div>
+            <div><dt>Payment terms</dt><dd><%= creditLabel(customer.credit_days) %></dd></div>
+            <div><dt>Added</dt><dd><%= fmt.date(customer.created_at) %></dd></div>
+          </dl>
+          <% if (customer.notes) { %><p class="mt-3 mb-0 text-body-secondary" style="white-space: pre-line"><%= customer.notes %></p><% } %>
+        </div>
+      </section>
+    </div>
+    <div class="col-lg-5">
+      <section class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h2 class="h6 mb-0">Contacts</h2>
+          <a class="small" href="?tab=contacts"><%= contacts.length ? 'Manage' : (canEdit ? 'Add' : '') %></a>
+        </div>
+        <% if (contacts.length) { %>
+          <% contacts.slice(0, 4).forEach((c) => { %>
+            <div class="jt-contact">
+              <span class="jt-avatar"><%= c.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() %></span>
+              <div class="jt-contact-main"><strong><%= c.name %></strong><span class="small text-body-secondary"><%= [c.role, c.phone && fmt.phone(c.phone)].filter(Boolean).join(' · ') || '—' %></span></div>
+            </div>
+          <% }) %>
+        <% } else { %>
+          <%- include('partials/empty', { icon: 'person-lines-fill', heading: 'No contacts', text: customer.category === 'individual' ? 'Not usually needed for an individual.' : 'Add the people you deal with, e.g. the salesman who brings vehicles in.' }) %>
+        <% } %>
+      </section>
+    </div>
+  </div>
+<% } %>
+
+<% if (tab === 'vehicles') { %>
+  <section class="card">
+    <% if (vehicles.length === 0) { %>
+      <%- include('partials/empty', { icon: 'truck', heading: 'No vehicles yet', text: 'Add their trucks and trailers once, then check-ins only need the reg number.', action: canAddVehicle ? { label: 'Add vehicle', href: `/vehicles/new?customer_id=${customer.id}` } : null }) %>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table jt-table">
+          <thead><tr><th>Vehicle</th><th>Make &amp; model</th><th>Type</th><th class="d-none d-md-table-cell">Brought in by</th></tr></thead>
+          <tbody>
+            <% vehicles.forEach((v) => { %>
+              <tr>
+                <td><a class="jt-row-link" href="/vehicles/<%= v.id %>"><% if (v.reg_no) { %><%- include('partials/plate', { reg: v.reg_no }) %><% } else { %><span class="font-monospace small"><%= v.chassis_no %></span><% } %></a></td>
+                <td><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %><% if (v.body_type) { %><span class="jt-sub"><%= v.body_type %></span><% } %></td>
+                <td><%= typeLabel(v.type) %></td>
+                <td class="d-none d-md-table-cell text-body-secondary"><%= v.contact_name ?? '—' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+<% } %>
+
+<% if (tab === 'contacts') { %>
+  <section class="card">
+    <% contacts.forEach((c) => { %>
+      <div class="jt-contact" x-data="{ editing: false, sure: false }">
+        <span class="jt-avatar"><%= c.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() %></span>
+        <div class="jt-contact-main" x-show="!editing">
+          <strong><%= c.name %></strong>
+          <span class="small text-body-secondary"><%= [c.role, c.phone && fmt.phone(c.phone), c.email].filter(Boolean).join(' · ') || 'No details' %></span>
+        </div>
+        <% if (canEdit) { %>
+          <div class="d-flex gap-1" x-show="!editing && !sure">
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="editing = true"><i class="bi bi-pencil"></i>Edit</button>
+            <button class="btn btn-sm btn-outline-danger" type="button" @click="sure = true" aria-label="Remove <%= c.name %>"><i class="bi bi-trash"></i></button>
+          </div>
+          <form method="post" action="/customers/<%= customer.id %>/contacts/<%= c.id %>/delete" class="d-flex gap-2 align-items-center" x-show="sure" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <span class="small">Remove <%= c.name %>?</span>
+            <button class="btn btn-sm btn-danger" type="submit">Remove</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="sure = false">Keep</button>
+          </form>
+          <form method="post" action="/customers/<%= customer.id %>/contacts/<%= c.id %>" class="flex-fill jt-fields" x-show="editing" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { id: `c${c.id}-name`, name: 'name', label: 'Name', value: c.name, required: true }) %>
+            <%- include('partials/field', { id: `c${c.id}-role`, name: 'role', label: 'Role', value: c.role ?? '' }) %>
+            <%- include('partials/field', { id: `c${c.id}-phone`, name: 'phone', label: 'Phone', type: 'tel', value: c.phone ? fmt.phone(c.phone) : '' }) %>
+            <%- include('partials/field', { id: `c${c.id}-email`, name: 'email', label: 'Email', type: 'email', value: c.email ?? '' }) %>
+            <div class="jt-full d-flex gap-2">
+              <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2"></i>Save</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="editing = false">Cancel</button>
+            </div>
+          </form>
+        <% } %>
+      </div>
+    <% }) %>
+
+    <% if (contacts.length === 0 && !canEdit) { %>
+      <%- include('partials/empty', { icon: 'person-lines-fill', heading: 'No contacts' }) %>
+    <% } %>
+
+    <% if (canEdit) { %>
+      <form method="post" action="/customers/<%= customer.id %>/contacts" class="card-body border-top d-grid gap-3" x-data="{ open: <%= contacts.length === 0 %> }">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn btn-outline-secondary justify-self-start" type="button" x-show="!open" @click="open = true; $nextTick(() => $refs.first.querySelector('input').focus())" style="justify-self: start"><i class="bi bi-person-plus"></i>Add contact</button>
+        <div class="d-grid gap-3" x-show="open" x-cloak>
+          <h3 class="h6 mb-0">New contact</h3>
+          <div class="jt-fields">
+            <div x-ref="first"><%- include('partials/field', { id: 'new-name', name: 'name', label: 'Name', required: true, autocomplete: 'off' }) %></div>
+            <%- include('partials/field', { id: 'new-role', name: 'role', label: 'Role', placeholder: 'e.g. Salesman, Fleet manager, Accounts' }) %>
+            <%- include('partials/field', { id: 'new-phone', name: 'phone', label: 'Phone', type: 'tel', placeholder: '0712 345 678' }) %>
+            <%- include('partials/field', { id: 'new-email', name: 'email', label: 'Email', type: 'email' }) %>
+          </div>
+          <div><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Add contact</button></div>
+        </div>
+      </form>
+    <% } %>
+  </section>
+<% } %>
+
+<% if (tab === 'history') { %>
+  <section class="card">
+    <div class="card-body">
+      <%- include('partials/history', { entries, labels: { name: 'Name', category: 'Type', phone: 'Phone', email: 'Email', kra_pin: 'KRA PIN', town: 'Town', address: 'Address', credit_days: 'Payment terms', notes: 'Notes', number: 'Number', contact: 'Contact' } }) %>
+    </div>
+  </section>
+<% } %>

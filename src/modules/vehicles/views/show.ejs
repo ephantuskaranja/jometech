@@ -1,0 +1,59 @@
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Sales <i class="bi bi-chevron-right"></i><a href="/vehicles">Vehicles</a><i class="bi bi-chevron-right"></i><span><%= vehicle.reg_no ?? vehicle.chassis_no %></span></div>
+    <div class="jt-record-top">
+      <% if (vehicle.reg_no) { %><%- include('partials/plate', { reg: vehicle.reg_no, size: 'lg' }) %><% } %>
+      <div class="jt-record-title">
+        <h1 class="h3"><%= [vehicle.make, vehicle.model].filter(Boolean).join(' ') || typeLabel(vehicle.type) %><% if (vehicle.year) { %> <span class="text-body-tertiary fw-normal"><%= vehicle.year %></span><% } %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-person"></i><a href="/customers/<%= vehicle.customer_id %>"><%= vehicle.customer_name %></a></span>
+          <span><i class="bi bi-telephone"></i><span class="font-monospace"><%= fmt.phone(vehicle.customer_phone) %></span></span>
+          <span><i class="bi bi-truck"></i><%= typeLabel(vehicle.type) %><%= vehicle.body_type ? ` · ${vehicle.body_type}` : '' %></span>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <% if (canEdit) { %><a class="btn btn-outline-secondary" href="/vehicles/<%= vehicle.id %>/edit"><i class="bi bi-pencil"></i>Edit</a><% } %>
+        <button class="btn btn-primary" type="button" disabled title="Arrives with the check-in step"><i class="bi bi-box-arrow-in-right"></i>Check in</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Reg number</dt><dd><%= vehicle.reg_no ?? '—' %></dd></div>
+          <div><dt>Chassis number</dt><dd class="font-monospace"><%= vehicle.chassis_no ?? '—' %></dd></div>
+          <div><dt>Colour</dt><dd><%= vehicle.colour ?? '—' %></dd></div>
+          <div><dt>Added</dt><dd><%= fmt.date(vehicle.created_at) %></dd></div>
+        </dl>
+        <% if (vehicle.notes) { %><p class="mt-3 mb-0 text-body-secondary" style="white-space: pre-line"><%= vehicle.notes %></p><% } %>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Brought in by</h2></div>
+      <% if (vehicle.contact_name) { %>
+        <div class="jt-contact">
+          <span class="jt-avatar"><%= vehicle.contact_name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() %></span>
+          <div class="jt-contact-main">
+            <strong><%= vehicle.contact_name %></strong>
+            <span class="small text-body-secondary"><%= [vehicle.contact_role, vehicle.contact_phone && fmt.phone(vehicle.contact_phone)].filter(Boolean).join(' · ') || '—' %></span>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="card-body text-body-secondary small">No contact person set. The customer’s own number is <span class="font-monospace"><%= fmt.phone(vehicle.customer_phone) %></span>.</div>
+      <% } %>
+    </section>
+  </div>
+  <div class="col-lg-5">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body">
+        <%- include('partials/history', { entries, labels: { reg_no: 'Reg', chassis_no: 'Chassis', customer: 'Owner', contact: 'Brought in by', type: 'Type', make: 'Make', model: 'Model', year: 'Year', body_type: 'Body', colour: 'Colour', notes: 'Notes' } }) %>
+      </div>
+    </section>
+  </div>
+</div>

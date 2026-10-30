@@ -1,3 +1,5 @@
+import { VIEW_CUSTOMERS } from './access.js';
+
 // Sidebar navigation. Icons are Bootstrap Icons names (https://icons.getbootstrap.com).
 // `permission`: who sees the item (one key, or a list meaning "any of these").
 // Items without `ready: true` show as "Soon" until their module is built.
@@ -15,7 +17,8 @@ export const nav = [
   {
     label: 'Sales',
     items: [
-      { label: 'Customers', href: '/customers', icon: 'person', permission: 'customers.manage' },
+      { label: 'Customers', href: '/customers', icon: 'person', permission: VIEW_CUSTOMERS, ready: true },
+      { label: 'Vehicles', href: '/vehicles', icon: 'truck-front', permission: VIEW_CUSTOMERS, ready: true },
       { label: 'Enquiries', href: '/enquiries', icon: 'inbox', permission: 'enquiries.manage' },
       { label: 'Quotations', href: '/quotations', icon: 'file-earmark-text', permission: ['quotations.manage', 'quotations.approve'] },
       { label: 'Invoices', href: '/invoices', icon: 'receipt', permission: 'invoices.manage' },

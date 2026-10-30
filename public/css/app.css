@@ -401,3 +401,31 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-changes-field::after { content: ":"; }
 .jt-changes-old { color: var(--bs-tertiary-color); text-decoration: line-through; }
 .jt-changes .bi { font-size: .7rem; color: var(--bs-tertiary-color); }
+
+/* ---------- 8. Search, record pages ---------- */
+.jt-search-results { position: absolute; left: 0; right: 0; top: calc(100% + .375rem); z-index: 1030; background: var(--jt-surface); border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); box-shadow: 0 12px 32px -8px rgb(16 24 40 / .22); padding: .375rem; max-height: 70vh; overflow-y: auto; }
+.jt-search-item { display: flex; align-items: center; gap: .7rem; padding: .55rem .65rem; border-radius: .4375rem; color: inherit; text-decoration: none; }
+.jt-search-item.active { background: var(--bs-tertiary-bg); }
+.jt-search-item > .bi { width: 1.25rem; text-align: center; color: var(--bs-tertiary-color); }
+.jt-search-text { display: grid; min-width: 0; line-height: 1.25; }
+.jt-search-text small { color: var(--bs-tertiary-color); font-size: .78rem; }
+.jt-search-meta { margin-left: auto; font-size: .78rem; color: var(--bs-tertiary-color); white-space: nowrap; }
+.jt-search-empty { padding: .75rem; color: var(--bs-tertiary-color); font-size: .875rem; }
+
+/* Record page header: key facts and actions, then tabs */
+.jt-record { display: grid; gap: 1rem; }
+.jt-record-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; }
+.jt-record-title { flex: 1; min-width: 0; display: grid; gap: .375rem; }
+.jt-record-title h1 { margin: 0; }
+.jt-meta { display: flex; flex-wrap: wrap; gap: .375rem 1.25rem; color: var(--bs-secondary-color); font-size: .875rem; }
+.jt-meta > span { display: inline-flex; align-items: center; gap: .375rem; }
+.jt-meta .bi { color: var(--bs-tertiary-color); }
+.jt-tabs { --bs-nav-tabs-border-color: var(--bs-border-color); --bs-nav-tabs-link-active-bg: transparent; --bs-nav-tabs-link-active-border-color: transparent; --bs-nav-link-color: var(--bs-tertiary-color); --bs-nav-link-hover-color: var(--bs-body-color); gap: .25rem; flex-wrap: nowrap; overflow-x: auto; padding: 0 1.125rem; }
+.jt-tabs .nav-link { border: 0; border-bottom: 2px solid transparent; font-weight: 600; white-space: nowrap; padding: .8rem .75rem; }
+.jt-tabs .nav-link.active { color: var(--bs-body-color); border-bottom-color: var(--bs-primary); }
+.jt-tabs .badge { background: var(--bs-tertiary-bg); color: var(--bs-secondary-color); font-weight: 600; }
+.jt-contact { display: flex; gap: .875rem; align-items: flex-start; padding: .875rem 1.125rem; border-bottom: 1px solid var(--bs-border-color); }
+.jt-contact:last-child { border-bottom: 0; }
+.jt-contact-main { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+.jt-warn-box { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .75rem; border-radius: var(--bs-border-radius-sm); background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); font-size: .85rem; }
+.jt-warn-box a { color: inherit; font-weight: 600; }

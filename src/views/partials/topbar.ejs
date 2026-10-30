@@ -3,12 +3,29 @@
     <i class="bi bi-list"></i>
   </button>
 
-  <%# Global search: the box is in place now; results arrive with the customers & vehicles module. %>
-  <form class="jt-search" role="search" id="global-search-form">
+  <%# Global search: suggestions as you type (/api/search); Enter opens /search. %>
+  <form class="jt-search" role="search" id="global-search-form" action="/search" method="get"
+        x-data="globalSearch" @submit="go($event)" @click.outside="open = false" @keydown.escape="open = false">
     <i class="bi bi-search" aria-hidden="true"></i>
     <input class="form-control" type="search" name="q" id="global-search" autocomplete="off"
-           placeholder="Search reg no., chassis, phone, job no. or customer" aria-label="Search">
+           placeholder="Search reg no., chassis, phone or customer" aria-label="Search"
+           x-model="q" @input="find()" @focus="results.length && (open = true)"
+           @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)"
+           role="combobox" :aria-expanded="open" aria-controls="global-search-results">
     <kbd class="d-none d-md-inline">/</kbd>
+    <div class="jt-search-results" id="global-search-results" role="listbox" x-show="open" x-cloak>
+      <template x-if="results.length === 0">
+        <div class="jt-search-empty">Nothing found. Try the reg number without spaces, or a phone number.</div>
+      </template>
+      <template x-for="(r, i) in results" :key="r.url">
+        <a class="jt-search-item" :href="r.url" role="option" :class="i === active && 'active'" :aria-selected="i === active" @mouseenter="active = i">
+          <template x-if="r.plate"><span class="jt-plate" x-text="r.plate"></span></template>
+          <template x-if="!r.plate"><i class="bi" :class="r.type === 'customer' ? 'bi-person' : 'bi-truck'"></i></template>
+          <span class="jt-search-text"><span x-text="r.title"></span><small x-text="r.sub"></small></span>
+          <span class="jt-search-meta" x-text="r.meta"></span>
+        </a>
+      </template>
+    </div>
   </form>
 
   <div class="jt-topbar-end">

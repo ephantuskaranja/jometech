@@ -16,6 +16,9 @@ import { router as accountRoutes } from './modules/account/routes.js';
 import { router as dashboardRoutes } from './modules/dashboard/routes.js';
 import { router as userRoutes } from './modules/users/routes.js';
 import { router as devRoutes } from './modules/dev/routes.js';
+import { router as customerRoutes } from './modules/customers/routes.js';
+import { router as vehicleRoutes } from './modules/vehicles/routes.js';
+import { router as searchRoutes } from './modules/search/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -104,6 +107,9 @@ export function createApp() {
   app.use(dashboardRoutes);
   app.use(userRoutes);
   app.use(devRoutes);
+  app.use(customerRoutes);
+  app.use(vehicleRoutes);
+  app.use(searchRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

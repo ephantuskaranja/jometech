@@ -12,6 +12,7 @@
   hint                  grey help text under the field
   auto                  true or a short word: shows the blue "auto" tag for prefilled values
   placeholder, autocomplete, inputmode, rows, id, class (for the wrapper)
+  attrs                 extra attributes as written, e.g. '@blur="check($el.value)"' (Alpine)
   select only: options  [{ value, label }] or plain strings
                blank    text of an empty first option, e.g. 'Choose a supplier'
                searchable  true → Tom Select (type to filter)
@@ -32,6 +33,7 @@
   const extra = [
     locals.placeholder ? `placeholder="${esc(locals.placeholder)}"` : '',
     locals.autocomplete ? `autocomplete="${esc(locals.autocomplete)}"` : '',
+    locals.attrs ?? '', // written by developers in views, never user input
   ].filter(Boolean).join(' ');
   const errorHtml = err ? `<div class="invalid-feedback" id="${esc(fieldId)}-error">${esc(err)}</div>` : '';
 %>
@@ -50,7 +52,7 @@
       const opts = (locals.options ?? []).map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
       const chosen = [].concat(val).map(String);
     %>
-    <select class="form-select<%= err ? ' is-invalid' : '' %>" <%- common %>
+    <select class="form-select<%= err ? ' is-invalid' : '' %>" <%- common %> <%- locals.attrs ?? '' %>
       <%= locals.multiple ? 'multiple' : '' %>
       <% if (locals.searchable || locals.url) { %>data-tom-select<% } %>
       <% if (locals.url) { %>data-tom-url="<%= locals.url %>"<% } %>

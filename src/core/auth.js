@@ -132,6 +132,14 @@ export function can(permission) {
   };
 }
 
+/** Route guard for "any one of these": canAny('customers.manage', 'checkin.manage') */
+export function canAny(...permissions) {
+  return (req, res, next) => {
+    if (permissions.some((p) => req.user?.can(p))) return next();
+    next(httpError(403, "You don't have access to this page. Ask an administrator if you need it."));
+  };
+}
+
 /** Only allow redirects to our own pages (blocks /login?next=https://evil.example). */
 export function safeNextUrl(value) {
   return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\')

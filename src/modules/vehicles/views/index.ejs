@@ -1,0 +1,45 @@
+<%- include('partials/page-header', {
+  crumb: ['Sales', 'Vehicles'],
+  heading: 'Vehicles',
+  sub: 'Trucks, trailers and other vehicles of every customer.',
+  actions: [{ label: 'Add vehicle', href: '/vehicles/new', icon: 'plus-lg', primary: true }],
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/vehicles">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Reg, chassis or customer" aria-label="Search vehicles">
+    </div>
+    <div style="min-width: 10rem">
+      <select class="form-select" name="type" aria-label="Type" x-data @change="$el.form.submit()">
+        <option value="">All types</option>
+        <% types.forEach((t) => { %><option value="<%= t.value %>"<%= type === t.value ? ' selected' : '' %>><%= t.label %></option><% }) %>
+      </select>
+    </div>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'vehicle' : 'vehicles' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q
+      ? { icon: 'search', heading: `No vehicle matches “${q}”`, text: 'Try the reg without spaces, the last digits of the chassis, or the owner’s name.' }
+      : { icon: 'truck', heading: 'No vehicles yet', text: 'Add a vehicle once; every check-in after that only needs the reg number.', action: { label: 'Add vehicle', href: '/vehicles/new' } }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Vehicle</th><th>Make &amp; model</th><th>Type</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th></tr></thead>
+        <tbody>
+          <% list.forEach((v) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/vehicles/<%= v.id %>"><% if (v.reg_no) { %><%- include('partials/plate', { reg: v.reg_no }) %><% } else { %><span class="font-monospace small"><%= v.chassis_no %></span><% } %></a></td>
+              <td><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %><% if (v.body_type) { %><span class="jt-sub"><%= v.body_type %></span><% } %></td>
+              <td><%= typeLabel(v.type) %></td>
+              <td><%= v.customer_name %></td>
+              <td class="d-none d-lg-table-cell text-body-secondary"><%= v.contact_name ?? '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

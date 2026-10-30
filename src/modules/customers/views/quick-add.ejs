@@ -1,0 +1,43 @@
+<%#
+  Small window for adding a customer without leaving the current form.
+  Opened by a searchable dropdown with data-tom-create="customer" (see public/js/app.js).
+%>
+<div class="modal fade" id="quick-add-customer" tabindex="-1" aria-labelledby="quick-add-title" aria-hidden="true"
+     x-data="quickAddCustomer" @jt:quick-add-customer.window="open($event.detail)" x-init="$el.addEventListener('hidden.bs.modal', () => cancelled())">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" @submit.prevent="save()" novalidate>
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="quick-add-title">New customer</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-grid gap-3">
+        <div class="jt-field">
+          <label class="form-label" for="qa-name">Name<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qa-name" x-model="name" :class="errors.name && 'is-invalid'" autocomplete="off">
+          <div class="invalid-feedback" x-text="errors.name"></div>
+        </div>
+        <div class="jt-field">
+          <label class="form-label" for="qa-phone">Phone number<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qa-phone" type="tel" inputmode="tel" x-ref="phone" x-model="phone" @blur="checkPhone()" :class="errors.phone && 'is-invalid'" placeholder="0712 345 678" autocomplete="off">
+          <div class="invalid-feedback" x-text="errors.phone"></div>
+          <template x-for="m in matches" :key="m.id">
+            <div class="jt-warn-box mt-1"><i class="bi bi-exclamation-triangle"></i>
+              <span>Already a customer: <strong x-text="m.name"></strong> (<span x-text="m.number"></span>). <a href="#" @click.prevent="use(m)">Use this customer</a></span>
+            </div>
+          </template>
+        </div>
+        <div class="jt-field">
+          <label class="form-label" for="qa-category">Type of customer</label>
+          <select class="form-select" id="qa-category" x-model="category">
+            <% categories.forEach((c) => { %><option value="<%= c.value %>"><%= c.label %></option><% }) %>
+          </select>
+        </div>
+        <p class="form-text mb-0">The rest (KRA PIN, contacts, address) can be added later on the customer’s page.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary" :disabled="busy"><i class="bi bi-check2"></i>Add customer</button>
+      </div>
+    </form>
+  </div>
+</div>
