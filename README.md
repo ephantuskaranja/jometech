@@ -47,6 +47,10 @@ npm test                 # runs every *.test.js in test/ (needs the database)
 - Dates are stored in UTC. DECIMAL values come back as strings so money keeps exact cents.
 - Never edit a migration that has already run on the server; add a new one.
 
+## Deploying
+
+Every push to `master` runs the tests and, if they pass, deploys to the server. One-time server setup: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Stack
 
 | Layer | Tool |

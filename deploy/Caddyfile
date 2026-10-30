@@ -1,0 +1,13 @@
+# Caddy: HTTPS (free certificate, renewed automatically) in front of the app.
+# Replace the address with your domain, then:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+# The domain's DNS A record must point at this server, and ports 80 and 443 must be open.
+
+app.example.co.ke {
+	encode zstd gzip
+	# Photos are resized in the browser first; this is a safety limit.
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy 127.0.0.1:3000
+}

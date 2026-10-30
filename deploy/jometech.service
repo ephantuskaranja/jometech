@@ -1,0 +1,23 @@
+# systemd service: keeps the app running and starts it on boot.
+# Install:  sudo cp deploy/jometech.service /etc/systemd/system/ && sudo systemctl enable --now jometech
+# Logs:     journalctl -u jometech -f
+[Unit]
+Description=Jome-Tech workshop app
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=jometech
+WorkingDirectory=/opt/jometech
+ExecStart=/usr/bin/node --env-file=.env src/server.js
+Restart=always
+RestartSec=3
+# The app finishes open requests on SIGTERM (src/server.js).
+KillSignal=SIGTERM
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
