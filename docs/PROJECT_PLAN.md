@@ -211,3 +211,28 @@ Assumes one full-time developer. Each phase ends with a demo and a short usabili
 1. Send `jometech-requirements-v0.2.docx` to Jome-Tech and schedule the §64 Q&A.
 2. Scaffold the project: Express 5 + EJS + Bootstrap 5 + Alpine + Tom Select + Knex + MySQL (Docker for local dev). Include a working example module (Customers) showing the patterns: list, search, quick-add modal, prefill and audit.
 3. Mock up the 6 key screens and review them with a supervisor and a storekeeper.
+
+---
+
+## 10. Build progress (where we are)
+
+Each step is committed as `Step N: …`; `git log --oneline` shows them.
+
+| Step | What | Status |
+|---|---|---|
+| 1 | Skeleton, layout, light/dark theme switch | Done |
+| 2 | Database connection and migrations (Knex + MySQL) | Done |
+| 3 | Users, phone-number login, 6 roles, permissions, sites | Done |
+| 4 | UI kit (`/dev/ui`) and users screen | Done |
+| 5 | History (audit trail) and gap-free document numbers | Done |
+| 6 | Customers, contact people, vehicles, global search | Done |
+| 7 | **Vehicle check-in** | Next, waiting on the checklist |
+
+### Step 7 decisions so far (2026-10-30)
+
+- **Checklist items:** waiting for Jome-Tech's paper check-in form. Until then, use the prototype's 12 items (windscreen, mirrors, lights, tyres, spare wheel, battery, tool kit, fire extinguisher, body panels, floor, doors, locks), every item defaulting to OK. Keep the list editable (a table, not hard-coded).
+- **Photos: optional.** Resized to save space:
+  - In the browser before upload: longest side 1600 px, JPEG quality about 0.8, so roughly 200–400 KB instead of 3–6 MB from a phone. This also makes uploads fast on slow workshop connections.
+  - On the server (sharp): re-save as WebP at 1280 px (about 100–200 KB) plus a 320 px thumbnail for lists; rotate by the camera's orientation, then strip location and other EXIF data.
+  - Stored as files on disk (`storage/uploads/checkins/YYYY/MM/`, outside `public/`, served only to logged-in users); the database keeps the path. Limit about 10 photos per check-in. Include the folder in backups.
+- Still to build: search by reg/chassis with owner, contact and last visit filled in; add an unregistered vehicle on the spot; reason chips; driver suggestion; odometer and fuel; `CHK-2026-0001` numbers; "in the workshop" list with Check out.
