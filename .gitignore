@@ -5,3 +5,6 @@ logs/
 /storage/
 .DS_Store
 Thumbs.db
+
+# Client source documents with personal data
+/docs/source/attendance/

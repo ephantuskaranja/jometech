@@ -26,3 +26,15 @@ test('the six built-in roles are seeded', async () => {
   const keys = (await db('roles').orderBy('id').select('key')).map((r) => r.key);
   assert.deepEqual(keys, ['admin', 'manager', 'supervisor', 'sales', 'storekeeper', 'technician']);
 });
+
+test('check-in quick-pick items are seeded', async () => {
+  const names = await db('checkin_item_presets').where({ is_active: true }).pluck('name');
+  assert.ok(names.includes('Spare wheel'), 'run: npm run db:seed');
+});
+
+test('a vehicle needs a reg, chassis or temporary tag', async () => {
+  const [[{ clause }]] = await db.raw(
+    "SELECT CHECK_CLAUSE AS clause FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'vehicles_has_identifier'",
+  );
+  assert.match(clause, /temp_tag/);
+});

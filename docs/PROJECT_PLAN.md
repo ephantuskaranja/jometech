@@ -226,13 +226,20 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 4 | UI kit (`/dev/ui`) and users screen | Done |
 | 5 | History (audit trail) and gap-free document numbers | Done |
 | 6 | Customers, contact people, vehicles, global search | Done |
-| 7 | **Vehicle check-in** | Next, waiting on the checklist |
+| 7 | **Vehicle check-in** | In progress: part 1 (tables) done |
 
-### Step 7 decisions so far (2026-10-30)
+### Step 7 decisions (updated 2026-10-31)
 
-- **Checklist items:** waiting for Jome-Tech's paper check-in form. Until then, use the prototype's 12 items (windscreen, mirrors, lights, tyres, spare wheel, battery, tool kit, fire extinguisher, body panels, floor, doors, locks), every item defaulting to OK. Keep the list editable (a table, not hard-coded).
+Jome-Tech's paper form is a **Truck Receiving Document** (`docs/source/checkin/RECEIVING DOCUMENT.pdf`). It has **no checklist**: date, received from + contact, company + client, make/model/chassis no, up to 10 rows of item + quantity, remarks, received by and confirmed by with signatures. The check-in screen follows that form instead of the prototype's checklist.
+
+- **Owner and brought in by:** owner = a customer of any type; brought in by = a contact person, who may belong to another customer (a dealer's salesman bringing an individual's truck). Shown with their company. The step 6 vehicle form keeps its rule (contact must be the owner's).
+- **Confirmed by = the person delivering the truck.** Not a user: after staff fill the check-in, the driver sees a summary on the same phone/tablet, types name and phone (ID no optional) and signs with a finger. Saved as a PNG under `storage/signatures/YYYY/MM/` with the time. If they leave without signing, staff record a reason. Later: send the driver a link to the receiving note by SMS/WhatsApp.
+- **Identifying the vehicle:** reg no (`KDA 123A`, trailers `ZF 1234`), chassis no (6–20 letters/digits; a VIN is 17 without I/O/Q), or a **temporary tag** `JTT-2026-0007` issued by the app and painted on units that get numbers later. At least one is required (database check). Unusual formats warn but can still be saved. The tag stays searchable after the real number is added.
+- **Odometer and fuel: optional.** Odometer in km with a "meter not working" tick (warn if lower than the last visit); fuel as E, ¼, ½, ¾, F (stored as 0–4 quarters).
+- **Items received:** item + quantity, no row limit, quick picks from `checkin_item_presets` (editable), plus free text.
+- **Printable receiving note** in the paper form's layout.
 - **Photos: optional.** Resized to save space:
   - In the browser before upload: longest side 1600 px, JPEG quality about 0.8, so roughly 200–400 KB instead of 3–6 MB from a phone. This also makes uploads fast on slow workshop connections.
   - On the server (sharp): re-save as WebP at 1280 px (about 100–200 KB) plus a 320 px thumbnail for lists; rotate by the camera's orientation, then strip location and other EXIF data.
   - Stored as files on disk (`storage/uploads/checkins/YYYY/MM/`, outside `public/`, served only to logged-in users); the database keeps the path. Limit about 10 photos per check-in. Include the folder in backups.
-- Still to build: search by reg/chassis with owner, contact and last visit filled in; add an unregistered vehicle on the spot; reason chips; driver suggestion; odometer and fuel; `CHK-2026-0001` numbers; "in the workshop" list with Check out.
+- **Parts:** 1 tables (done) · 2 check-in screen (find/add vehicle or issue a tag, owner, brought in by, odometer, fuel, items, remarks) · 3 driver signature handover · 4 photos · 5 "in the workshop" list, check out, printable note.

@@ -16,6 +16,7 @@ import { config } from '../config.js';
 export const NUMBER_FORMATS = {
   customer:  { prefix: 'CUS', yearly: false },
   vehicle:   { prefix: 'VEH', yearly: false },
+  temp_tag:  { prefix: 'JTT', yearly: true },   // painted on trailers that have no reg/chassis number yet
   checkin:   { prefix: 'CHK', yearly: true },
   enquiry:   { prefix: 'ENQ', yearly: true },
   quotation: { prefix: 'QT', yearly: true },
