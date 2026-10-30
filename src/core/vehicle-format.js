@@ -27,3 +27,13 @@ export function formatKraPin(input) {
 
 /** For searching: letters and digits only. */
 export const compact = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** The name a vehicle goes by: reg, else chassis, else the temporary JTT tag. */
+export const vehicleLabel = (v) => v.reg_no ?? v.chassis_no ?? v.temp_tag;
+
+/**
+ * True for the usual Kenyan plates: KDA 123A, trailers ZF 1234, government GKB 123A.
+ * Anything else only gets a warning (old, foreign and diplomatic plates exist).
+ * public/js/app.js has the same check.
+ */
+export const regLooksUsual = (reg) => /^(K[A-Z]{2} \d{3}[A-Z]|Z[A-Z] \d{4}|GK[A-Z] \d{3}[A-Z])$/.test(reg ?? '');

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS, EDIT_VEHICLES } from '../../core/access.js';
 import { history } from '../../core/audit.js';
-import { formatChassis, formatReg } from '../../core/vehicle-format.js';
+import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-format.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import * as vehicles from './service.js';
 import * as customers from '../customers/service.js';
@@ -38,7 +38,7 @@ async function renderForm(res, { status = 200, vehicle = null, values, errors = 
   const customer = values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
   const contacts = customer ? await customers.listContacts(customer.id) : [];
   res.status(status).render('vehicles/views/form', {
-    title: vehicle ? `Edit ${vehicle.reg_no ?? vehicle.chassis_no}` : 'Add vehicle',
+    title: vehicle ? `Edit ${vehicleLabel(vehicle)}` : 'Add vehicle',
     vehicle, values, errors, customer, existingId,
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     contactOptions: contacts.map((c) => ({ value: c.id, label: [c.name, c.role].filter(Boolean).join(' · ') })),
@@ -58,12 +58,13 @@ async function save(req, res, vehicle) {
   const values = { ...blank, ...req.body };
   const result = check(vehicleSchema, req.body);
   const errors = { ...result.errors };
-  if (!String(req.body.reg_no ?? '').trim() && !String(req.body.chassis_no ?? '').trim()) errors.reg_no ??= NEEDS_ID;
+  // A vehicle with a temporary JTT tag is already identified; the real numbers come later.
+  if (!vehicle?.temp_tag && !String(req.body.reg_no ?? '').trim() && !String(req.body.chassis_no ?? '').trim()) errors.reg_no ??= NEEDS_ID;
   if (Object.keys(errors).length) return renderForm(res, { status: 422, vehicle, values, errors });
   const { data } = result;
   try {
     const id = vehicle ? (await vehicles.updateVehicle(vehicle.id, data, req), vehicle.id) : await vehicles.createVehicle(data, req);
-    const name = data.reg_no ?? data.chassis_no;
+    const name = vehicleLabel({ ...vehicle, ...data });
     req.session.flash = { type: 'success', text: vehicle ? `Saved changes to ${name}.` : `${name} added.` };
     res.redirect(`/vehicles/${id}`);
   } catch (err) {
@@ -91,11 +92,12 @@ router.post('/vehicles', edit, (req, res) => save(req, res, null));
 router.get('/vehicles/:id', view, async (req, res) => {
   const vehicle = await loadVehicle(req);
   res.render('vehicles/views/show', {
-    title: vehicle.reg_no ?? vehicle.chassis_no,
-    vehicle,
+    title: vehicleLabel(vehicle),
+    vehicle, vehicleLabel,
     entries: await history('vehicle', vehicle.id),
     typeLabel: vehicles.typeLabel,
     canEdit: EDIT_VEHICLES.some((p) => req.user.can(p)),
+    canCheckIn: req.user.can('checkin.manage'),
   });
 });
 

@@ -429,3 +429,16 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-contact-main { flex: 1; min-width: 0; display: grid; gap: .1rem; }
 .jt-warn-box { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .75rem; border-radius: var(--bs-border-radius-sm); background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); font-size: .85rem; }
 .jt-warn-box a { color: inherit; font-weight: 600; }
+
+/* ---------- Check-in ---------- */
+.jt-info-box { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .75rem; border-radius: var(--bs-border-radius-sm); background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis); font-size: .85rem; }
+.jt-vehicle-card { padding: 1rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); background: var(--bs-tertiary-bg); }
+.jt-fuel { display: flex; gap: .375rem; }
+.jt-fuel .btn { flex: 1; min-height: 2.75rem; font-weight: 600; }
+.jt-chips { display: flex; flex-wrap: wrap; gap: .375rem; }
+.jt-chip { display: inline-flex; align-items: center; gap: .125rem; padding: .3rem .7rem .3rem .45rem; border: 1px solid var(--bs-border-color); border-radius: 999px; background: var(--jt-surface); color: var(--bs-body-color); font-size: .85rem; min-height: 2.25rem; }
+.jt-chip:hover { border-color: var(--bs-primary); color: var(--bs-primary); }
+.jt-items { display: grid; gap: .5rem; }
+.jt-items-head, .jt-items-row { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) 5rem 2.5rem; gap: .5rem; align-items: center; }
+.jt-items-head { font-size: .75rem; font-weight: 600; color: var(--bs-tertiary-color); text-transform: uppercase; letter-spacing: .05em; }
+.jt-items-no { color: var(--bs-tertiary-color); font-size: .85rem; text-align: center; }

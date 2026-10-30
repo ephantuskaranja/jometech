@@ -20,6 +20,9 @@ function formatReg(input) {
   return m ? `${m[1]} ${m[2]}${m[3]}` : String(input).toUpperCase().trim().replace(/\s+/g, ' ');
 }
 
+/** Same as regLooksUsual() in src/core/vehicle-format.js: KDA 123A, ZF 1234, GKB 123A. */
+const regLooksUsual = (reg) => /^(K[A-Z]{2} \d{3}[A-Z]|Z[A-Z] \d{4}|GK[A-Z] \d{3}[A-Z])$/.test(reg);
+
 // Searchable dropdowns: any <select data-tom-select> becomes a Tom Select.
 // With data-tom-url="/api/…" it asks the server as you type; the endpoint
 // answers ?q=… with JSON: [{ "value": "12", "label": "Mwangi Transporters" }, …]
@@ -117,6 +120,46 @@ document.addEventListener('alpine:init', () => {
     async customerChanged(id) {
       this.contactId = '';
       this.contacts = id ? await getJson(`/api/customers/${id}/contacts`).catch(() => []) : [];
+    },
+  }));
+
+  // Check-in form: chosen vehicle's details, usual contact, odometer warning, item rows.
+  Alpine.data('checkinForm', ({ mode = 'existing', vehicle = null, issueTag = false, odometer = '', odometerBroken = false, fuel = '', rows = [] } = {}) => ({
+    mode, vehicle, issueTag, odometer, odometerBroken, fuel, rows, regOdd: false,
+    get odometerLow() {
+      const last = this.vehicle?.lastVisit?.odometer;
+      const now = Number(String(this.odometer).replace(/\D/g, ''));
+      return this.mode === 'existing' && !this.odometerBroken && last != null && now > 0 && now < last;
+    },
+    fmtDate: (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    tidyReg(el) {
+      el.value = formatReg(el.value);
+      this.regOdd = el.value !== '' && !regLooksUsual(el.value);
+    },
+    async vehicleChanged(id) {
+      this.vehicle = id ? await getJson(`/api/check-in/vehicles/${id}`).catch(() => null) : null;
+      // Fill in who usually brings it, unless someone is already chosen.
+      const contact = this.$refs.contact?.tomselect;
+      if (this.vehicle?.contact && contact && !contact.getValue()) {
+        contact.addOption(this.vehicle.contact);
+        contact.setValue(String(this.vehicle.contact.value), true);
+      }
+    },
+    addRow(description = '') {
+      this.rows.push({ description, quantity: '1' });
+      if (!description) this.$nextTick(() => this.$root.querySelector('.jt-items-row:last-child input')?.focus());
+    },
+    // A quick pick fills the first empty row, adds one more to an existing row, or adds a row.
+    addPreset(name) {
+      const same = this.rows.find((r) => r.description.trim().toLowerCase() === name.toLowerCase());
+      if (same) { same.quantity = String((Number(same.quantity) || 0) + 1); return; }
+      const empty = this.rows.find((r) => !r.description.trim());
+      if (empty) empty.description = name;
+      else this.addRow(name);
+    },
+    removeRow(i) {
+      this.rows.splice(i, 1);
+      if (!this.rows.length) this.rows.push({ description: '', quantity: '1' });
     },
   }));
 

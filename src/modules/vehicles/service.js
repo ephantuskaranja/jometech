@@ -14,7 +14,7 @@ export const VEHICLE_TYPES = [
 ];
 export const typeLabel = (value) => VEHICLE_TYPES.find((t) => t.value === value)?.label ?? value;
 
-const COLUMNS = ['reg_no', 'chassis_no', 'customer_id', 'contact_id', 'type', 'make', 'model', 'year', 'body_type', 'colour', 'notes'];
+const COLUMNS = ['reg_no', 'chassis_no', 'temp_tag', 'customer_id', 'contact_id', 'type', 'make', 'model', 'year', 'body_type', 'colour', 'notes'];
 const pick = (input) => Object.fromEntries(COLUMNS.filter((k) => k in input).map((k) => [k, input[k] ?? null]));
 
 /** What the history shows for a vehicle: names, not ids. */
@@ -22,13 +22,15 @@ async function snapshot(trx, v) {
   const customer = v.customer_id ? await trx('customers').where({ id: v.customer_id }).first('name') : null;
   const contact = v.contact_id ? await trx('customer_contacts').where({ id: v.contact_id }).first('name') : null;
   return {
-    reg_no: v.reg_no, chassis_no: v.chassis_no, customer: customer?.name ?? null, contact: contact?.name ?? null,
+    reg_no: v.reg_no, chassis_no: v.chassis_no, temp_tag: v.temp_tag ?? null, customer: customer?.name ?? null, contact: contact?.name ?? null,
     type: typeLabel(v.type), make: v.make, model: v.model, year: v.year, body_type: v.body_type, colour: v.colour, notes: v.notes,
   };
 }
 
-export async function createVehicle(input, actor) {
-  return db.transaction(async (trx) => {
+/** `outer`: a transaction to join (check-in saves the new vehicle and the check-in together). */
+export async function createVehicle(input, actor, outer = null) {
+  const run = (fn) => (outer ? fn(outer) : db.transaction(fn));
+  return run(async (trx) => {
     const row = pick(input);
     await checkRules(trx, row);
     const [id] = await trx('vehicles').insert({ ...row, created_by: actor?.user?.id ?? null });
@@ -63,14 +65,17 @@ export async function listVehicles({ q = '', type = '' } = {}) {
     .leftJoin('customer_contacts', 'customer_contacts.id', 'vehicles.contact_id')
     .orderBy('vehicles.reg_no')
     .limit(200)
-    .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.type', 'vehicles.make', 'vehicles.model', 'vehicles.body_type',
+    .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.type', 'vehicles.make', 'vehicles.model', 'vehicles.body_type',
       'customers.id as customer_id', 'customers.name as customer_name', 'customer_contacts.name as contact_name');
   if (type) query.where('vehicles.type', type);
   const term = q.trim();
   if (term) {
     const key = compact(term);
     query.where((w) => {
-      if (key) w.whereRaw("REPLACE(`vehicles`.`reg_no`, ' ', '') LIKE ?", [`%${key}%`]).orWhere('vehicles.chassis_no', 'like', `%${key}%`);
+      if (key) {
+        w.whereRaw("REPLACE(`vehicles`.`reg_no`, ' ', '') LIKE ?", [`%${key}%`]).orWhere('vehicles.chassis_no', 'like', `%${key}%`)
+          .orWhereRaw("REPLACE(`vehicles`.`temp_tag`, '-', '') LIKE ?", [`%${key}%`]);
+      }
       w.orWhere('customers.name', 'like', `%${term}%`);
     });
   }

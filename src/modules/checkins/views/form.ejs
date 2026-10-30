@@ -1,0 +1,182 @@
+<%#
+  New check-in: the digital Truck Receiving Document.
+  Required: the vehicle (found, or added here). Everything else is optional.
+%>
+<%
+  const initial = {
+    mode: values.vehicle_mode === 'new' ? 'new' : 'existing',
+    vehicle,
+    issueTag: values.issue_tag === '1' || values.issue_tag === 'on',
+    odometer: values.odometer_km ?? '',
+    odometerBroken: values.odometer_not_working === '1' || values.odometer_not_working === 'on',
+    fuel: values.fuel_quarters === '' || values.fuel_quarters === undefined ? '' : String(values.fuel_quarters),
+    rows: rows.map((r) => ({ description: r.description, quantity: String(r.quantity || '1') })),
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Workshop', { label: 'Check-in', href: '/check-in' }, 'New check-in'],
+  heading: 'Check a vehicle in',
+  sub: 'Find the vehicle, note who brought it and what came with it. The driver confirms on the next screen.',
+}) %>
+
+<form method="post" action="/check-in" novalidate class="col-xl-9" x-data="checkinForm(<%= JSON.stringify(initial) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <input type="hidden" name="vehicle_mode" :value="mode">
+
+  <%# ---------- Vehicle ---------- %>
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center gap-3 flex-wrap">
+      <h2 class="h6 mb-0 me-auto">Vehicle</h2>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Vehicle">
+        <button type="button" class="btn" :class="mode === 'existing' ? 'btn-primary' : 'btn-outline-secondary'" @click="mode = 'existing'" :aria-pressed="mode === 'existing'"><i class="bi bi-search"></i>Find vehicle</button>
+        <button type="button" class="btn" :class="mode === 'new' ? 'btn-primary' : 'btn-outline-secondary'" @click="mode = 'new'" :aria-pressed="mode === 'new'"><i class="bi bi-plus-lg"></i>New vehicle</button>
+      </div>
+    </div>
+
+    <div x-show="mode === 'existing'"><div class="card-body d-grid gap-3">
+      <%- include('partials/field', { name: 'vehicle_id', label: 'Reg, chassis or tag number', type: 'select', url: '/api/check-in/vehicles',
+            options: vehicle ? [{ value: vehicle.id, label: vehicle.label }] : [], value: values.vehicle_id, error: errors.vehicle_id,
+            blank: 'Type the reg (e.g. KDA123A), chassis or owner', hint: 'Not found? Choose “New vehicle” above.',
+            attrs: '@change="vehicleChanged($el.value)"' }) %>
+      <% if (existingId) { %><div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span><a href="/check-in/<%= existingId %>">Open its current check-in</a></span></div><% } %>
+
+      <template x-if="vehicle">
+        <div class="jt-vehicle-card">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <template x-if="vehicle.plate"><span class="jt-plate jt-plate-lg" x-text="vehicle.plate"></span></template>
+            <template x-if="!vehicle.plate"><strong class="font-monospace" x-text="vehicle.name"></strong></template>
+            <span class="text-body-secondary" x-text="vehicle.description"></span>
+          </div>
+          <dl class="jt-kv mt-3 mb-0">
+            <div><dt>Owner</dt><dd><a :href="`/customers/${vehicle.owner.id}`" x-text="vehicle.owner.name"></a> <span class="text-body-tertiary small" x-text="vehicle.owner.number"></span></dd></div>
+            <div><dt>Last visit</dt><dd x-text="vehicle.lastVisit ? `${fmtDate(vehicle.lastVisit.date)} (${vehicle.lastVisit.number})` : 'First visit'"></dd></div>
+          </dl>
+          <div class="form-text mt-2">Wrong owner? <a :href="`/vehicles/${vehicle.id}/edit`">Change it on the vehicle</a> first.</div>
+          <div class="jt-warn-box mt-3" x-show="vehicle.open" x-cloak>
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>Already in the workshop on <strong x-text="vehicle.open?.number"></strong>. <a :href="`/check-in/${vehicle.open?.id}`">Open it</a></span>
+          </div>
+        </div>
+      </template>
+    </div></div>
+
+    <div x-show="mode === 'new'" x-cloak><div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'reg_no', label: 'Reg number', value: values.reg_no, error: errors.reg_no, placeholder: 'KDA 123A', autocomplete: 'off',
+              hint: 'Tidied as you type: kda123a becomes KDA 123A.', attrs: 'x-ref="reg" @blur="tidyReg($el)" :disabled="issueTag" style="text-transform: uppercase"' }) %>
+        <%- include('partials/field', { name: 'chassis_no', label: 'Chassis number', value: values.chassis_no, error: errors.chassis_no, autocomplete: 'off',
+              hint: 'A VIN is 17 letters and digits (never I, O or Q).', attrs: 'x-ref="chassis" @blur="$el.value = $el.value.toUpperCase().replace(/[\\s-]/g, \'\')" :disabled="issueTag" style="text-transform: uppercase"' }) %>
+      </div>
+      <div class="jt-warn-box" x-show="regOdd" x-cloak>
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Unusual reg format. Kenyan plates look like <strong>KDA 123A</strong> or, for trailers, <strong>ZF 1234</strong>. Check it, or save anyway.</span>
+      </div>
+      <label class="jt-choice">
+        <input class="form-check-input" type="checkbox" name="issue_tag" value="1" x-model="issueTag">
+        <span>
+          <span class="jt-choice-label">No reg or chassis number yet: issue a temporary tag</span>
+          <span class="jt-choice-hint">The app gives it a number like <span class="font-monospace">JTT-<%= new Date().getFullYear() %>-0007</span>. Paint it on the frame; add the real numbers later.</span>
+        </span>
+      </label>
+
+      <%- include('partials/choices', { name: 'type', label: 'Type', required: true, options: types, value: values.type, columns: 4 }) %>
+
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'customer_id', label: 'Owner', type: 'select', url: '/api/customers', options: ownerOption, value: values.customer_id,
+              error: errors.customer_id, required: true, blank: 'Type a name, phone or CUS number', class: 'jt-full',
+              hint: 'Not found? Type the name and choose “Add new customer”.', attrs: 'data-tom-create="customer"' }) %>
+        <%- include('partials/field', { name: 'make', label: 'Make', value: values.make, error: errors.make, placeholder: 'e.g. Isuzu' }) %>
+        <%- include('partials/field', { name: 'model', label: 'Model', value: values.model, error: errors.model, placeholder: 'e.g. FVZ' }) %>
+      </div>
+    </div></div>
+  </section>
+
+  <%# ---------- Brought in by ---------- %>
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Brought in by</h2></div>
+    <div class="card-body">
+      <%- include('partials/field', { name: 'contact_id', label: 'Contact person', type: 'select', url: '/api/check-in/contacts',
+            options: contact ? [contact] : [], value: values.contact_id, error: errors.contact_id,
+            blank: 'Type a name, phone or company', auto: contact && vehicle && vehicle.contact && vehicle.contact.value === contact.value ? 'usual' : false,
+            hint: 'The owner’s staff, or another company’s salesman. Add new people on the customer’s page.', attrs: 'x-ref="contact"' }) %>
+    </div>
+  </section>
+
+  <%# ---------- Odometer and fuel ---------- %>
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Odometer and fuel <span class="text-body-tertiary fw-normal">(optional)</span></h2></div>
+    <div class="card-body jt-fields">
+      <div class="jt-field">
+        <label class="form-label" for="f-odometer_km">Odometer</label>
+        <div class="input-group has-validation">
+          <input class="form-control text-end jt-num<%= errors.odometer_km ? ' is-invalid' : '' %>" type="text" inputmode="numeric" id="f-odometer_km" name="odometer_km"
+                 x-model="odometer" :disabled="odometerBroken" placeholder="e.g. 245 300">
+          <span class="input-group-text">km</span>
+          <% if (errors.odometer_km) { %><div class="invalid-feedback"><%= errors.odometer_km %></div><% } %>
+        </div>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" id="f-odometer_not_working" name="odometer_not_working" value="1" x-model="odometerBroken">
+          <label class="form-check-label" for="f-odometer_not_working">Meter not working</label>
+        </div>
+        <div class="jt-warn-box mt-2" x-show="odometerLow" x-cloak>
+          <i class="bi bi-exclamation-triangle"></i>
+          <span>Lower than last visit (<span x-text="Number(vehicle?.lastVisit?.odometer).toLocaleString('en-KE')"></span> km). Check the reading.</span>
+        </div>
+      </div>
+
+      <fieldset class="jt-field">
+        <legend class="form-label">Fuel</legend>
+        <div class="jt-fuel" role="radiogroup" aria-label="Fuel level">
+          <% fuelLevels.forEach((f) => { %>
+            <input class="btn-check" type="radio" name="fuel_quarters" id="fuel-<%= f.value %>" value="<%= f.value %>" x-model="fuel" @click="if (fuel === '<%= f.value %>') { $event.preventDefault(); fuel = '' }">
+            <label class="btn btn-outline-primary" for="fuel-<%= f.value %>"><%= f.label %></label>
+          <% }) %>
+        </div>
+        <div class="form-text">Tap again to clear.</div>
+      </fieldset>
+    </div>
+  </section>
+
+  <%# ---------- Items received ---------- %>
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Items received with the vehicle</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-chips" aria-label="Quick add">
+        <% presets.forEach((p) => { %>
+          <button type="button" class="jt-chip" @click="addPreset(<%= JSON.stringify(p) %>)"><i class="bi bi-plus"></i><%= p %></button>
+        <% }) %>
+      </div>
+      <% if (errors.items) { %><div class="jt-error-text"><%= errors.items %></div><% } %>
+      <div class="jt-items">
+        <div class="jt-items-head" aria-hidden="true"><span>#</span><span>Item description</span><span>Qty</span><span></span></div>
+        <template x-for="(row, i) in rows" :key="i">
+          <div class="jt-items-row">
+            <span class="jt-items-no" x-text="i + 1"></span>
+            <input class="form-control" type="text" name="item_description" x-model="row.description" maxlength="120" list="item-presets" :aria-label="`Item ${i + 1}`" placeholder="e.g. Spare wheel">
+            <input class="form-control text-end jt-num" type="text" inputmode="numeric" name="item_quantity" x-model="row.quantity" :aria-label="`Quantity of item ${i + 1}`">
+            <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove item ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          </div>
+        </template>
+      </div>
+      <datalist id="item-presets"><% presets.forEach((p) => { %><option value="<%= p %>"><% }) %></datalist>
+      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another item</button></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-body">
+      <%- include('partials/field', { name: 'remarks', label: 'Remarks', type: 'textarea', value: values.remarks, error: errors.remarks, rows: 3,
+            placeholder: 'e.g. Dent on the left door, cracked rear light, customer wants a dropside body' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-pen"></i>Received by <%= user.name %>. The driver confirms and signs next.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="/check-in">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save check-in</button>
+    </div>
+  </div>
+</form>
+
+<%- include('customers/views/quick-add') %>

@@ -9,7 +9,7 @@ export const nav = [
     label: 'Workshop',
     items: [
       { label: 'Dashboard', href: '/', icon: 'grid-1x2', ready: true },
-      { label: 'Check-in', href: '/check-in', icon: 'truck', permission: 'checkin.manage' },
+      { label: 'Check-in', href: '/check-in', icon: 'truck', permission: 'checkin.manage', ready: true },
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress'] },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage' },
     ],

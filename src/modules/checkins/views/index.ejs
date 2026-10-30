@@ -1,0 +1,32 @@
+<%- include('partials/page-header', {
+  crumb: ['Workshop', 'Check-in'],
+  heading: 'In the workshop',
+  sub: `Vehicles checked in at ${site.name} and not yet checked out.`,
+  actions: canCheckIn ? [{ label: 'Check a vehicle in', href: '/check-in/new', icon: 'box-arrow-in-right', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', { icon: 'truck', heading: 'No vehicles in the workshop',
+          text: 'When a truck arrives, check it in: find it by reg number, note who brought it and what came with it.',
+          action: canCheckIn ? { label: 'Check a vehicle in', href: '/check-in/new' } : null }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Vehicle</th><th>Check-in</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th><th>Arrived</th></tr></thead>
+        <tbody>
+          <% list.forEach((c) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/check-in/<%= c.id %>"><% if (c.reg_no) { %><%- include('partials/plate', { reg: c.reg_no }) %><% } else { %><span class="font-monospace small"><%= vehicleLabel(c) %></span><% } %></a>
+                <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %></td>
+              <td class="font-monospace small"><%= c.number %></td>
+              <td><%= c.customer_name %></td>
+              <td class="d-none d-lg-table-cell text-body-secondary"><%= c.contact_name ?? '—' %></td>
+              <td class="text-nowrap"><%= fmt.dateTime(c.checked_in_at) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

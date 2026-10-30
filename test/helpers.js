@@ -35,6 +35,9 @@ export async function cleanup() {
   // Test customers use phones 0700 00x xxx too; remove their vehicles first (a customer with vehicles can't be deleted).
   const customerIds = await db('customers').where('phone', 'like', '+25470000%').pluck('id');
   const vehicleIds = await db('vehicles').whereIn('customer_id', customerIds).pluck('id');
+  const checkinIds = await db('checkins').whereIn('vehicle_id', vehicleIds).pluck('id');
+  await db('audit_log').where({ entity: 'checkin' }).whereIn('entity_id', checkinIds).delete();
+  await db('checkins').whereIn('id', checkinIds).delete(); // items and photos go with them
   await db('audit_log').where({ entity: 'vehicle' }).whereIn('entity_id', vehicleIds).delete();
   await db('vehicles').whereIn('id', vehicleIds).delete();
   await db('audit_log').where({ entity: 'customer' }).whereIn('entity_id', customerIds).delete();

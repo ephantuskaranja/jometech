@@ -31,7 +31,7 @@
         <tbody>
           <% list.forEach((v) => { %>
             <tr>
-              <td><a class="jt-row-link" href="/vehicles/<%= v.id %>"><% if (v.reg_no) { %><%- include('partials/plate', { reg: v.reg_no }) %><% } else { %><span class="font-monospace small"><%= v.chassis_no %></span><% } %></a></td>
+              <td><a class="jt-row-link" href="/vehicles/<%= v.id %>"><% if (v.reg_no) { %><%- include('partials/plate', { reg: v.reg_no }) %><% } else { %><span class="font-monospace small"><%= v.chassis_no ?? v.temp_tag %></span><% } %></a></td>
               <td><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %><% if (v.body_type) { %><span class="jt-sub"><%= v.body_type %></span><% } %></td>
               <td><%= typeLabel(v.type) %></td>
               <td><%= v.customer_name %></td>

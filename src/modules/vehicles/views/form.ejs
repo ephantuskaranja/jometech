@@ -5,8 +5,8 @@
   const backUrl = editing ? `/vehicles/${vehicle.id}` : (customer ? `/customers/${customer.id}?tab=vehicles` : '/vehicles');
 %>
 <%- include('partials/page-header', {
-  crumb: ['Sales', { label: 'Vehicles', href: '/vehicles' }, editing ? (vehicle.reg_no ?? vehicle.chassis_no) : 'Add vehicle'],
-  heading: editing ? `Edit ${vehicle.reg_no ?? vehicle.chassis_no}` : 'Add vehicle',
+  crumb: ['Sales', { label: 'Vehicles', href: '/vehicles' }, editing ? (vehicle.reg_no ?? vehicle.chassis_no ?? vehicle.temp_tag) : 'Add vehicle'],
+  heading: editing ? `Edit ${vehicle.reg_no ?? vehicle.chassis_no ?? vehicle.temp_tag}` : 'Add vehicle',
   sub: 'Reg number (or chassis number for a new trailer), owner and type. The rest can be filled in later.',
 }) %>
 
@@ -24,6 +24,9 @@
         <%- include('partials/field', { name: 'chassis_no', label: 'Chassis number', value: values.chassis_no, error: errors.chassis_no, autocomplete: 'off',
               hint: 'Enough on its own for a trailer without plates.', attrs: 'x-ref="chassis" @blur="$el.value = $el.value.toUpperCase().replace(/[\\s-]/g, \'\'); checkDuplicate()" style="text-transform: uppercase"' }) %>
       </div>
+      <% if (editing && vehicle.temp_tag) { %>
+        <div class="jt-info-box"><i class="bi bi-tag"></i><span>Temporary tag <strong class="font-monospace"><%= vehicle.temp_tag %></strong>. Add the reg or chassis number once it has one; the tag stays searchable.</span></div>
+      <% } %>
       <div class="jt-warn-box" x-show="duplicate" x-cloak>
         <i class="bi bi-exclamation-triangle"></i>
         <span>Already registered: <strong x-text="duplicate?.reg_no ?? duplicate?.chassis_no"></strong>, owned by <span x-text="duplicate?.customer_name"></span>. <a :href="`/vehicles/${duplicate?.id}`">Open it</a></span>

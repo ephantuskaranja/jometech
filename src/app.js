@@ -19,6 +19,7 @@ import { router as devRoutes } from './modules/dev/routes.js';
 import { router as customerRoutes } from './modules/customers/routes.js';
 import { router as vehicleRoutes } from './modules/vehicles/routes.js';
 import { router as searchRoutes } from './modules/search/routes.js';
+import { router as checkinRoutes } from './modules/checkins/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -110,6 +111,7 @@ export function createApp() {
   app.use(customerRoutes);
   app.use(vehicleRoutes);
   app.use(searchRoutes);
+  app.use(checkinRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

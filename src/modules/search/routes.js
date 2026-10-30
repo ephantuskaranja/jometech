@@ -3,6 +3,7 @@ import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
 import { formatPhone } from '../../core/phone.js';
 import { globalSearch } from '../customers/service.js';
+import { vehicleLabel } from '../../core/vehicle-format.js';
 
 // The search box in the top bar: reg no., chassis, phone, customer name or number.
 // Job numbers join in when the jobs module is built.
@@ -11,7 +12,7 @@ const view = canAny(...VIEW_CUSTOMERS);
 
 const toResults = ({ vehicles, customers }) => [
   ...vehicles.map((v) => ({
-    type: 'vehicle', url: `/vehicles/${v.id}`, plate: v.reg_no, title: v.reg_no ?? v.chassis_no,
+    type: 'vehicle', url: `/vehicles/${v.id}`, plate: v.reg_no, title: vehicleLabel(v),
     meta: [v.make, v.model].filter(Boolean).join(' ') || v.chassis_no || '', sub: v.customer_name,
   })),
   ...customers.map((c) => ({ type: 'customer', url: `/customers/${c.id}`, title: c.name, meta: c.number, sub: formatPhone(c.phone) })),

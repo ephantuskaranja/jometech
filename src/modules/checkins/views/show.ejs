@@ -1,0 +1,88 @@
+<%# One check-in: the digital Truck Receiving Document. %>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Workshop <i class="bi bi-chevron-right"></i><a href="/check-in">Check-in</a><i class="bi bi-chevron-right"></i><span><%= checkin.number %></span></div>
+    <div class="jt-record-top">
+      <% if (checkin.reg_no) { %><%- include('partials/plate', { reg: checkin.reg_no, size: 'lg' }) %><% } %>
+      <div class="jt-record-title">
+        <h1 class="h3"><%= checkin.number %> <%- include('partials/pill', { text: status.label, tone: status.tone }) %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-truck"></i><a href="/vehicles/<%= checkin.vehicle_id %>"><%= vehicleLabel(checkin) %></a><%= [checkin.make, checkin.model].filter(Boolean).length ? ` · ${[checkin.make, checkin.model].filter(Boolean).join(' ')}` : '' %></span>
+          <span><i class="bi bi-clock"></i><%= fmt.dateTime(checkin.checked_in_at) %></span>
+          <span><i class="bi bi-geo-alt"></i><%= checkin.site_name %></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Vehicle and owner</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Owner</dt><dd><a href="/customers/<%= checkin.customer_id %>"><%= checkin.customer_name %></a> <span class="text-body-tertiary small"><%= checkin.customer_number %></span></dd></div>
+          <div><dt>Brought in by</dt><dd>
+            <% if (checkin.contact_name) { %>
+              <%= checkin.contact_name %><%= checkin.contact_role ? ` · ${checkin.contact_role}` : '' %>
+              <% if (checkin.contact_company_id !== checkin.customer_id) { %><span class="d-block small text-body-secondary">of <a href="/customers/<%= checkin.contact_company_id %>"><%= checkin.contact_company %></a></span><% } %>
+              <% if (checkin.contact_phone) { %><span class="d-block small font-monospace"><%= fmt.phone(checkin.contact_phone) %></span><% } %>
+            <% } else { %>—<% } %>
+          </dd></div>
+          <div><dt>Reg number</dt><dd><%= checkin.reg_no ?? '—' %></dd></div>
+          <div><dt>Chassis number</dt><dd class="font-monospace"><%= checkin.chassis_no ?? '—' %></dd></div>
+          <% if (checkin.temp_tag) { %><div><dt>Temporary tag</dt><dd class="font-monospace"><%= checkin.temp_tag %></dd></div><% } %>
+          <div><dt>Odometer</dt><dd><%= checkin.odometer_not_working ? 'Meter not working' : (checkin.odometer_km != null ? `${fmt.qty(checkin.odometer_km)} km` : '—') %></dd></div>
+          <div><dt>Fuel</dt><dd><%= fuel ?? '—' %></dd></div>
+          <div><dt>Received by</dt><dd><%= checkin.received_by_name %></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Items received</h2></div>
+      <% if (checkin.items.length) { %>
+        <div class="table-responsive">
+          <table class="table jt-table mb-0">
+            <thead><tr><th style="width: 3rem">#</th><th>Item description</th><th class="text-end">Qty</th></tr></thead>
+            <tbody>
+              <% checkin.items.forEach((item, i) => { %>
+                <tr><td class="text-body-tertiary"><%= i + 1 %></td><td><%= item.description %></td><td class="text-end jt-num"><%= item.quantity %></td></tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } else { %>
+        <div class="card-body text-body-secondary small">No loose items recorded.</div>
+      <% } %>
+      <% if (checkin.remarks) { %>
+        <div class="card-body border-top">
+          <div class="small fw-semibold mb-1">Remarks</div>
+          <p class="mb-0" style="white-space: pre-line"><%= checkin.remarks %></p>
+        </div>
+      <% } %>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Confirmed by the driver</h2></div>
+      <div class="card-body small text-body-secondary">
+        <% if (checkin.driver_signed_at) { %>
+          Signed by <%= checkin.driver_name %> on <%= fmt.dateTime(checkin.driver_signed_at) %>.
+        <% } else if (checkin.not_signed_reason) { %>
+          Not signed: <%= checkin.not_signed_reason %>
+        <% } else { %>
+          <i class="bi bi-hourglass-split"></i> Waiting for the driver to sign. (The signing screen is the next part of this step.)
+        <% } %>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body">
+        <%- include('partials/history', { entries, labels: {} }) %>
+      </div>
+    </section>
+  </div>
+</div>

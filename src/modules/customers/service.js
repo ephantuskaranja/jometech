@@ -178,10 +178,11 @@ export async function globalSearch(q, { limit = 8 } = {}) {
     .join('customers', 'customers.id', 'vehicles.customer_id')
     .where((w) => {
       w.whereRaw("REPLACE(`vehicles`.`reg_no`, ' ', '') LIKE ?", [`%${key}%`])
-        .orWhere('vehicles.chassis_no', 'like', `%${key}%`);
+        .orWhere('vehicles.chassis_no', 'like', `%${key}%`)
+        .orWhereRaw("REPLACE(`vehicles`.`temp_tag`, '-', '') LIKE ?", [`%${key}%`]);
     })
     .orderBy('vehicles.reg_no').limit(limit)
-    .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name') : [];
+    .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name') : [];
 
   const customers = await db('customers')
     .where((w) => {
