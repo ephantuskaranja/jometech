@@ -16,6 +16,8 @@
     "db:status": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:list",
     "db:make": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:make",
     "db:seed": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js seed:run",
+    "migration:run": "npm run db:migrate",
+    "seed": "npm run db:seed",
     "user:create": "node --env-file-if-exists=.env scripts/create-user.js"
   },
   "dependencies": {
