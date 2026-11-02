@@ -12,6 +12,7 @@
           <span><i class="bi bi-geo-alt"></i><%= checkin.site_name %></span>
         </div>
       </div>
+      <a class="btn btn-outline-secondary" href="/check-in/<%= checkin.id %>/print" target="_blank" rel="noopener"><i class="bi bi-printer"></i>Receiving note</a>
     </div>
   </div>
 </section>
@@ -73,6 +74,42 @@
   </div>
 
   <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <% if (checkin.status === 'checked_out') { %>
+      <section class="card">
+        <div class="card-body d-flex gap-3 align-items-start">
+          <i class="bi bi-box-arrow-right fs-4 text-success"></i>
+          <div>
+            <div class="fw-semibold">Checked out <%= fmt.dateTime(checkin.checked_out_at) %></div>
+            <div class="small text-body-secondary">By <%= checkin.checked_out_by_name ?? 'a removed user' %>, after <%= daysIn.toLowerCase() === 'today' ? 'less than a day' : daysIn %> in the workshop.</div>
+          </div>
+        </div>
+      </section>
+    <% } else if (canCheckOut) { %>
+      <section class="card" x-data="{ open: false }">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3">
+            <div class="me-auto">
+              <div class="fw-semibold">In the workshop<%= daysIn === 'Today' ? ' since today' : ` for ${daysIn}` %></div>
+              <div class="small text-body-secondary">Arrived <%= fmt.dateTime(checkin.checked_in_at) %></div>
+            </div>
+            <button type="button" class="btn btn-outline-primary" x-show="!open" @click="open = true"><i class="bi bi-box-arrow-right"></i>Check out</button>
+          </div>
+          <div x-show="open" x-cloak>
+            <form method="post" action="/check-in/<%= checkin.id %>/check-out" class="d-grid gap-3 mt-3">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <% if (!checkin.driver_signed_at && !checkin.not_signed_reason) { %>
+                <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>The driver hasn’t confirmed this check-in. After check-out it can’t be signed.</span></div>
+              <% } %>
+              <p class="small mb-0">This records that the vehicle has left the workshop. The check-in, its signature and photos can’t be changed after this.</p>
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Yes, check it out</button>
+                <button class="btn btn-link" type="button" @click="open = false">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    <% } %>
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Confirmed by the driver</h2></div>
       <div class="card-body">
@@ -85,6 +122,8 @@
           </div>
         <% } else if (checkin.not_signed_reason) { %>
           <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span><%= checkin.not_signed_reason %></span></div>
+        <% } else if (checkin.status !== 'in_workshop') { %>
+          <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span>Checked out before the driver confirmed.</span></div>
         <% } else { %>
           <p class="small text-body-secondary mb-3"><i class="bi bi-hourglass-split"></i> Waiting for the person who delivered the vehicle to check the details and sign.</p>
           <% if (canConfirm) { %><a class="btn btn-primary w-100" href="/check-in/<%= checkin.id %>/sign"><i class="bi bi-pen"></i>Driver signs now</a><% } %>

@@ -17,9 +17,19 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? (env === 'production' ? undefined : 'dev-only-not-secret'),
   // Uploaded and generated files (signatures, photos, backups). Not public: served
   // only through routes that check who is logged in. Include it in backups.
-  storageDir: process.env.STORAGE_DIR ?? fileURLToPath(new URL('../storage', import.meta.url)),
-  appName: 'Jome-Tech',
-  timezone: 'Africa/Nairobi',
+  storageDir: process.env.STORAGE_DIR || fileURLToPath(new URL('../storage', import.meta.url)),
+  appName: process.env.APP_NAME || 'Jome-Tech',
+  // Dates, times and yearly document numbers (CHK-2026-…) follow this zone, not the server's.
+  timezone: process.env.TIMEZONE || 'Africa/Nairobi',
+  // Letterhead on printed documents (receiving note; later quotations and invoices).
+  // Defaults are from the paper Truck Receiving Document; moves to company settings when that screen exists.
+  company: {
+    name: process.env.COMPANY_NAME || 'Jome-Tech Engineering Ltd',
+    // Address lines separated by "|"
+    address: (process.env.COMPANY_ADDRESS || 'Eastern Bypass, Ruai|P.O. Box 14554 - 00400, Nairobi').split('|').map((line) => line.trim()).filter(Boolean),
+    phone: process.env.COMPANY_PHONE || '0705 656 398',
+    email: process.env.COMPANY_EMAIL || 'jometechltd@gmail.com',
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 3306),

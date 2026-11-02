@@ -273,3 +273,57 @@ test('photos need a login to see, and check-in rights to add', async () => {
   const res = await sales.post(`/check-in/${p.checkin_id}/photos`).set('x-csrf-token', csrf).attach('photo', await cameraPhoto(), 'photo.jpg');
   assert.equal(res.status, 403);
 });
+
+// ---------- check out and the receiving note ----------
+
+async function checkOut(id) {
+  const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
+  return supervisor.post(`/check-in/${id}/check-out`).type('form').send({ _csrf: csrf });
+}
+
+test('checking out moves the vehicle to “Checked out” and locks the check-in', async () => {
+  const id = await freshCheckin('KZY 309C');
+  assert.equal((await checkOut(id)).status, 302);
+  const c = await db('checkins').where({ id }).first();
+  assert.equal(c.status, 'checked_out');
+  assert.ok(c.checked_out_at);
+  assert.ok(c.checked_out_by);
+
+  const page = (await supervisor.get(`/check-in/${id}`)).text;
+  assert.match(page, /Checked out /);
+  assert.match(page, /checked it out/);
+  assert.doesNotMatch((await supervisor.get('/check-in')).text, /KZY 309C/);
+  assert.match((await supervisor.get('/check-in?show=out')).text, /KZY 309C/);
+
+  // Locked: no second check-out, no signature, no photos
+  assert.equal((await checkOut(id)).status, 409);
+  assert.equal((await sign(id, { driver_name: 'Brian Otieno', signature: PNG })).status, 409);
+  assert.equal((await db('checkins').where({ id }).first()).driver_signed_at, null);
+  assert.equal((await addPhoto(id, await cameraPhoto())).status, 409);
+
+  // The same vehicle can come back in
+  const v = await db('vehicles').where({ reg_no: 'KZY 309C' }).first();
+  const again = await checkIn({ vehicle_mode: 'existing', vehicle_id: v.id });
+  assert.equal(again.status, 302, again.text);
+});
+
+test('sales staff can’t check a vehicle out', async () => {
+  const c = await db('checkins').where({ status: 'in_workshop' }).orderBy('id', 'desc').first('id');
+  const csrf = csrfFrom((await sales.get('/customers')).text);
+  const res = await sales.post(`/check-in/${c.id}/check-out`).type('form').send({ _csrf: csrf });
+  assert.equal(res.status, 403);
+});
+
+test('the receiving note follows the paper form, with the signature', async () => {
+  const id = await freshCheckin('KZY 310C');
+  await sign(id, { driver_name: 'Brian Otieno', driver_phone: '0700 000 333', signature: PNG });
+  const html = (await supervisor.get(`/check-in/${id}/print`).expect(200)).text;
+  assert.match(html, /Truck Receiving Document/);
+  assert.match(html, /Jome-Tech Engineering Ltd/);
+  assert.match(html, /Brian Otieno/);
+  assert.match(html, /Rift Motors/, 'company name: the salesman’s company');
+  assert.match(html, /Wanjiru Kamau/, 'client name: the owner');
+  assert.match(html, new RegExp(`/check-in/${id}/signature.png`));
+  assert.equal((html.match(/<td class="no">/g) ?? []).length, 10, 'ten item lines, like the paper form');
+  assert.doesNotMatch(html, /jt-sidebar/, 'no app menu on the printed page');
+});

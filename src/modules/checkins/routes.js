@@ -9,6 +9,7 @@ import { check, httpError, optionalId, optionalPhone, optionalText } from '../..
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
 import { fmt } from '../../core/format.js';
+import { config } from '../../config.js';
 import * as customers from '../customers/service.js';
 import { VEHICLE_TYPES, typeLabel } from '../vehicles/service.js';
 
@@ -88,10 +89,13 @@ function needSite(req) {
 
 router.get('/check-in', view, async (req, res) => {
   needSite(req);
+  const tab = req.query.show === 'out' ? 'out' : 'in';
   res.render('checkins/views/index', {
     title: 'Check-in',
-    list: await checkins.listInWorkshop(req.site.id),
-    vehicleLabel,
+    tab,
+    list: await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'in_workshop'),
+    inCount: await checkins.countInWorkshop(req.site.id),
+    vehicleLabel, daysIn: checkins.daysIn,
     canCheckIn: req.user.can('checkin.manage'),
   });
 });
@@ -148,7 +152,29 @@ router.get('/check-in/:id', view, async (req, res) => {
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
+    canCheckOut: req.user.can('checkin.manage') && checkin.status === 'in_workshop',
+    daysIn: checkins.daysIn(checkin.checked_in_at, checkin.checked_out_at ?? new Date()),
     photos: photosFor(checkin, req.user.can('checkin.manage') && checkin.status === 'in_workshop'),
+  });
+});
+
+router.post('/check-in/:id/check-out', manage, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  await checkins.checkOut(checkin.id, req);
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} checked out (${checkin.number}).` };
+  res.redirect(`/check-in/${checkin.id}`);
+});
+
+// The paper Truck Receiving Document, filled in: an A4 page to print or save as PDF.
+router.get('/check-in/:id/print', view, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  res.render('checkins/views/print', {
+    layout: false,
+    title: `${checkin.number} receiving note`,
+    checkin, vehicleLabel, typeLabel,
+    company: config.company,
+    fuel: checkins.fuelLabel(checkin.fuel_quarters),
+    printedAt: new Date(),
   });
 });
 

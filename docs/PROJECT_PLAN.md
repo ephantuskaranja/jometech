@@ -226,7 +226,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 4 | UI kit (`/dev/ui`) and users screen | Done |
 | 5 | History (audit trail) and gap-free document numbers | Done |
 | 6 | Customers, contact people, vehicles, global search | Done |
-| 7 | **Vehicle check-in** | In progress: parts 1–4 done (tables, check-in screen, driver signature, photos) |
+| 7 | Vehicle check-in (tables, check-in screen, driver signature, photos, check-out, printable receiving note) | Done |
 
 ### Step 7 decisions (updated 2026-10-31)
 

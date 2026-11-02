@@ -1,0 +1,115 @@
+<%#
+  The paper Truck Receiving Document, filled in from the check-in: one A4 page.
+  Standalone (no app layout) so it prints cleanly; "Print" also saves as PDF.
+  Same sections and order as docs/source/checkin/RECEIVING DOCUMENT.pdf.
+%>
+<%
+  const blank = '—';
+  const receivedFrom = checkin.driver_name ?? checkin.contact_name;
+  const contactPhone = checkin.driver_phone ?? checkin.contact_phone;
+  const rows = [...checkin.items];
+  while (rows.length < 10) rows.push(null); // the paper form has 10 lines; keep its shape
+  const odometer = checkin.odometer_not_working ? 'Not working' : (checkin.odometer_km != null ? `${fmt.qty(checkin.odometer_km)} km` : blank);
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/check-in/<%= checkin.id %>">&larr; Back to <%= checkin.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+
+  <main class="sheet">
+    <header class="letterhead">
+      <img src="/img/brand/icon.svg" alt="" width="64" height="64">
+      <div class="company">
+        <div class="company-name"><%= company.name %></div>
+        <div><%= company.address.join(' · ') %></div>
+        <div>Tel: <%= company.phone %> · <%= company.email %></div>
+      </div>
+    </header>
+
+    <div class="title-row">
+      <h1>Truck Receiving Document</h1>
+      <div class="doc-meta">
+        <div><span>No:</span> <strong><%= checkin.number %></strong></div>
+        <div><span>Date:</span> <%= fmt.dateTime(checkin.checked_in_at) %></div>
+      </div>
+    </div>
+
+    <table class="grid">
+      <tr>
+        <td colspan="2"><span class="label">Received from:</span> <%= receivedFrom ?? blank %></td>
+        <td colspan="2"><span class="label">Contact:</span> <%= contactPhone ? fmt.phone(contactPhone) : blank %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Company name:</span> <%= checkin.contact_company ?? blank %></td>
+        <td colspan="2"><span class="label">Client name:</span> <%= checkin.customer_name %> <span class="muted">(<%= checkin.customer_number %>)</span></td>
+      </tr>
+      <tr>
+        <td><span class="label">Make:</span> <%= checkin.make ?? blank %></td>
+        <td><span class="label">Model:</span> <%= checkin.model ?? blank %></td>
+        <td colspan="2"><span class="label">Chassis no:</span> <span class="mono"><%= checkin.chassis_no ?? blank %></span></td>
+      </tr>
+      <tr>
+        <td><span class="label"><%= checkin.reg_no || !checkin.temp_tag ? 'Reg no:' : 'Tag no:' %></span> <span class="mono"><%= checkin.reg_no ?? checkin.temp_tag ?? blank %></span></td>
+        <td><span class="label">Type:</span> <%= typeLabel(checkin.type) %></td>
+        <td><span class="label">Odometer:</span> <%= odometer %></td>
+        <td><span class="label">Fuel:</span> <%= fuel ?? blank %></td>
+      </tr>
+    </table>
+
+    <table class="items">
+      <thead><tr><th class="no">No:</th><th>Item description</th><th class="qty">Quantity</th></tr></thead>
+      <tbody>
+        <% rows.forEach((item, i) => { %>
+          <tr><td class="no"><%= i + 1 %></td><td><%= item?.description ?? '' %></td><td class="qty"><%= item?.quantity ?? '' %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <h2>Remarks</h2>
+    <div class="remarks"><%= checkin.remarks ?? '' %><% if (checkin.photos.length) { %><div class="muted photos-note"><%= checkin.photos.length %> photo<%= checkin.photos.length === 1 ? '' : 's' %> of the vehicle on file in Jome-Tech.</div><% } %></div>
+
+    <div class="signatures">
+      <div class="sig-row">
+        <div class="sig-name"><span class="label">Received by:</span> <%= checkin.received_by_name %></div>
+        <div class="sig-box"><span class="label">Sign</span><span class="sig-line"></span></div>
+      </div>
+      <div class="sig-row">
+        <div class="sig-name">
+          <span class="label">Confirmed by:</span> <%= checkin.driver_name ?? '' %>
+          <% if (checkin.driver_phone || checkin.driver_id_no) { %>
+            <div class="muted small"><%= [checkin.driver_phone && fmt.phone(checkin.driver_phone), checkin.driver_id_no && `ID ${checkin.driver_id_no}`].filter(Boolean).join(' · ') %></div>
+          <% } %>
+        </div>
+        <div class="sig-box">
+          <span class="label">Sign</span>
+          <% if (checkin.driver_signed_at) { %>
+            <span class="sig-line has-sig"><img src="/check-in/<%= checkin.id %>/signature.png" alt="Signature of <%= checkin.driver_name %>"></span>
+          <% } else { %>
+            <span class="sig-line"><% if (checkin.not_signed_reason) { %><span class="muted small">Not signed: <%= checkin.not_signed_reason %></span><% } %></span>
+          <% } %>
+        </div>
+      </div>
+      <% if (checkin.driver_signed_at) { %><div class="muted small signed-at">Signed on the device <%= fmt.dateTime(checkin.driver_signed_at) %></div><% } %>
+    </div>
+
+    <footer class="muted small">
+      <span><%= checkin.site_name %><%= checkin.status === 'checked_out' ? ` · Checked out ${fmt.dateTime(checkin.checked_out_at)}` : '' %></span>
+      <span>Printed <%= fmt.dateTime(printedAt) %></span>
+    </footer>
+  </main>
+</body>
+</html>
