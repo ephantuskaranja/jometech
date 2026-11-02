@@ -84,17 +84,80 @@
           </div>
         </div>
       </section>
+    <% } else if (move) { %>
+      <%# On the road between sites: the other site confirms when it arrives. %>
+      <% const rv = moveForm?.form === 'receive' ? moveForm.values : {}; const re = moveForm?.form === 'receive' ? moveForm.errors : {}; %>
+      <section class="card jt-move-card">
+        <div class="card-body d-grid gap-3">
+          <div class="d-flex gap-3 align-items-start">
+            <i class="bi bi-truck fs-4 text-info"></i>
+            <div>
+              <div class="fw-semibold">On the way to <%= move.to_site_name %></div>
+              <div class="small text-body-secondary">
+                Sent from <%= move.from_site_name %> <%= fmt.dateTime(move.sent_at) %><%= move.sent_by_name ? ` by ${move.sent_by_name}` : '' %>.
+                Driver: <%= move.driver_name %><%= move.driver_phone ? `, ${fmt.phone(move.driver_phone)}` : '' %><%= move.odometer_out != null ? `. Odometer ${fmt.qty(move.odometer_out)} km` : '' %>.
+              </div>
+              <% if (move.notes) { %><div class="small mt-1"><%= move.notes %></div><% } %>
+              <div class="small text-body-tertiary font-monospace mt-1"><%= move.number %></div>
+            </div>
+          </div>
+          <% if (canReceive) { %>
+            <form method="post" action="/movements/<%= move.id %>/receive" class="d-grid gap-3 border-top pt-3">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <div class="jt-fields">
+                <%- include('partials/field', { name: 'odometer_in', label: 'Odometer on arrival', value: rv.odometer_in, error: re.odometer_in, inputmode: 'numeric', hint: 'Optional, km' }) %>
+                <%- include('partials/field', { name: 'receive_notes', label: 'Notes', value: rv.receive_notes, error: re.receive_notes, hint: 'Optional, e.g. arrived with a flat tyre' }) %>
+              </div>
+              <div><button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-down"></i>Received at <%= move.to_site_name %></button></div>
+            </form>
+          <% } %>
+          <% if (canCancelMove) { %>
+            <form method="post" action="/movements/<%= move.id %>/cancel" x-data @submit="if (!confirm(<%= JSON.stringify(`Cancel this move? The vehicle stays at ${move.from_site_name}.`) %>)) $event.preventDefault()">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">It didn’t leave: cancel the move</button>
+            </form>
+          <% } %>
+        </div>
+      </section>
     <% } else if (canCheckOut) { %>
-      <section class="card" x-data="{ open: false }">
+      <% const sv = moveForm?.form === 'send' ? moveForm.values : {}; const se = moveForm?.form === 'send' ? moveForm.errors : {}; %>
+      <section class="card" x-data="{ open: '<%= moveForm?.form === 'send' ? 'send' : '' %>' }">
         <div class="card-body">
-          <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
             <div class="me-auto">
               <div class="fw-semibold">In the workshop<%= daysIn === 'Today' ? ' since today' : ` for ${daysIn}` %></div>
               <div class="small text-body-secondary">Arrived <%= fmt.dateTime(checkin.checked_in_at) %></div>
             </div>
-            <button type="button" class="btn btn-outline-primary" x-show="!open" @click="open = true"><i class="bi bi-box-arrow-right"></i>Check out</button>
+            <div class="d-flex gap-2" x-show="!open">
+              <% if (sendTo.length) { %><button type="button" class="btn btn-outline-secondary" @click="open = 'send'"><i class="bi bi-arrow-left-right"></i>Send to another site</button><% } %>
+              <button type="button" class="btn btn-outline-primary" @click="open = 'out'"><i class="bi bi-box-arrow-right"></i>Check out</button>
+            </div>
           </div>
-          <div x-show="open" x-cloak>
+          <% if (sendTo.length) { %>
+            <div x-show="open === 'send'" x-cloak>
+              <form method="post" action="/check-in/<%= checkin.id %>/send" class="d-grid gap-3 mt-3" novalidate>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <% if (sendTo.length === 1) { %>
+                  <input type="hidden" name="to_site_id" value="<%= sendTo[0].id %>">
+                  <p class="mb-0">Send to <strong><%= sendTo[0].name %></strong>. It stays on this site’s list until <%= sendTo[0].name %> receives it.</p>
+                  <% if (se.to_site_id) { %><div class="jt-error-text"><%= se.to_site_id %></div><% } %>
+                <% } else { %>
+                  <%- include('partials/field', { name: 'to_site_id', label: 'Send to', type: 'select', options: sendTo.map((s) => ({ value: s.id, label: s.name })), value: sv.to_site_id, error: se.to_site_id, blank: 'Choose the site', required: true }) %>
+                <% } %>
+                <div class="jt-fields">
+                  <%- include('partials/field', { name: 'driver_name', label: 'Driver', value: sv.driver_name, error: se.driver_name, required: true, autocomplete: 'off' }) %>
+                  <%- include('partials/field', { name: 'driver_phone', label: 'Driver’s phone', type: 'tel', value: sv.driver_phone, error: se.driver_phone, placeholder: '0712 345 678' }) %>
+                  <%- include('partials/field', { name: 'odometer_out', label: 'Odometer now', value: sv.odometer_out, error: se.odometer_out, inputmode: 'numeric', hint: 'Optional, km' }) %>
+                  <%- include('partials/field', { name: 'notes', label: 'Notes', value: sv.notes, error: se.notes, hint: 'Optional, e.g. why it is moving' }) %>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i>Send it</button>
+                  <button class="btn btn-link" type="button" @click="open = ''">Cancel</button>
+                </div>
+              </form>
+            </div>
+          <% } %>
+          <div x-show="open === 'out'" x-cloak>
             <form method="post" action="/check-in/<%= checkin.id %>/check-out" class="d-grid gap-3 mt-3">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <% if (!checkin.driver_signed_at && !checkin.not_signed_reason) { %>
@@ -103,7 +166,7 @@
               <p class="small mb-0">This records that the vehicle has left the workshop. The check-in, its signature and photos can’t be changed after this.</p>
               <div class="d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Yes, check it out</button>
-                <button class="btn btn-link" type="button" @click="open = false">Cancel</button>
+                <button class="btn btn-link" type="button" @click="open = ''">Cancel</button>
               </div>
             </form>
           </div>

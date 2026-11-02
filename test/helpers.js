@@ -11,10 +11,10 @@ export const PASSWORD = 'workshop-test-1';
 // Counter values before this test file ran (restored in cleanup).
 const counters = await db('number_sequences').select('seq_key', 'period', 'counter');
 
-/** Creates a test user at the MAIN site; returns the phone number as typed (07…). */
+/** Creates a test user at HQ (or the sites in extra.siteIds); returns the phone number as typed (07…). */
 export async function makeUser(phoneSuffix, roles, extra = {}) {
   const phone = `07000000${String(phoneSuffix).padStart(2, '0')}`;
-  const site = await db('sites').where({ code: 'MAIN' }).first('id');
+  const site = await db('sites').where({ code: 'HQ' }).first('id');
   await createUser({ name: `Test ${roles.join(' ')}`, phone, password: PASSWORD, roles, siteIds: [site.id], ...extra }, { user: null });
   return phone;
 }

@@ -47,6 +47,12 @@ export const optionalPhone = () =>
 export const optionalId = () =>
   z.union([z.literal(''), z.coerce.number().int().positive()]).optional().transform((v) => (v ? v : null));
 
+/** Optional meter reading (odometer km): "245,300" and "245 300 km" are both 245300; '' → null. */
+export const optionalReading = () => z.preprocess(
+  (v) => (typeof v === 'string' ? v.replace(/[^\d]/g, '') : v),
+  z.union([z.literal(''), z.coerce.number().int().max(9_999_999, 'Check the reading')]).optional().transform((v) => (v === '' || v === undefined ? null : v)),
+);
+
 /** An Error carrying an HTTP status, for the error page. */
 export function httpError(status, message) {
   return Object.assign(new Error(message), { status, expose: true });

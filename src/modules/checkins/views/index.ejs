@@ -1,16 +1,68 @@
+<%
+  const headings = {
+    in: ['In the workshop', `Vehicles checked in at ${site.name} and not yet checked out.`],
+    out: ['Checked out', `Vehicles that have left ${site.name}, most recent first.`],
+    moves: ['Movements', `Vehicles sent from or to ${site.name}, most recent first.`],
+  };
+  const moveStatus = { in_transit: ['On the way', 'warn'], received: ['Received', 'ok'], cancelled: ['Cancelled', 'neutral'] };
+  const vehicleCell = (v) => v.reg_no ? include('partials/plate', { reg: v.reg_no }) : `<span class="font-monospace small">${vehicleLabel(v)}</span>`;
+%>
 <%- include('partials/page-header', {
   crumb: ['Workshop', 'Check-in'],
-  heading: tab === 'out' ? 'Checked out' : 'In the workshop',
-  sub: tab === 'out' ? `Vehicles that have left ${site.name}, most recent first.` : `Vehicles checked in at ${site.name} and not yet checked out.`,
+  heading: headings[tab][0],
+  sub: headings[tab][1],
   actions: canCheckIn ? [{ label: 'Check a vehicle in', href: '/check-in/new', icon: 'box-arrow-in-right', primary: true }] : [],
 }) %>
+
+<% if (arriving.length) { %>
+  <section class="card mb-4 jt-arriving">
+    <div class="card-header"><h2 class="h6 mb-0"><i class="bi bi-truck"></i> On the way to <%= site.name %></h2></div>
+    <ul class="list-group list-group-flush">
+      <% arriving.forEach((m) => { %>
+        <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+          <%- vehicleCell(m) %>
+          <span class="small text-body-secondary me-auto">From <%= m.from_site_name %> with <%= m.driver_name %>, sent <%= fmt.dateTime(m.sent_at) %></span>
+          <a class="btn btn-sm btn-primary" href="/check-in/<%= m.checkin_id %>"><i class="bi bi-box-arrow-in-down"></i>Receive</a>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+<% } %>
 
 <section class="card">
   <nav class="nav nav-tabs jt-tabs">
     <a class="nav-link<%= tab === 'in' ? ' active' : '' %>" href="/check-in"<%- tab === 'in' ? ' aria-current="page"' : '' %>>In the workshop <span class="badge rounded-pill"><%= inCount %></span></a>
     <a class="nav-link<%= tab === 'out' ? ' active' : '' %>" href="/check-in?show=out"<%- tab === 'out' ? ' aria-current="page"' : '' %>>Checked out</a>
+    <% if (hasOtherSites) { %>
+      <a class="nav-link<%= tab === 'moves' ? ' active' : '' %>" href="/check-in?show=moves"<%- tab === 'moves' ? ' aria-current="page"' : '' %>>Movements</a>
+    <% } %>
   </nav>
-  <% if (list.length === 0) { %>
+
+  <% if (tab === 'moves') { %>
+    <% if (moves.length === 0) { %>
+      <%- include('partials/empty', { icon: 'arrow-left-right', heading: 'No movements yet',
+            text: 'To send a vehicle to another site, open its check-in and choose “Send to another site”.' }) %>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table jt-table">
+          <thead><tr><th>Vehicle</th><th>Movement</th><th>From → To</th><th class="d-none d-lg-table-cell">Driver</th><th>Sent</th><th>Received</th></tr></thead>
+          <tbody>
+            <% moves.forEach((m) => { %>
+              <tr>
+                <td><a class="jt-row-link" href="/check-in/<%= m.checkin_id %>"><%- vehicleCell(m) %></a></td>
+                <td><span class="font-monospace small"><%= m.number %></span>
+                  <span class="d-block mt-1"><%- include('partials/pill', { text: moveStatus[m.status][0], tone: moveStatus[m.status][1] }) %></span></td>
+                <td class="text-nowrap"><%= m.from_site_name %> <i class="bi bi-arrow-right text-body-tertiary"></i> <%= m.to_site_name %></td>
+                <td class="d-none d-lg-table-cell text-body-secondary"><%= m.driver_name %></td>
+                <td class="text-nowrap"><%= fmt.dateTime(m.sent_at) %></td>
+                <td class="text-nowrap"><%= m.received_at ? fmt.dateTime(m.received_at) : '—' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  <% } else if (list.length === 0) { %>
     <% if (tab === 'out') { %>
       <%- include('partials/empty', { icon: 'box-arrow-right', heading: 'Nothing checked out yet',
             text: 'When a vehicle leaves, open its check-in and choose “Check out”. It then appears here.' }) %>
@@ -26,9 +78,10 @@
         <tbody>
           <% list.forEach((c) => { %>
             <tr>
-              <td><a class="jt-row-link" href="/check-in/<%= c.id %>"><% if (c.reg_no) { %><%- include('partials/plate', { reg: c.reg_no }) %><% } else { %><span class="font-monospace small"><%= vehicleLabel(c) %></span><% } %></a>
+              <td><a class="jt-row-link" href="/check-in/<%= c.id %>"><%- vehicleCell(c) %></a>
                 <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %></td>
               <td><span class="font-monospace small"><%= c.number %></span>
+                <% if (tab === 'in' && c.moving_to) { %><span class="d-block mt-1"><%- include('partials/pill', { text: `On the way to ${c.moving_to}`, tone: 'info' }) %></span><% } %>
                 <% if (tab === 'in' && !c.driver_signed_at && !c.not_signed_reason) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Driver to sign', tone: 'warn' }) %></span><% } %></td>
               <td><%= c.customer_name %></td>
               <td class="d-none d-lg-table-cell text-body-secondary"><%= c.contact_name ?? '—' %></td>

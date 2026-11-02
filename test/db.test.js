@@ -17,7 +17,7 @@ test('migrations are up to date', async () => {
 });
 
 test('sites table has the starter site', async () => {
-  const site = await db('sites').where({ code: 'MAIN' }).first();
+  const site = await db('sites').where({ code: 'HQ' }).first();
   assert.ok(site, 'run: npm run db:seed');
   assert.equal(site.is_active, 1);
 });

@@ -5,9 +5,10 @@ import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
 import { history } from '../../core/audit.js';
 import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-format.js';
-import { check, httpError, optionalId, optionalPhone, optionalText } from '../../core/validate.js';
+import { check, httpError, optionalId, optionalPhone, optionalReading, optionalText } from '../../core/validate.js';
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
+import * as movements from '../movements/service.js';
 import { fmt } from '../../core/format.js';
 import { config } from '../../config.js';
 import * as customers from '../customers/service.js';
@@ -18,11 +19,7 @@ const view = canAny(...VIEW_CUSTOMERS);
 const manage = canAny('checkin.manage');
 
 const ticked = z.preprocess((v) => v === '1' || v === 'on' || v === true, z.boolean());
-// "123,456" and "123 456 km" are both 123456.
-const odometer = z.preprocess(
-  (v) => (typeof v === 'string' ? v.replace(/[^\d]/g, '') : v),
-  z.union([z.literal(''), z.coerce.number().int().max(9_999_999, 'Check the reading')]).optional().transform((v) => (v === '' || v === undefined ? null : v)),
-);
+const odometer = optionalReading();
 
 const checkinSchema = z.object({
   vehicle_mode: z.enum(['existing', 'new']).catch('existing'),
@@ -89,11 +86,14 @@ function needSite(req) {
 
 router.get('/check-in', view, async (req, res) => {
   needSite(req);
-  const tab = req.query.show === 'out' ? 'out' : 'in';
+  const tab = ['out', 'moves'].includes(req.query.show) ? req.query.show : 'in';
   res.render('checkins/views/index', {
     title: 'Check-in',
     tab,
-    list: await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'in_workshop'),
+    list: tab === 'moves' ? [] : await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'in_workshop'),
+    moves: tab === 'moves' ? await movements.listMovements(req.site.id) : [],
+    arriving: tab === 'in' ? await movements.arriving(req.site.id) : [],
+    hasOtherSites: (await movements.otherSites(req.site.id)).length > 0,
     inCount: await checkins.countInWorkshop(req.site.id),
     vehicleLabel, daysIn: checkins.daysIn,
     canCheckIn: req.user.can('checkin.manage'),
@@ -144,6 +144,12 @@ router.post('/check-in', manage, async (req, res) => {
 
 router.get('/check-in/:id', view, async (req, res) => {
   const checkin = await loadCheckin(req);
+  const manages = req.user.can('checkin.manage');
+  const atSite = worksAt(req, checkin.site_id);
+  const move = checkin.move;
+  // A send or receive form that came back with problems (movements/routes.js) opens again with them.
+  const moveForm = req.session.moveForm?.checkinId === checkin.id ? req.session.moveForm : null;
+  delete req.session.moveForm;
   res.render('checkins/views/show', {
     title: checkin.number,
     checkin,
@@ -152,14 +158,21 @@ router.get('/check-in/:id', view, async (req, res) => {
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
-    canCheckOut: req.user.can('checkin.manage') && checkin.status === 'in_workshop',
+    canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,
     daysIn: checkins.daysIn(checkin.checked_in_at, checkin.checked_out_at ?? new Date()),
-    photos: photosFor(checkin, req.user.can('checkin.manage') && checkin.status === 'in_workshop'),
+    photos: photosFor(checkin, manages && checkin.status === 'in_workshop'),
+    // Moving between sites
+    move,
+    sendTo: manages && atSite && checkin.status === 'in_workshop' && !move ? await movements.otherSites(checkin.site_id) : [],
+    canReceive: Boolean(move) && manages && worksAt(req, move.to_site_id),
+    canCancelMove: Boolean(move) && manages && worksAt(req, move.from_site_id),
+    moveForm,
   });
 });
 
 router.post('/check-in/:id/check-out', manage, async (req, res) => {
   const checkin = await loadCheckin(req);
+  if (!worksAt(req, checkin.site_id)) throw httpError(403, `Only staff at ${checkin.site_name} can check this vehicle out.`);
   await checkins.checkOut(checkin.id, req);
   req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} checked out (${checkin.number}).` };
   res.redirect(`/check-in/${checkin.id}`);
@@ -197,8 +210,16 @@ function signaturePng(dataUrl) {
 async function loadCheckin(req) {
   const checkin = await checkins.getCheckin(Number(req.params.id));
   if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  // Staff see their own sites' check-ins, and vehicles on their way to them.
+  checkin.move = await movements.openMovement(checkin.id);
+  if (!worksAt(req, checkin.site_id) && !(checkin.move && worksAt(req, checkin.move.to_site_id))) {
+    throw httpError(403, `${checkin.number} is at ${checkin.site_name}, which isn’t one of your sites.`);
+  }
   return checkin;
 }
+
+/** Staff work only at their own sites (admins and managers: all sites). */
+const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
 function renderSign(res, checkin, { status = 200, values, errors = {} }) {
   res.status(status).render('checkins/views/sign', {

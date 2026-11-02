@@ -20,6 +20,7 @@ import { router as customerRoutes } from './modules/customers/routes.js';
 import { router as vehicleRoutes } from './modules/vehicles/routes.js';
 import { router as searchRoutes } from './modules/search/routes.js';
 import { router as checkinRoutes } from './modules/checkins/routes.js';
+import { router as movementRoutes } from './modules/movements/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -112,6 +113,7 @@ export function createApp() {
   app.use(vehicleRoutes);
   app.use(searchRoutes);
   app.use(checkinRoutes);
+  app.use(movementRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

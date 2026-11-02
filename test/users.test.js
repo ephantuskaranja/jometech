@@ -12,7 +12,7 @@ before(async () => {
   const phone = await makeUser(21, ['admin']);
   admin = await loginAs(app, phone);
   adminId = (await db('users').where({ phone: '+254700000021' }).first('id')).id;
-  siteId = (await db('sites').where({ code: 'MAIN' }).first('id')).id;
+  siteId = (await db('sites').where({ code: 'HQ' }).first('id')).id;
 });
 after(cleanup);
 

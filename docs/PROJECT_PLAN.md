@@ -227,6 +227,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 5 | History (audit trail) and gap-free document numbers | Done |
 | 6 | Customers, contact people, vehicles, global search | Done |
 | 7 | Vehicle check-in (tables, check-in screen, driver signature, photos, check-out, printable receiving note) | Done |
+| 8 | Sites HQ and Site B; vehicle movements between them (send, receive, cancel) | Done |
 
 ### Step 7 decisions (updated 2026-10-31)
 
@@ -243,3 +244,23 @@ Jome-Tech's paper form is a **Truck Receiving Document** (`docs/source/checkin/R
   - On the server (sharp): re-save as WebP at 1280 px (about 100–200 KB) plus a 320 px thumbnail for lists; rotate by the camera's orientation, then strip location and other EXIF data.
   - Stored as files on disk (`storage/uploads/checkins/YYYY/MM/`, outside `public/`, served only to logged-in users); the database keeps the path. Limit about 10 photos per check-in. Include the folder in backups.
 - **Parts:** 1 tables (done) · 2 check-in screen (find/add vehicle or issue a tag, owner, brought in by, odometer, fuel, items, remarks) · 3 driver signature handover · 4 photos · 5 "in the workshop" list, check out, printable note.
+
+### Next steps (agreed 2026-11-02)
+
+Jome-Tech has **two sites: HQ (Ruai) and Site B**. Vehicles rarely move between them, but it must be possible.
+
+| Step | What |
+|---|---|
+| 8 | Sites HQ and Site B; **vehicle movements**: sent from one site (driver, time, odometer), then received at the other; "in transit" in between. The vehicle's open check-in moves with it. |
+| 9 | **Visitor register**: sign in/out at the gate (name, phone, ID optional, company, host, purpose, vehicle reg); who is on site now. |
+| 10 | **Enquiries**: logged from phone calls (customer, vehicle, what they want, follow-up date); one click to a proforma. |
+| 11 | **Proformas (quotations)** with amendments, PDF, convert to job. |
+
+**Proforma decisions** (sample: `docs/source/Quotation/`, git-ignored, personal data):
+
+- Called **Proforma Invoice** on screen and paper; numbers continue Jome-Tech's paper series: **490, 491 …**. Revisions are **490-R1, 490-R2**.
+- **Prices include VAT** (16%); the PDF says "VAT inclusive". The company KRA PIN and bank details print on it (settings in `.env`).
+- Lines: quantity, description with spec bullets, unit price, amount; total. Customer name, town and KRA PIN at the top.
+- **No approval step**: whoever prepares it sends it; the Director's name prints at the bottom.
+- Statuses: Draft → Sent → Accepted / Declined / Expired; Accepted → Converted to job.
+- **Amendments**: a draft is edited freely. A sent proforma is amended by creating a revision (a copy to edit); the previous one becomes *Superseded* and read-only, and the history records what changed. Only the latest revision can be accepted, and the job is created from exactly that revision. Changes after the job exists are **variations** on the job (jobs step), never edits to the proforma. Declined/expired proformas can be copied into a new one.

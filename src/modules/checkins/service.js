@@ -253,10 +253,14 @@ export async function listCheckins(siteId, status = 'in_workshop') {
     .join('vehicles', 'vehicles.id', 'checkins.vehicle_id')
     .join('customers', 'customers.id', 'checkins.customer_id')
     .leftJoin('customer_contacts as contact', 'contact.id', 'checkins.contact_id')
+    // A vehicle on its way to another site stays on this list until it is received there.
+    .leftJoin('vehicle_movements as move', (j) => j.on('move.checkin_id', 'checkins.id').andOnVal('move.status', 'in_transit'))
+    .leftJoin('sites as move_to', 'move_to.id', 'move.to_site_id')
     .where({ 'checkins.status': status, 'checkins.site_id': siteId })
     .orderBy(out ? 'checkins.checked_out_at' : 'checkins.checked_in_at', 'desc')
     .limit(out ? 100 : 200)
     .select('checkins.id', 'checkins.number', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
+      'move_to.name as moving_to',
       'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name',
       db.raw('COALESCE(contact.name, checkins.driver_name) as contact_name')); // not a contact: the name given when signing
 }
@@ -279,6 +283,9 @@ export async function checkOut(id, actor) {
       .first('checkins.id', 'checkins.number', 'checkins.status', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag');
     if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
     if (checkin.status !== 'in_workshop') throw httpError(409, `${checkin.number} is no longer in the workshop.`);
+    if (await trx('vehicle_movements').where({ checkin_id: id, status: 'in_transit' }).first('id')) {
+      throw httpError(409, `${vehicleLabel(checkin)} is on its way to another site. That site receives it first.`);
+    }
     await trx('checkins').where({ id }).update({ status: 'checked_out', checked_out_at: trx.fn.now(), checked_out_by: actor.user.id });
     await audit(trx, actor, { entity: 'checkin', id, action: 'checked_out', summary: `Checked out ${vehicleLabel(checkin)} (${checkin.number})` });
   });
