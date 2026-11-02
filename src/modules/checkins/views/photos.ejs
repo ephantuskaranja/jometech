@@ -1,0 +1,54 @@
+<%#
+  Photos of the vehicle on arrival (dents, cracked lights, general condition).
+  Each photo is shrunk in the browser and uploaded on its own (checkinPhotos in public/js/app.js).
+  photos: { url, max, canEdit, photos: [{ id, full, thumb }] } from photosFor() in routes.js
+%>
+<section class="card" x-data="checkinPhotos(<%= JSON.stringify(photos) %>)">
+  <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+    <h2 class="h6 mb-0 me-auto">Photos <span class="text-body-tertiary fw-normal small" x-show="photos.length" x-cloak x-text="`${photos.length} of ${max}`"></span></h2>
+    <% if (photos.canEdit) { %>
+      <div class="d-flex gap-2" x-show="room > 0">
+        <label class="btn btn-sm btn-outline-primary mb-0">
+          <i class="bi bi-camera"></i>Take photo
+          <input type="file" accept="image/*" capture="environment" class="visually-hidden" @change="add($event.target.files); $event.target.value = ''">
+        </label>
+        <label class="btn btn-sm btn-outline-secondary mb-0">
+          <i class="bi bi-images"></i>Choose
+          <input type="file" accept="image/*" multiple class="visually-hidden" @change="add($event.target.files); $event.target.value = ''">
+        </label>
+      </div>
+    <% } %>
+  </div>
+  <div class="card-body">
+    <div class="jt-photos" x-show="photos.length || queue.length" x-cloak>
+      <template x-for="p in photos" :key="p.id">
+        <div class="jt-photo">
+          <a :href="p.full" target="_blank" rel="noopener"><img :src="p.thumb" alt="Photo of the vehicle" width="320" height="320" loading="lazy"></a>
+          <% if (photos.canEdit) { %>
+            <button type="button" class="jt-photo-delete" @click="remove(p)" aria-label="Delete this photo"><i class="bi bi-trash3"></i></button>
+          <% } %>
+        </div>
+      </template>
+      <template x-for="u in queue" :key="u.key">
+        <div class="jt-photo is-busy" :class="{ 'is-failed': u.error }">
+          <img :src="u.preview" alt="" width="320" height="320">
+          <div class="jt-photo-status">
+            <span x-show="!u.error"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Uploading</span>
+            <template x-if="u.error">
+              <span><span x-text="u.error"></span>
+                <span class="d-flex gap-2 justify-content-center mt-1">
+                  <button type="button" class="btn btn-sm btn-light" @click="retry(u)">Try again</button>
+                  <button type="button" class="btn btn-sm btn-link text-white" @click="drop(u)">Remove</button>
+                </span>
+              </span>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+    <p class="small text-body-secondary mb-0" x-show="!photos.length && !queue.length">
+      <%= photos.canEdit ? `No photos yet. Photograph any damage and the general condition (up to ${photos.max}).` : 'No photos were taken.' %>
+    </p>
+    <div class="jt-error-text mt-2" x-show="message" x-cloak x-text="message"></div>
+  </div>
+</section>

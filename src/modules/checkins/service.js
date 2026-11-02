@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { db } from '../../core/db.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
@@ -135,6 +136,86 @@ export async function markNotSigned(id, reason, actor) {
   });
 }
 
+// ---------- photos ----------
+
+export const MAX_PHOTOS = 10;
+// What sharp can read that a phone or camera produces ('heif' covers AVIF; iPhone HEIC needs converting first).
+const PHOTO_FORMATS = ['jpeg', 'png', 'webp', 'heif', 'tiff'];
+const NOT_A_PHOTO = 'That file isn’t a photo we can read. Use a JPEG, PNG or WebP picture.';
+
+/**
+ * A phone photo → a 1280 px WebP to view and a 320 px square thumbnail.
+ * Turned upright by the camera's orientation tag. sharp writes no metadata
+ * unless asked, so location and other EXIF data are dropped.
+ */
+export async function processPhoto(buffer) {
+  const meta = await sharp(buffer).metadata().catch(() => null);
+  if (!meta || !PHOTO_FORMATS.includes(meta.format)) throw httpError(422, NOT_A_PHOTO);
+  const upright = sharp(buffer, { failOn: 'error' }).rotate();
+  try {
+    const [full, thumb] = await Promise.all([
+      upright.clone().resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer(),
+      upright.clone().resize({ width: 320, height: 320, fit: 'cover' }).webp({ quality: 70 }).toBuffer(),
+    ]);
+    return { full, thumb };
+  } catch {
+    throw httpError(422, NOT_A_PHOTO);
+  }
+}
+
+async function photoCount(q, id) {
+  const [{ count }] = await q('checkin_photos').where({ checkin_id: id }).count({ count: '*' });
+  return Number(count);
+}
+const tooMany = () => httpError(409, `A check-in can have up to ${MAX_PHOTOS} photos. Delete one to add another.`);
+
+/** Photos can be added or deleted while the vehicle is in the workshop. */
+async function openForPhotos(trx, id) {
+  const checkin = await trx('checkins').where({ id }).forUpdate().first('id', 'number', 'status');
+  if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  if (checkin.status !== 'in_workshop') throw httpError(409, `${checkin.number} is no longer open.`);
+  return checkin;
+}
+
+/** Saves one photo; returns its id. */
+export async function addPhoto(id, buffer, actor) {
+  if ((await photoCount(db, id)) >= MAX_PHOTOS) throw tooMany(); // before the slow part
+  const { full, thumb } = await processPhoto(buffer);
+  const files = [];
+  try {
+    files.push(await saveFile('photos', full, 'webp'), await saveFile('photos', thumb, 'webp'));
+    return await db.transaction(async (trx) => {
+      const checkin = await openForPhotos(trx, id);
+      if ((await photoCount(trx, id)) >= MAX_PHOTOS) throw tooMany();
+      const [photoId] = await trx('checkin_photos').insert({
+        checkin_id: id, path: files[0], thumb_path: files[1], bytes: full.length + thumb.length, uploaded_by: actor.user.id,
+      });
+      await audit(trx, actor, { entity: 'checkin', id, action: 'photo_added', summary: `Photo added to ${checkin.number}` });
+      return photoId;
+    });
+  } catch (err) {
+    for (const rel of files) await removeFile(rel); // not saved: don't leave the images behind
+    throw err;
+  }
+}
+
+export async function deletePhoto(id, photoId, actor) {
+  const photo = await db.transaction(async (trx) => {
+    const checkin = await openForPhotos(trx, id);
+    const row = await trx('checkin_photos').where({ id: photoId, checkin_id: id }).first();
+    if (!row) throw httpError(404, 'That photo has already been deleted.');
+    await trx('checkin_photos').where({ id: photoId }).delete();
+    await audit(trx, actor, { entity: 'checkin', id, action: 'photo_deleted', summary: `Photo deleted from ${checkin.number}` });
+    return row;
+  });
+  await removeFile(photo.path);
+  await removeFile(photo.thumb_path);
+}
+
+export function getPhoto(id, photoId) {
+  return db('checkin_photos').where({ id: photoId, checkin_id: id }).first('id', 'path', 'thumb_path');
+}
+
 /** The vehicle's check-in that is still open (in the workshop), if any. */
 function openCheckin(q, vehicleId) {
   return q('checkins').where({ vehicle_id: vehicleId, status: 'in_workshop' }).first('id', 'number');
@@ -157,6 +238,7 @@ export async function getCheckin(id) {
       'receiver.name as received_by_name', 'sites.name as site_name');
   if (!checkin) return null;
   checkin.items = await db('checkin_items').where({ checkin_id: id }).orderBy('sort_order').select('description', 'quantity');
+  checkin.photos = await db('checkin_photos').where({ checkin_id: id }).orderBy('id').pluck('id');
   return checkin;
 }
 

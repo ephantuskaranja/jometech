@@ -51,6 +51,8 @@
     <% } %>
   </section>
 
+  <div class="mb-4"><%- include('photos', { photos }) %></div>
+
   <form method="post" action="/check-in/<%= checkin.id %>/sign" novalidate class="card mb-4" x-data="signaturePad" @submit="submit($event)">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="signature" x-ref="output">

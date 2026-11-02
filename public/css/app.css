@@ -455,3 +455,13 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-sign-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .5rem; color: #98a2b3; font-size: 1.05rem; pointer-events: none; }
 .jt-sign-line { position: absolute; left: 1.5rem; right: 1.5rem; bottom: 2.75rem; border-bottom: 1px solid #d0d5dd; pointer-events: none; }
 .jt-signature { display: block; max-width: 100%; height: auto; max-height: 9rem; background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius-sm); }
+
+/* Check-in photos: square thumbnails; the full photo opens in a new tab */
+.jt-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: .5rem; }
+.jt-photo { position: relative; aspect-ratio: 1; border-radius: var(--bs-border-radius); overflow: hidden; background: var(--bs-tertiary-bg); }
+.jt-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jt-photo.is-busy img { opacity: .45; }
+.jt-photo-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: .375rem; text-align: center; font-size: .75rem; font-weight: 600; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .6); }
+.jt-photo.is-failed .jt-photo-status { background: rgb(180 35 24 / .8); text-shadow: none; }
+.jt-photo-delete { position: absolute; top: .25rem; right: .25rem; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; }
+.jt-photo-delete:hover, .jt-photo-delete:focus-visible { background: var(--bs-danger); }

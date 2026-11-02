@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
@@ -147,6 +148,7 @@ router.get('/check-in/:id', view, async (req, res) => {
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
+    photos: photosFor(checkin, req.user.can('checkin.manage') && checkin.status === 'in_workshop'),
   });
 });
 
@@ -176,7 +178,16 @@ function renderSign(res, checkin, { status = 200, values, errors = {} }) {
   res.status(status).render('checkins/views/sign', {
     title: `Confirm ${checkin.number}`, checkin, values, errors, vehicleLabel, typeLabel,
     fuel: checkins.fuelLabel(checkin.fuel_quarters), reasons: checkins.NOT_SIGNED_REASONS,
+    photos: photosFor(checkin, true), // staff photograph damage before handing over the device
   });
+}
+
+/** What the photos panel (views/photos.ejs) needs. */
+function photosFor(checkin, canEdit) {
+  return {
+    url: `/check-in/${checkin.id}/photos`, max: checkins.MAX_PHOTOS, canEdit,
+    photos: checkin.photos.map((id) => photoUrls(checkin.id, id)),
+  };
 }
 
 router.get('/check-in/:id/sign', manage, async (req, res) => {
@@ -220,6 +231,54 @@ router.get('/check-in/:id/signature.png', view, async (req, res) => {
   res.set('Cache-Control', 'private, max-age=86400');
   res.sendFile(storagePath(checkin.driver_signature_path));
 });
+
+// ---------- photos ----------
+// The page uploads one photo per request (already shrunk in the browser), so a
+// dropped connection loses one photo, not all of them. Answers are JSON.
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } }).single('photo');
+const receivePhoto = (req, res) => new Promise((resolve, reject) => upload(req, res, (err) => (err ? reject(err) : resolve(req.file))));
+
+function photoError(req, res, err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'That photo is too large (over 15 MB).' });
+  if (!err.expose) req.log.error(err);
+  res.status(err.status ?? 500).json({ error: err.expose ? err.message : 'The photo couldn’t be saved. Try again.' });
+}
+
+const photoUrls = (checkinId, photoId) => ({
+  id: photoId,
+  full: `/check-in/${checkinId}/photos/${photoId}.webp`,
+  thumb: `/check-in/${checkinId}/photos/${photoId}/thumb.webp`,
+});
+
+router.post('/check-in/:id/photos', manage, async (req, res) => {
+  try {
+    const file = await receivePhoto(req, res);
+    if (!file) throw httpError(422, 'Choose a photo to add.');
+    const photoId = await checkins.addPhoto(Number(req.params.id), file.buffer, req);
+    res.status(201).json(photoUrls(Number(req.params.id), photoId));
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+router.post('/check-in/:id/photos/:photoId/delete', manage, async (req, res) => {
+  try {
+    await checkins.deletePhoto(Number(req.params.id), Number(req.params.photoId), req);
+    res.json({ ok: true });
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+async function sendPhoto(req, res, which) {
+  const photo = await checkins.getPhoto(Number(req.params.id), Number(req.params.photoId));
+  if (!photo) throw httpError(404, 'That photo doesn’t exist.');
+  res.set('Cache-Control', 'private, max-age=604800, immutable'); // a photo never changes; a new one gets a new id
+  res.type('image/webp').sendFile(storagePath(photo[which]));
+}
+router.get('/check-in/:id/photos/:photoId.webp', view, (req, res) => sendPhoto(req, res, 'path'));
+router.get('/check-in/:id/photos/:photoId/thumb.webp', view, (req, res) => sendPhoto(req, res, 'thumb_path'));
 
 // ---------- lookups used by the form ----------
 

@@ -37,7 +37,12 @@ export async function cleanup() {
   const customerIds = await db('customers').where('phone', 'like', '+25470000%').pluck('id');
   const vehicleIds = await db('vehicles').whereIn('customer_id', customerIds).pluck('id');
   const checkinIds = await db('checkins').whereIn('vehicle_id', vehicleIds).pluck('id');
-  for (const file of await db('checkins').whereIn('id', checkinIds).whereNotNull('driver_signature_path').pluck('driver_signature_path')) await removeFile(file);
+  // A file another process still holds open (Windows: EBUSY) only warns; failing here would leave the database open and the run hanging.
+  const files = [
+    ...await db('checkins').whereIn('id', checkinIds).whereNotNull('driver_signature_path').pluck('driver_signature_path'),
+    ...(await db('checkin_photos').whereIn('checkin_id', checkinIds).select('path', 'thumb_path')).flatMap((p) => [p.path, p.thumb_path]),
+  ];
+  for (const file of files) await removeFile(file).catch((err) => console.warn(`Test file left behind: ${err.message}`));
   await db('audit_log').where({ entity: 'checkin' }).whereIn('entity_id', checkinIds).delete();
   await db('checkins').whereIn('id', checkinIds).delete(); // items and photos go with them
   await db('audit_log').where({ entity: 'vehicle' }).whereIn('entity_id', vehicleIds).delete();

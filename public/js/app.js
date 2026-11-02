@@ -23,6 +23,26 @@ function formatReg(input) {
 /** Same as regLooksUsual() in src/core/vehicle-format.js: KDA 123A, ZF 1234, GKB 123A. */
 const regLooksUsual = (reg) => /^(K[A-Z]{2} \d{3}[A-Z]|Z[A-Z] \d{4}|GK[A-Z] \d{3}[A-Z])$/.test(reg);
 
+/**
+ * Phone photos are 3–6 MB: shrink to 1600 px JPEG (about 300 KB) before uploading, so it's quick
+ * on a slow workshop connection. Drawing on a canvas also drops the location data.
+ * If the browser can't read the file (e.g. HEIC on Android), send it as it is and let the server decide.
+ */
+async function shrinkPhoto(file, size = 1600) {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return (await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8))) ?? file;
+  } catch {
+    return file;
+  }
+}
+
 // Searchable dropdowns: any <select data-tom-select> becomes a Tom Select.
 // With data-tom-url="/api/…" it asks the server as you type; the endpoint
 // answers ?q=… with JSON: [{ "value": "12", "label": "Mwangi Transporters" }, …]
@@ -235,6 +255,59 @@ document.addEventListener('alpine:init', () => {
       if (this.empty) { e.preventDefault(); this.missing = true; return; }
       this.$refs.output.value = this.$refs.canvas.toDataURL('image/png');
       this.busy = true;
+    },
+  }));
+
+  // Check-in photos (checkins/views/photos.ejs): each photo is shrunk, then uploaded on its own,
+  // one at a time, so a dropped connection loses one photo and it can be tried again.
+  Alpine.data('checkinPhotos', ({ url, max, photos = [] }) => ({
+    url, max, photos, queue: [], message: '', busy: false,
+    get room() { return this.max - this.photos.length - this.queue.length; },
+    add(files) {
+      this.message = '';
+      const chosen = [...files];
+      const fits = chosen.slice(0, Math.max(this.room, 0));
+      if (fits.length < chosen.length) this.message = `A check-in can have up to ${this.max} photos, so ${chosen.length - fits.length} weren’t added.`;
+      for (const file of fits) this.queue.push({ key: `${Date.now()}-${Math.random()}`, file, preview: URL.createObjectURL(file), error: '' });
+      this.pump();
+    },
+    async pump() {
+      if (this.busy) return;
+      this.busy = true;
+      try {
+        for (let u; (u = this.queue.find((x) => !x.error));) await this.send(u);
+      } finally {
+        this.busy = false;
+      }
+    },
+    async send(u) {
+      try {
+        const body = new FormData();
+        body.append('photo', await shrinkPhoto(u.file), 'photo.jpg');
+        const res = await fetch(this.url, { method: 'POST', body, headers: { Accept: 'application/json', 'x-csrf-token': csrfToken() } });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error ?? 'Not saved. Reload the page and try again.');
+        this.photos.push(json);
+        this.drop(u);
+      } catch (err) {
+        u.error = err instanceof TypeError ? 'No connection.' : err.message; // fetch throws TypeError when offline
+      }
+    },
+    retry(u) {
+      u.error = '';
+      this.pump();
+    },
+    drop(u) {
+      URL.revokeObjectURL(u.preview);
+      this.queue = this.queue.filter((x) => x !== u);
+    },
+    async remove(p) {
+      if (!confirm('Delete this photo?')) return;
+      this.message = '';
+      const res = await fetch(`${this.url}/${p.id}/delete`, { method: 'POST', headers: { Accept: 'application/json', 'x-csrf-token': csrfToken() } }).catch(() => null);
+      const json = await res?.json().catch(() => ({}));
+      if (res?.ok) this.photos = this.photos.filter((x) => x.id !== p.id);
+      else this.message = json?.error ?? 'The photo wasn’t deleted. Check the connection and try again.';
     },
   }));
 

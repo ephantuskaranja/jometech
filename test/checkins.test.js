@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { regLooksUsual } from '../src/core/vehicle-format.js';
+import { storagePath } from '../src/core/storage.js';
+import { existsSync, readFileSync } from 'node:fs';
+import sharp from 'sharp';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
@@ -199,4 +202,74 @@ test('staff can save it without a signature, with a reason', async () => {
   // The signing screen now just leads back to the check-in
   const back = await supervisor.get(`/check-in/${id}/sign`);
   assert.equal(back.status, 302);
+});
+
+// ---------- photos ----------
+
+// An 800 × 400 camera photo whose orientation tag says "turn 90°", as phones send them.
+const cameraPhoto = () => sharp({ create: { width: 800, height: 400, channels: 3, background: '#c33' } })
+  .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+
+async function addPhoto(id, buffer, name = 'photo.jpg') {
+  const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
+  return supervisor.post(`/check-in/${id}/photos`).set('x-csrf-token', csrf).set('Accept', 'application/json').attach('photo', buffer, name);
+}
+
+test('a photo is turned upright, shrunk to WebP with a thumbnail, and stripped of its EXIF data', async () => {
+  const id = await freshCheckin('KZY 305C');
+  const res = await addPhoto(id, await cameraPhoto());
+  assert.equal(res.status, 201, res.text);
+  assert.equal(res.body.thumb, `/check-in/${id}/photos/${res.body.id}/thumb.webp`);
+
+  const row = await db('checkin_photos').where({ checkin_id: id }).first();
+  assert.match(row.path, /^photos\/\d{4}\/\d{2}\/[0-9a-f]+\.webp$/);
+  const full = await sharp(readFileSync(storagePath(row.path))).metadata(); // a buffer: sharp would keep the file open (Windows can't delete it)
+  assert.equal(full.format, 'webp');
+  assert.deepEqual([full.width, full.height], [400, 800], 'turned upright');
+  assert.equal(full.exif, undefined, 'no EXIF (location) kept');
+  const thumb = await sharp(readFileSync(storagePath(row.thumb_path))).metadata();
+  assert.deepEqual([thumb.width, thumb.height], [320, 320]);
+
+  const img = await supervisor.get(res.body.full).expect(200);
+  assert.equal(img.headers['content-type'], 'image/webp');
+  const page = (await supervisor.get(`/check-in/${id}`)).text;
+  assert.match(page, /added a photo/);
+});
+
+test('something that isn’t a photo is refused', async () => {
+  const id = await freshCheckin('KZY 306C');
+  const res = await addPhoto(id, Buffer.from('not really a picture'), 'photo.jpg');
+  assert.equal(res.status, 422);
+  assert.match(res.body.error, /isn’t a photo/);
+  assert.equal((await db('checkin_photos').where({ checkin_id: id })).length, 0);
+});
+
+test('up to 10 photos per check-in', async () => {
+  const id = await freshCheckin('KZY 307C');
+  await db('checkin_photos').insert(Array.from({ length: 10 }, () => ({ checkin_id: id, path: 'photos/none.webp', thumb_path: 'photos/none.webp', bytes: 1 })));
+  const res = await addPhoto(id, await cameraPhoto());
+  assert.equal(res.status, 409);
+  assert.match(res.body.error, /up to 10 photos/);
+});
+
+test('a photo can be deleted, and its files go with it', async () => {
+  const id = await freshCheckin('KZY 308C');
+  const added = await addPhoto(id, await cameraPhoto());
+  const row = await db('checkin_photos').where({ id: added.body.id }).first();
+  const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
+  const del = () => supervisor.post(`/check-in/${id}/photos/${row.id}/delete`).set('x-csrf-token', csrf).set('Accept', 'application/json');
+  assert.equal((await del()).status, 200);
+  assert.equal(await db('checkin_photos').where({ id: row.id }).first(), undefined);
+  assert.equal(existsSync(storagePath(row.path)), false);
+  assert.equal(existsSync(storagePath(row.thumb_path)), false);
+  assert.equal((await del()).status, 404);
+});
+
+test('photos need a login to see, and check-in rights to add', async () => {
+  const p = await db('checkin_photos').whereNot({ path: 'photos/none.webp' }).orderBy('id', 'desc').first();
+  const anon = await (await import('supertest')).default(app).get(`/check-in/${p.checkin_id}/photos/${p.id}.webp`);
+  assert.equal(anon.status, 302);
+  const csrf = csrfFrom((await sales.get('/customers')).text);
+  const res = await sales.post(`/check-in/${p.checkin_id}/photos`).set('x-csrf-token', csrf).attach('photo', await cameraPhoto(), 'photo.jpg');
+  assert.equal(res.status, 403);
 });
