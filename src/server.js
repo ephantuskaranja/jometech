@@ -8,6 +8,8 @@ const app = createApp();
 const server = app.listen(config.port, async (err) => {
   if (err) throw err;
   logger.info(`${config.appName} running at http://localhost:${config.port}`);
+
+  console.log(`Server starting on port ${config.port}`);
   // Say so straight away if the database settings in .env are wrong.
   if (await dbIsUp()) logger.info(`Connected to MySQL database "${config.db.database}"`);
   else logger.warn(`Cannot reach MySQL at ${config.db.host}:${config.db.port} as "${config.db.user}". Check the DB_* settings in .env`);
