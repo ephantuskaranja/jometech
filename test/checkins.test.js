@@ -48,7 +48,7 @@ test('an existing vehicle is checked in with another company’s salesman, readi
   const items = await db('checkin_items').where({ checkin_id: c.id }).orderBy('sort_order').select('description', 'quantity');
   assert.deepEqual(items.map((i) => ({ ...i })), [{ description: 'Spare wheel', quantity: 2 }, { description: 'Toolbox', quantity: 1 }]);
 
-  const page = (await supervisor.get(res.headers.location)).text;
+  const page = (await supervisor.get(`/check-in/${c.id}`)).text;
   assert.match(page, /Brian Otieno/);
   assert.match(page, /of <a href="\/customers\/\d+">Rift Motors/);
   assert.match(page, /245,300 km/);
@@ -113,4 +113,90 @@ test('contacts of any company can be found for “brought in by”', async () =>
 test('usual Kenyan plates pass; others only warn', () => {
   for (const reg of ['KDA 123A', 'ZF 1234', 'GKB 123A']) assert.ok(regLooksUsual(reg), reg);
   for (const reg of ['KDA 12A', 'UAX 123B', 'CD 12K']) assert.ok(!regLooksUsual(reg), reg);
+});
+
+// ---------- the driver confirms ----------
+
+// A real 1×1 PNG, as the signature pad would send (much smaller, same format).
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+async function freshCheckin(reg) {
+  const page = await sales.get('/vehicles/new');
+  await sales.post('/vehicles').type('form').send({ _csrf: csrfFrom(page.text), reg_no: reg, customer_id: owner.id, type: 'truck' });
+  const v = await db('vehicles').where({ reg_no: reg }).first();
+  const res = await checkIn({ vehicle_mode: 'existing', vehicle_id: v.id, contact_id: salesman.id, item_description: 'Jack', item_quantity: '1' });
+  assert.equal(res.status, 302, res.text);
+  assert.match(res.headers.location, /\/check-in\/\d+\/sign$/, 'goes straight to the signing screen');
+  return Number(/\/check-in\/(\d+)\/sign/.exec(res.headers.location)[1]);
+}
+
+async function sign(id, fields) {
+  const page = await supervisor.get(`/check-in/${id}/sign`);
+  return supervisor.post(`/check-in/${id}/sign`).type('form').send({ _csrf: csrfFrom(page.text), ...fields });
+}
+
+test('the signing screen shows the items and suggests the person who brought it', async () => {
+  const id = await freshCheckin('KZY 301C');
+  const page = (await supervisor.get(`/check-in/${id}/sign`)).text;
+  assert.match(page, /Confirm delivery/);
+  assert.match(page, /Jack/);
+  assert.match(page, /value="Brian Otieno"/);
+  assert.match((await supervisor.get('/check-in')).text, /Driver to sign/);
+});
+
+test('the driver signs: name, phone and the signature image are kept', async () => {
+  const id = await freshCheckin('KZY 302C');
+  const res = await sign(id, { driver_name: 'Brian Otieno', driver_phone: '0700 000 333', driver_id_no: '23456789', signature: PNG });
+  assert.equal(res.status, 302, res.text);
+  const c = await db('checkins').where({ id }).first();
+  assert.equal(c.driver_name, 'Brian Otieno');
+  assert.equal(c.driver_phone, '+254700000333');
+  assert.ok(c.driver_signed_at);
+  assert.match(c.driver_signature_path, /^signatures\/\d{4}\/\d{2}\/[0-9a-f]+\.png$/);
+
+  const img = await supervisor.get(`/check-in/${id}/signature.png`).expect(200);
+  assert.equal(img.headers['content-type'], 'image/png');
+  assert.match((await supervisor.get(`/check-in/${id}`)).text, /Signed /);
+
+    // Brought in by someone who isn't a contact: the signed name stands in
+  await db('checkins').where({ id }).update({ contact_id: null });
+  assert.match((await supervisor.get(`/check-in/${id}`)).text, /Not saved as a contact/);
+  assert.match((await supervisor.get('/check-in')).text, /Brian Otieno/);
+
+  // Only once
+  const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
+  const again = await supervisor.post(`/check-in/${id}/sign`).type('form').send({ _csrf: csrf, driver_name: 'Someone Else', signature: PNG });
+  assert.equal(again.status, 409);
+});
+
+test('the signature image needs a login', async () => {
+  const c = await db('checkins').whereNotNull('driver_signature_path').orderBy('id', 'desc').first('id');
+  const res = await (await import('supertest')).default(app).get(`/check-in/${c.id}/signature.png`);
+  assert.equal(res.status, 302);
+  assert.match(res.headers.location, /\/login/);
+});
+
+test('no name, no signature, or something that isn’t a PNG is refused', async () => {
+  const id = await freshCheckin('KZY 303C');
+  let res = await sign(id, { driver_name: '', signature: '' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Type your full name/);
+  assert.match(res.text, /Sign in the box above/);
+  res = await sign(id, { driver_name: 'Brian Otieno', signature: 'data:image/png;base64,PHN2Zz48L3N2Zz4=' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /didn’t come through/);
+  assert.equal((await db('checkins').where({ id }).first()).driver_signed_at, null);
+});
+
+test('staff can save it without a signature, with a reason', async () => {
+  const id = await freshCheckin('KZY 304C');
+  const page = await supervisor.get(`/check-in/${id}/sign`);
+  let res = await supervisor.post(`/check-in/${id}/not-signed`).type('form').send({ _csrf: csrfFrom(page.text), reason: 'other', other_reason: '' });
+  assert.equal(res.status, 422);
+  res = await supervisor.post(`/check-in/${id}/not-signed`).type('form').send({ _csrf: csrfFrom(page.text), reason: 'Driver left before signing' });
+  assert.equal(res.status, 302);
+  assert.equal((await db('checkins').where({ id }).first()).not_signed_reason, 'Driver left before signing');
+  // The signing screen now just leads back to the check-in
+  const back = await supervisor.get(`/check-in/${id}/sign`);
+  assert.equal(back.status, 302);
 });

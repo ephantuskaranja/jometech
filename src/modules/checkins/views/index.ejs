@@ -19,7 +19,8 @@
             <tr>
               <td><a class="jt-row-link" href="/check-in/<%= c.id %>"><% if (c.reg_no) { %><%- include('partials/plate', { reg: c.reg_no }) %><% } else { %><span class="font-monospace small"><%= vehicleLabel(c) %></span><% } %></a>
                 <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %></td>
-              <td class="font-monospace small"><%= c.number %></td>
+              <td><span class="font-monospace small"><%= c.number %></span>
+                <% if (!c.driver_signed_at && !c.not_signed_reason) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Driver to sign', tone: 'warn' }) %></span><% } %></td>
               <td><%= c.customer_name %></td>
               <td class="d-none d-lg-table-cell text-body-secondary"><%= c.contact_name ?? '—' %></td>
               <td class="text-nowrap"><%= fmt.dateTime(c.checked_in_at) %></td>

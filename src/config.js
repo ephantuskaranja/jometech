@@ -2,6 +2,8 @@
 // of the code imports `config` instead of touching process.env directly.
 // Values come from .env (loaded by `node --env-file-if-exists=.env`).
 
+import { fileURLToPath } from 'node:url';
+
 const env = process.env.NODE_ENV ?? 'development';
 
 export const config = {
@@ -13,6 +15,9 @@ export const config = {
   logLevel: process.env.LOG_LEVEL ?? 'info',
   // Signs the login cookie. Must be long and random on the server.
   sessionSecret: process.env.SESSION_SECRET ?? (env === 'production' ? undefined : 'dev-only-not-secret'),
+  // Uploaded and generated files (signatures, photos, backups). Not public: served
+  // only through routes that check who is logged in. Include it in backups.
+  storageDir: process.env.STORAGE_DIR ?? fileURLToPath(new URL('../storage', import.meta.url)),
   appName: 'Jome-Tech',
   timezone: 'Africa/Nairobi',
   db: {

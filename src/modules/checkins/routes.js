@@ -4,8 +4,10 @@ import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
 import { history } from '../../core/audit.js';
 import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-format.js';
-import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
+import { check, httpError, optionalId, optionalPhone, optionalText } from '../../core/validate.js';
+import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
+import { fmt } from '../../core/format.js';
 import * as customers from '../customers/service.js';
 import { VEHICLE_TYPES, typeLabel } from '../vehicles/service.js';
 
@@ -127,8 +129,8 @@ router.post('/check-in', manage, async (req, res) => {
 
   try {
     const { id, number } = await checkins.createCheckin({ ...result.data, new_vehicle: newVehicle, items }, req);
-    req.session.flash = { type: 'success', text: `Checked in: ${number}.` };
-    res.redirect(`/check-in/${id}`);
+    req.session.flash = { type: 'success', text: `Saved as ${number}. Now hand the device to the driver to confirm.` };
+    res.redirect(`/check-in/${id}/sign`);
   } catch (err) {
     if (!err.field) throw err;
     renderForm(res, { status: 422, values, rows, errors: { [err.field]: err.message }, existingId: err.existingId });
@@ -136,8 +138,7 @@ router.post('/check-in', manage, async (req, res) => {
 });
 
 router.get('/check-in/:id', view, async (req, res) => {
-  const checkin = await checkins.getCheckin(Number(req.params.id));
-  if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  const checkin = await loadCheckin(req);
   res.render('checkins/views/show', {
     title: checkin.number,
     checkin,
@@ -145,7 +146,79 @@ router.get('/check-in/:id', view, async (req, res) => {
     status: checkins.STATUSES[checkin.status],
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
     entries: await history('checkin', checkin.id),
+    canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
   });
+});
+
+// ---------- the driver confirms ----------
+
+const signSchema = z.object({
+  driver_name: z.string().trim().min(2, 'Type your full name').max(100, 'Use 100 characters or fewer'),
+  driver_phone: optionalPhone(),
+  driver_id_no: optionalText(20),
+  signature: z.string().min(1, 'Sign in the box above').max(400_000, 'The signature is too large. Clear it and sign again.'),
+});
+
+/** "data:image/png;base64,…" from the signature pad → PNG bytes, or null. */
+function signaturePng(dataUrl) {
+  const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  const buf = m ? Buffer.from(m[1], 'base64') : null;
+  return buf && checkins.isPng(buf) ? buf : null;
+}
+
+async function loadCheckin(req) {
+  const checkin = await checkins.getCheckin(Number(req.params.id));
+  if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  return checkin;
+}
+
+function renderSign(res, checkin, { status = 200, values, errors = {} }) {
+  res.status(status).render('checkins/views/sign', {
+    title: `Confirm ${checkin.number}`, checkin, values, errors, vehicleLabel, typeLabel,
+    fuel: checkins.fuelLabel(checkin.fuel_quarters), reasons: checkins.NOT_SIGNED_REASONS,
+  });
+}
+
+router.get('/check-in/:id/sign', manage, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  if (checkin.driver_signed_at || checkin.not_signed_reason) return res.redirect(`/check-in/${checkin.id}`);
+  // Whoever was chosen as "brought in by" is most likely the person signing.
+  renderSign(res, checkin, { values: { driver_name: checkin.contact_name ?? '', driver_phone: checkin.contact_phone ? fmt.phone(checkin.contact_phone) : '', driver_id_no: '' } });
+});
+
+router.post('/check-in/:id/sign', manage, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  const { data, errors } = check(signSchema, req.body);
+  const allErrors = { ...errors };
+  const png = data ? signaturePng(data.signature) : null;
+  if (data && !png) allErrors.signature = 'The signature didn’t come through. Clear it and sign again.';
+  if (Object.keys(allErrors).length) return renderSign(res, checkin, { status: 422, values: { ...req.body, signature: '' }, errors: allErrors });
+
+  await checkins.signCheckin(checkin.id, { driver_name: data.driver_name, driver_phone: data.driver_phone, driver_id_no: data.driver_id_no, signature: png }, req);
+  req.session.flash = { type: 'success', text: `Thank you. ${checkin.number} is confirmed by ${data.driver_name}.` };
+  res.redirect(`/check-in/${checkin.id}`);
+});
+
+router.post('/check-in/:id/not-signed', manage, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  const reason = String(req.body.reason === 'other' ? req.body.other_reason ?? '' : req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    return renderSign(res, checkin, {
+      status: 422, values: { driver_name: '', driver_phone: '', driver_id_no: '', ...req.body, signature: '' },
+      errors: { reason: 'Say why the driver didn’t sign (3 to 255 characters)' },
+    });
+  }
+  await checkins.markNotSigned(checkin.id, reason, req);
+  req.session.flash = { type: 'warning', text: `${checkin.number} saved without the driver’s signature.` };
+  res.redirect(`/check-in/${checkin.id}`);
+});
+
+// The signature image: only for logged-in staff who can see check-ins.
+router.get('/check-in/:id/signature.png', view, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  if (!checkin.driver_signature_path) throw httpError(404, 'No signature for this check-in.');
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.sendFile(storagePath(checkin.driver_signature_path));
 });
 
 // ---------- lookups used by the form ----------

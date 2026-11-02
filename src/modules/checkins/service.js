@@ -4,6 +4,7 @@ import { nextNumber } from '../../core/numbering.js';
 import { compact, vehicleLabel } from '../../core/vehicle-format.js';
 import { normalizePhone } from '../../core/phone.js';
 import { httpError } from '../../core/validate.js';
+import { saveFile, removeFile } from '../../core/storage.js';
 import { createVehicle, typeLabel } from '../vehicles/service.js';
 
 // Check-in: the digital Truck Receiving Document.
@@ -80,6 +81,60 @@ export async function createCheckin(input, actor) {
   });
 }
 
+// ---------- the driver confirms ----------
+
+/** Quick reasons when the person delivering the vehicle doesn't sign. */
+export const NOT_SIGNED_REASONS = [
+  'Driver left before signing',
+  'Driver refused to sign',
+  'Delivered by a towing company',
+  'Dropped off after hours',
+];
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** True when the buffer really is a PNG (not just named one). */
+export const isPng = (buf) => Buffer.isBuffer(buf) && buf.length > PNG_MAGIC.length && buf.subarray(0, 8).equals(PNG_MAGIC);
+
+/** A check-in can be signed (or marked not signed) once, while it is open. */
+async function openForConfirmation(trx, id) {
+  const checkin = await trx('checkins').where({ id }).forUpdate().first('id', 'number', 'status', 'driver_signed_at', 'not_signed_reason');
+  if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  if (checkin.driver_signed_at || checkin.not_signed_reason) throw httpError(409, `${checkin.number} has already been confirmed.`);
+  if (checkin.status !== 'in_workshop') throw httpError(409, `${checkin.number} is no longer open.`);
+  return checkin;
+}
+
+/**
+ * The driver typed their name and signed on the device.
+ * @param {{ driver_name: string, driver_phone: string|null, driver_id_no: string|null, signature: Buffer }} input
+ */
+export async function signCheckin(id, input, actor) {
+  const rel = await saveFile('signatures', input.signature, 'png');
+  try {
+    await db.transaction(async (trx) => {
+      const checkin = await openForConfirmation(trx, id);
+      await trx('checkins').where({ id }).update({
+        driver_name: input.driver_name, driver_phone: input.driver_phone, driver_id_no: input.driver_id_no,
+        driver_signature_path: rel, driver_signed_at: trx.fn.now(),
+      });
+      await audit(trx, actor, { entity: 'checkin', id, action: 'signed', summary: `${input.driver_name} signed for ${checkin.number}` });
+    });
+  } catch (err) {
+    await removeFile(rel); // not saved: don't leave the image behind
+    throw err;
+  }
+}
+
+/** Staff record why there is no signature. */
+export async function markNotSigned(id, reason, actor) {
+  await db.transaction(async (trx) => {
+    const checkin = await openForConfirmation(trx, id);
+    await trx('checkins').where({ id }).update({ not_signed_reason: reason });
+    await audit(trx, actor, { entity: 'checkin', id, action: 'not_signed', summary: `Not signed: ${reason} (${checkin.number})` });
+  });
+}
+
 /** The vehicle's check-in that is still open (in the workshop), if any. */
 function openCheckin(q, vehicleId) {
   return q('checkins').where({ vehicle_id: vehicleId, status: 'in_workshop' }).first('id', 'number');
@@ -114,8 +169,9 @@ export async function listInWorkshop(siteId) {
     .where({ 'checkins.status': 'in_workshop', 'checkins.site_id': siteId })
     .orderBy('checkins.checked_in_at', 'desc')
     .limit(200)
-    .select('checkins.id', 'checkins.number', 'checkins.checked_in_at', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag',
-      'vehicles.make', 'vehicles.model', 'customers.name as customer_name', 'contact.name as contact_name');
+    .select('checkins.id', 'checkins.number', 'checkins.checked_in_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag',
+      'vehicles.make', 'vehicles.model', 'customers.name as customer_name',
+      db.raw('COALESCE(contact.name, checkins.driver_name) as contact_name')); // not a contact: the name given when signing
 }
 
 export async function itemPresets() {

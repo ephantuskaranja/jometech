@@ -4,6 +4,7 @@ import request from 'supertest';
 import { db } from '../src/core/db.js';
 import { sessionStore } from '../src/core/session.js';
 import { createUser } from '../src/modules/users/service.js';
+import { removeFile } from '../src/core/storage.js';
 
 export const PASSWORD = 'workshop-test-1';
 
@@ -36,6 +37,7 @@ export async function cleanup() {
   const customerIds = await db('customers').where('phone', 'like', '+25470000%').pluck('id');
   const vehicleIds = await db('vehicles').whereIn('customer_id', customerIds).pluck('id');
   const checkinIds = await db('checkins').whereIn('vehicle_id', vehicleIds).pluck('id');
+  for (const file of await db('checkins').whereIn('id', checkinIds).whereNotNull('driver_signature_path').pluck('driver_signature_path')) await removeFile(file);
   await db('audit_log').where({ entity: 'checkin' }).whereIn('entity_id', checkinIds).delete();
   await db('checkins').whereIn('id', checkinIds).delete(); // items and photos go with them
   await db('audit_log').where({ entity: 'vehicle' }).whereIn('entity_id', vehicleIds).delete();

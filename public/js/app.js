@@ -32,8 +32,10 @@ function initSearchableSelects(root = document) {
     const url = el.dataset.tomUrl;
     const options = {
       maxOptions: 50,
+      // The empty first <option> stays in the form (so nothing chosen sends ""), but Tom Select
+      // shows its text as a placeholder that clears when you type, not as a chosen item.
       placeholder: el.dataset.placeholder,
-      allowEmptyOption: true,
+      allowEmptyOption: false,
       plugins: el.multiple ? ['remove_button'] : [],
       render: { no_results: () => '<div class="no-results">No matches. Check the spelling.</div>' },
     };
@@ -160,6 +162,79 @@ document.addEventListener('alpine:init', () => {
     removeRow(i) {
       this.rows.splice(i, 1);
       if (!this.rows.length) this.rows.push({ description: '', quantity: '1' });
+    },
+  }));
+
+  // Signature box: draw with a finger, stylus or mouse; sent as a PNG data URL.
+  // Strokes are kept so the drawing survives the box being resized (phone rotated).
+  Alpine.data('signaturePad', () => ({
+    strokes: [], current: null, empty: true, missing: false, busy: false, ctx: null,
+    init() {
+      this.resize();
+      new ResizeObserver(() => this.resize()).observe(this.$refs.canvas);
+    },
+    resize() {
+      const canvas = this.$refs.canvas;
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = canvas.offsetWidth * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      this.ctx = canvas.getContext('2d');
+      this.ctx.scale(ratio, ratio);
+      this.redraw();
+    },
+    point(e) {
+      const r = this.$refs.canvas.getBoundingClientRect();
+      // Stored as fractions of the box, so a resize keeps the shape.
+      return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+    },
+    start(e) {
+      e.preventDefault();
+      this.$refs.canvas.setPointerCapture?.(e.pointerId);
+      this.current = [this.point(e)];
+      this.strokes.push(this.current);
+    },
+    move(e) {
+      if (!this.current) return;
+      this.current.push(this.point(e));
+      this.redraw();
+    },
+    end() {
+      if (!this.current) return;
+      if (this.current.length === 1) this.current.push(this.current[0]); // a dot
+      this.current = null;
+      this.empty = false;
+      this.missing = false;
+    },
+    redraw() {
+      const { ctx } = this;
+      const w = this.$refs.canvas.offsetWidth, h = this.$refs.canvas.offsetHeight;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#0b1a5c';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const stroke of this.strokes) {
+        ctx.beginPath();
+        stroke.forEach(([x, y], i) => {
+          const [px, py] = [x * w, y * h];
+          if (i === 0) { ctx.moveTo(px, py); return; }
+          // Smooth: curve through the midpoints between samples.
+          const [lx, ly] = stroke[i - 1];
+          ctx.quadraticCurveTo(lx * w, ly * h, (lx * w + px) / 2, (ly * h + py) / 2);
+        });
+        ctx.stroke();
+      }
+    },
+    clear() {
+      this.strokes = [];
+      this.empty = true;
+      this.redraw();
+    },
+    submit(e) {
+      if (this.empty) { e.preventDefault(); this.missing = true; return; }
+      this.$refs.output.value = this.$refs.canvas.toDataURL('image/png');
+      this.busy = true;
     },
   }));
 

@@ -28,6 +28,11 @@
               <%= checkin.contact_name %><%= checkin.contact_role ? ` · ${checkin.contact_role}` : '' %>
               <% if (checkin.contact_company_id !== checkin.customer_id) { %><span class="d-block small text-body-secondary">of <a href="/customers/<%= checkin.contact_company_id %>"><%= checkin.contact_company %></a></span><% } %>
               <% if (checkin.contact_phone) { %><span class="d-block small font-monospace"><%= fmt.phone(checkin.contact_phone) %></span><% } %>
+            <% } else if (checkin.driver_name) { %>
+              <%# Not in the system: the name they gave when signing. %>
+              <%= checkin.driver_name %>
+              <% if (checkin.driver_phone) { %><span class="d-block small font-monospace"><%= fmt.phone(checkin.driver_phone) %></span><% } %>
+              <span class="d-block small text-body-secondary">Not saved as a contact</span>
             <% } else { %>—<% } %>
           </dd></div>
           <div><dt>Reg number</dt><dd><%= checkin.reg_no ?? '—' %></dd></div>
@@ -68,13 +73,19 @@
   <div class="col-lg-5 d-grid gap-4 align-content-start">
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Confirmed by the driver</h2></div>
-      <div class="card-body small text-body-secondary">
+      <div class="card-body">
         <% if (checkin.driver_signed_at) { %>
-          Signed by <%= checkin.driver_name %> on <%= fmt.dateTime(checkin.driver_signed_at) %>.
+          <img class="jt-signature mb-2" src="/check-in/<%= checkin.id %>/signature.png" alt="Signature of <%= checkin.driver_name %>" width="400" height="120">
+          <div class="fw-semibold"><%= checkin.driver_name %></div>
+          <div class="small text-body-secondary">
+            <%= [checkin.driver_phone && fmt.phone(checkin.driver_phone), checkin.driver_id_no && `ID ${checkin.driver_id_no}`].filter(Boolean).join(' · ') %>
+            <span class="d-block">Signed <%= fmt.dateTime(checkin.driver_signed_at) %></span>
+          </div>
         <% } else if (checkin.not_signed_reason) { %>
-          Not signed: <%= checkin.not_signed_reason %>
+          <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span><%= checkin.not_signed_reason %></span></div>
         <% } else { %>
-          <i class="bi bi-hourglass-split"></i> Waiting for the driver to sign. (The signing screen is the next part of this step.)
+          <p class="small text-body-secondary mb-3"><i class="bi bi-hourglass-split"></i> Waiting for the person who delivered the vehicle to check the details and sign.</p>
+          <% if (canConfirm) { %><a class="btn btn-primary w-100" href="/check-in/<%= checkin.id %>/sign"><i class="bi bi-pen"></i>Driver signs now</a><% } %>
         <% } %>
       </div>
     </section>
