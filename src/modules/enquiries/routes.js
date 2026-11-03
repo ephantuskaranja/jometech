@@ -7,6 +7,7 @@ import { check, httpError, optionalAmount, optionalId, optionalPhone, optionalTe
 import { fmt } from '../../core/format.js';
 import * as enquiries from './service.js';
 import * as customers from '../customers/service.js';
+import * as proformas from '../proformas/service.js';
 
 // Enquiries: log a call, follow it up, close it as won or lost.
 
@@ -121,6 +122,7 @@ router.get('/enquiries/:id', manage, async (req, res) => {
     title: enquiry.number, enquiry, phoneMatch,
     statuses: enquiries.STATUSES, sourceLabel: enquiries.sourceLabel, lostReasons: enquiries.LOST_REASONS,
     entries: await history('enquiry', enquiry.id),
+    proformas: await proformas.forEnquiry(enquiry.id), proformaStatuses: proformas.STATUSES,
     today: localDay(), nextDays: [1, 3, 7].map((d) => ({ days: d, day: plusDays(d) })),
   });
 });

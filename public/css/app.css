@@ -443,6 +443,32 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-items-head { font-size: .75rem; font-weight: 600; color: var(--bs-tertiary-color); text-transform: uppercase; letter-spacing: .05em; }
 .jt-items-no { color: var(--bs-tertiary-color); font-size: .85rem; text-align: center; }
 
+/* ---------- Proforma lines (proformas/views/form.ejs) ---------- */
+.jt-lines { display: grid; gap: .75rem; }
+.jt-lines-head, .jt-lines-row { display: grid; grid-template-columns: 5rem 5.5rem minmax(0, 1fr) 9rem 8rem 2.5rem; gap: .5rem; align-items: start; }
+.jt-lines-head { font-size: .75rem; font-weight: 600; color: var(--bs-tertiary-color); text-transform: uppercase; letter-spacing: .05em; }
+/* The description grows with what is typed (long specifications) */
+.jt-lines-row textarea { field-sizing: content; min-height: 7.5rem; max-height: 30rem; }
+.jt-lines-label { display: none; }
+.jt-lines-amount { padding-top: .45rem; text-align: right; font-weight: 600; }
+.jt-bullet { position: relative; padding-left: 1.1rem; }
+.jt-bullet::before { content: "•"; position: absolute; left: .2rem; }
+.jt-totals { display: grid; gap: .125rem; min-width: 16rem; }
+.jt-totals > div { display: flex; justify-content: space-between; gap: 1.5rem; }
+.jt-totals dd { margin: 0; }
+/* Phones: each line is a small card: qty and unit side by side, then the description, then the price */
+@media (max-width: 767.98px) {
+  .jt-lines-head { display: none; }
+  .jt-lines-row { grid-template-columns: 1fr 1fr; padding: .75rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); position: relative; }
+  .jt-lines-label { display: block; font-size: .75rem; font-weight: 600; color: var(--bs-tertiary-color); margin-bottom: -.25rem; }
+  .jt-lines-row > :nth-child(1) { grid-area: 1 / 1; } .jt-lines-row > :nth-child(2) { grid-area: 2 / 1; }
+  .jt-lines-row > :nth-child(3) { grid-area: 1 / 2; } .jt-lines-row > :nth-child(4) { grid-area: 2 / 2; }
+  .jt-lines-row > :nth-child(n+5) { grid-column: 1 / -1; }
+  .jt-lines-row > .jt-icon-btn { position: absolute; top: .25rem; right: .25rem; }
+  .jt-lines-row { padding-top: 2.25rem; }
+  .jt-totals { min-width: 0; width: 100%; }
+}
+
 /* ---------- Driver confirms (check-in/:id/sign) ---------- */
 .jt-sign { max-width: 46rem; }
 .jt-sign-head { margin-bottom: 1.25rem; }

@@ -38,6 +38,10 @@ export async function cleanup() {
   const vehicleIds = await db('vehicles').whereIn('customer_id', customerIds).pluck('id');
   const checkinIds = await db('checkins').whereIn('vehicle_id', vehicleIds).pluck('id');
   const enquiryIds = await db('enquiries').where('caller_phone', 'like', '+25470000%').orWhereIn('customer_id', customerIds).pluck('id');
+  const proformaIds = await db('proformas').whereIn('customer_id', customerIds).orWhereIn('enquiry_id', enquiryIds).pluck('id');
+  await db('audit_log').where({ entity: 'proforma' }).whereIn('entity_id', proformaIds).delete();
+  await db('proformas').whereIn('id', proformaIds).update({ replaced_by: null });
+  await db('proformas').whereIn('id', proformaIds).delete(); // lines go with them
   await db('audit_log').where({ entity: 'enquiry' }).whereIn('entity_id', enquiryIds).delete();
   await db('enquiries').whereIn('id', enquiryIds).delete(); // notes go with them
   // A file another process still holds open (Windows: EBUSY) only warns; failing here would leave the database open and the run hanging.

@@ -1,0 +1,97 @@
+<%#
+  The paper Proforma Invoice, filled in: one A4 page (more if the lines are long).
+  Standalone (no app layout) so it prints cleanly; "Print" also saves as PDF.
+  Same sections and order as docs/source/Quotation (proforma 489).
+%>
+<%
+  const bullet = /^\s*[-•*]\s+/;
+  const draft = proforma.status === 'draft';
+  const day = fmt.date(`${proforma.proforma_date}T12:00:00Z`);
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/proformas/<%= proforma.id %>">&larr; Back to <%= proforma.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+  <% if (draft) { %><div class="toolbar draft-note">This is a draft: it prints with “DRAFT” across it. Mark it as sent first for the customer’s copy.</div><% } %>
+
+  <main class="sheet proforma<%= draft ? ' is-draft' : '' %>">
+    <header class="pf-head">
+      <div class="pf-company-name"><%= company.name %></div>
+      <div class="pf-head-row">
+        <img src="/img/brand/icon.svg" alt="" width="90" height="90">
+        <div class="pf-address">
+          <% company.address.forEach((line) => { %><div><%= line %></div><% }) %>
+          <div>Tel: <%= company.phone %></div>
+          <div>Email: <%= company.email %></div>
+          <div>PIN: <%= company.kraPin %></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="pf-date">Date: <%= day %></div>
+
+    <div class="pf-to">
+      <div><%= proforma.customer_name %></div>
+      <% if (proforma.customer_address) { %><div><%= proforma.customer_address %></div><% } %>
+      <% if (proforma.customer_town) { %><div><%= proforma.customer_town %></div><% } %>
+      <% if (proforma.customer_pin) { %><div>PIN: <%= proforma.customer_pin %></div><% } %>
+    </div>
+
+    <h1 class="pf-title">Proforma Invoice <%= proforma.number %></h1>
+
+    <table class="pf-lines">
+      <thead><tr><th class="qty">Qty</th><th>Description</th><th class="money">@</th><th class="money">Amount (KShs)</th></tr></thead>
+      <tbody>
+        <% proforma.lines.forEach((l) => { %>
+          <tr>
+            <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+            <td class="desc">
+              <% let list = []; const flush = () => { if (list.length) { %><ul><% list.forEach((b) => { %><li><%= b %></li><% }) %></ul><% list = []; } }; %>
+              <% String(l.description).split('\n').forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
+              <% if (proforma.vehicle_label && l === proforma.lines[0]) { %><div class="muted small">Vehicle: <%= proforma.vehicle_label %><%= [proforma.make, proforma.model].filter(Boolean).length ? `, ${[proforma.make, proforma.model].filter(Boolean).join(' ')}` : '' %></div><% } %>
+            </td>
+            <td class="money"><%= fmt.money(l.unit_price).replace(/\.00$/, '') %></td>
+            <td class="money"><%= fmt.money(l.amount).replace(/\.00$/, '') %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2" class="blank"></td><th class="money">Total</th><th class="money"><%= fmt.money(proforma.total).replace(/\.00$/, '') %></th></tr>
+        <tr><td colspan="4" class="vat">Prices include VAT at <%= vatRate %>% (KShs <%= fmt.money(vat) %>).</td></tr>
+      </tfoot>
+    </table>
+
+    <table class="pf-bank">
+      <tr><td></td><th>Bank details</th></tr>
+      <tr><td>Account name:</td><td><%= company.bank.accountName %></td></tr>
+      <tr><td>Account number:</td><td>A/C: <%= company.bank.accountNumber %></td></tr>
+      <tr><td>Bank:</td><td><%= company.bank.bank %></td></tr>
+      <tr><td>Branch:</td><td><%= company.bank.branch %></td></tr>
+    </table>
+
+    <% if (proforma.notes) { %><div class="pf-notes"><%= proforma.notes %></div><% } %>
+
+    <div class="pf-sign">
+      <div>Yours faithfully,</div>
+      <div>For &amp; on behalf of</div>
+      <div><%= company.name %></div>
+      <div class="pf-sign-line"></div>
+      <div><%= company.signatory %></div>
+    </div>
+  </main>
+</body>
+</html>

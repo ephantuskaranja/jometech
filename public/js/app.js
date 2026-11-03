@@ -322,6 +322,49 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Proforma form (proformas/views/form.ejs): line rows with a running total (VAT included),
+  // the customer's vehicles, and "start from another proforma".
+  Alpine.data('proformaForm', ({ rows = [], vehicles = [], hasCustomer = false, vatRate = 16, enquiryId = '' } = {}) => {
+    let next = 0;
+    const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
+    // Prices from the server (a copy, a draft) show as 800,000 like typed ones.
+    const grouped = (v) => (/^\d+(\.\d+)?$/.test(String(v)) ? num(v).toLocaleString('en-KE', { maximumFractionDigits: 2 }) : v);
+    const row = (r = {}) => ({ key: next++, quantity: '1', unit: 'Unit', description: '', ...r, unit_price: grouped(r.unit_price ?? '') });
+    return {
+      rows: rows.map(row), vehicles, hasCustomer,
+      amount: (r) => Math.round(num(r.quantity === '' ? 1 : r.quantity) * num(r.unit_price) * 100) / 100,
+      get total() { return Math.round(this.rows.reduce((sum, r) => sum + this.amount(r), 0) * 100) / 100; },
+      get vat() { return Math.round((this.total * vatRate / (100 + vatRate)) * 100) / 100; },
+      money: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      addRow() {
+        this.rows.push(row());
+        this.$nextTick(() => this.$root.querySelector('.jt-lines-row:last-child textarea')?.focus());
+      },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+      async customerChanged(id) {
+        this.hasCustomer = Boolean(id);
+        this.vehicles = id ? await getJson(`/api/proformas/vehicles?customer_id=${id}`).catch(() => []) : [];
+      },
+      // Reloads the form with that proforma's lines and notes; keeps the customer and enquiry chosen here.
+      copyFrom(el) {
+        const id = el.value;
+        if (!id) return;
+        if (this.rows.some((r) => r.description.trim()) && !window.confirm('Replace the lines you have typed with the copied ones?')) {
+          el.tomselect?.clear(true);
+          return;
+        }
+        const params = new URLSearchParams({ copy: id });
+        const customer = this.$refs.customer?.value;
+        if (customer) params.set('customer_id', customer);
+        if (enquiryId) params.set('enquiry', enquiryId);
+        window.location.href = `/proformas/new?${params}`;
+      },
+    };
+  });
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

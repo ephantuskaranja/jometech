@@ -1,0 +1,105 @@
+<%# Write a proforma (or change a draft): who it's for, the lines with prices (VAT included), notes. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Proformas', href: '/proformas' }, proforma ? proforma.number : 'New'],
+  heading: proforma ? `Edit proforma ${proforma.number}` : 'New proforma',
+  sub: proforma ? 'A draft can be changed until it is marked as sent.' : 'Prices include VAT. It is saved as a draft: check it, print it, then mark it as sent.',
+}) %>
+
+<form method="post" action="<%= proforma ? `/proformas/${proforma.id}` : '/proformas' %>" novalidate
+      x-data="proformaForm(<%= JSON.stringify({ rows, vehicles: vehicleOptions, hasCustomer: Boolean(values.customer_id), vatRate, enquiryId: values.enquiry_id || '' }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <input type="hidden" name="enquiry_id" value="<%= values.enquiry_id ?? '' %>">
+  <input type="hidden" name="copied_from" value="<%= values.copied_from ?? '' %>">
+
+  <% if (!proforma) { %>
+    <section class="card mb-4">
+      <div class="card-body d-grid gap-2">
+        <% if (copiedFrom) { %>
+          <div class="jt-info-box"><i class="bi bi-files"></i><span>Copied from proforma <a href="/proformas/<%= copiedFrom.id %>"><%= copiedFrom.number %></a> (<%= copiedFrom.customer_name %>). Change the customer and prices as needed.</span></div>
+        <% } %>
+        <%- include('partials/field', { name: 'copy', label: copiedFrom ? 'Copy a different proforma' : 'Start from another proforma (optional)', type: 'select', url: '/api/proformas',
+              blank: 'Type a number (e.g. 489), customer or body type', hint: 'Its lines and notes are copied in. Nothing changes on the one you copy.',
+              attrs: '@change="copyFrom($el)"' }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">For</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (enquiry) { %>
+        <div class="small text-body-secondary"><i class="bi bi-inbox"></i> From enquiry <a href="/enquiries/<%= enquiry.id %>"><%= enquiry.number %></a>: <%= enquiry.work_type %>, <%= enquiry.caller_name %></div>
+      <% } %>
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', required: true,
+              options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
+              attrs: 'x-ref="customer" @change="customerChanged($el.value)"' }) %>
+        <div style="max-width: 14rem">
+          <%- include('partials/field', { name: 'proforma_date', label: 'Date', type: 'date', value: values.proforma_date, error: errors.proforma_date, required: true }) %>
+        </div>
+      </div>
+      <div class="jt-fields">
+        <div x-show="hasCustomer && vehicles.length" x-cloak>
+          <div class="jt-field">
+            <label class="form-label" for="f-vehicle_id">Their vehicle</label>
+            <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id">
+              <option value="">Not one of these</option>
+              <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
+            </select>
+            <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
+          </div>
+        </div>
+        <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">What you are offering</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <div class="jt-lines">
+        <div class="jt-lines-head" aria-hidden="true"><span>Qty</span><span>Unit</span><span>Description</span><span class="text-end">Price (KES)</span><span class="text-end">Amount</span><span></span></div>
+        <template x-for="(row, i) in rows" :key="row.key">
+          <div class="jt-lines-row">
+            <label class="jt-lines-label">Qty</label>
+            <input class="form-control text-end jt-num" type="text" inputmode="decimal" data-number="decimal" name="line_quantity" x-model="row.quantity" :aria-label="`Quantity, line ${i + 1}`">
+            <label class="jt-lines-label">Unit</label>
+            <input class="form-control" type="text" name="line_unit" x-model="row.unit" maxlength="20" list="line-units" :aria-label="`Unit, line ${i + 1}`">
+            <label class="jt-lines-label">Description</label>
+            <textarea class="form-control" name="line_description" x-model="row.description" rows="5" :aria-label="`Description, line ${i + 1}`"
+                      placeholder="Fabrication of 10,000-litre water bowser tank on …&#10;- Toolbox&#10;- Battery cover"></textarea>
+            <label class="jt-lines-label">Price (KES)</label>
+            <input class="form-control text-end jt-num" type="text" inputmode="decimal" data-number="decimal" name="line_price" x-model="row.unit_price" :aria-label="`Price, line ${i + 1}`">
+            <span class="jt-lines-amount jt-num" x-text="money(amount(row))"></span>
+            <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          </div>
+        </template>
+      </div>
+      <datalist id="line-units"><option value="Unit"><option value="Pc"><option value="Set"><option value="Lot"><option value="Day"></datalist>
+      <div class="d-flex flex-wrap align-items-start gap-3">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button>
+        <span class="form-text mt-0">Start a line with “- ” to print it as a bullet point.</span>
+        <dl class="jt-totals ms-auto mb-0">
+          <div><dt>Total (VAT included)</dt><dd class="jt-num fw-semibold" x-text="`KES ${money(total)}`"></dd></div>
+          <div class="text-body-secondary small"><dt>of which VAT <%= vatRate %>%</dt><dd class="jt-num" x-text="money(vat)"></dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <%- include('partials/field', { name: 'notes', label: 'Notes on the proforma', type: 'textarea', rows: 3, value: values.notes, error: errors.notes,
+            hint: 'Optional. Printed under the total, e.g. delivery time or payment terms.', placeholder: 'e.g. Delivery 3 weeks from deposit. 50% deposit, balance on collection.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-file-earmark-text"></i>Saved as a draft: nothing goes to the customer yet.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= proforma ? `/proformas/${proforma.id}` : (enquiry ? `/enquiries/${enquiry.id}` : '/proformas') %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= proforma ? 'Save changes' : 'Save draft' %></button>
+    </div>
+  </div>
+</form>

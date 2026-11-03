@@ -12,7 +12,10 @@ import { config } from '../config.js';
 // same moment get different numbers because the counter row is locked until
 // the first transaction finishes.
 
-/** Every numbered document. `yearly`: the count restarts at 1 each January. */
+/**
+ * Every numbered document. `yearly`: the count restarts at 1 each January. `plain`: just the number, no prefix.
+ * `first`: the number the very first one gets (default 1); only used until that document type has a counter.
+ */
 export const NUMBER_FORMATS = {
   customer:  { prefix: 'CUS', yearly: false },
   vehicle:   { prefix: 'VEH', yearly: false },
@@ -21,7 +24,7 @@ export const NUMBER_FORMATS = {
   movement:  { prefix: 'MOV', yearly: true },   // a vehicle sent from one site to the other
   visitor:   { prefix: 'VIS', yearly: true },
   enquiry:   { prefix: 'ENQ', yearly: true },
-  quotation: { prefix: 'QT', yearly: true },
+  proforma:  { prefix: 'PF', yearly: false, plain: true, first: () => config.proformaFirstNumber }, // 490, 491 … continuing the paper ones; revisions (490-R1) aren't from here
   job:       { prefix: 'JOB', yearly: true },
   issue:     { prefix: 'ISS', yearly: true },
   request:   { prefix: 'PR', yearly: true },
@@ -52,14 +55,15 @@ export async function nextNumber(trx, type, date = new Date()) {
 
   const period = format.yearly ? nairobiYear(date) : '';
 
-  // One statement: create the counter at 1, or add 1 to it. The row stays
-  // locked until this transaction commits or rolls back.
+  // One statement: create the counter at the first number, or add 1 to it.
+  // The row stays locked until this transaction commits or rolls back.
   await trx.raw(
-    'INSERT INTO `number_sequences` (`seq_key`, `period`, `counter`) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE `counter` = `counter` + 1',
-    [format.prefix, period],
+    'INSERT INTO `number_sequences` (`seq_key`, `period`, `counter`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `counter` = `counter` + 1',
+    [format.prefix, period, format.first?.() ?? 1],
   );
   const { counter: value } = await trx('number_sequences').where({ seq_key: format.prefix, period }).first('counter');
 
   const count = String(value).padStart(PAD, '0');
+  if (format.plain) return String(value);
   return format.yearly ? `${format.prefix}-${period}-${count}` : `${format.prefix}-${count}`;
 }

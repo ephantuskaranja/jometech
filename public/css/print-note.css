@@ -1,4 +1,4 @@
-/* Printed documents (checkins/views/print.ejs): an A4 sheet, laid out like the paper form.
+/* Printed documents (checkins/views/print.ejs, proformas/views/print.ejs): an A4 sheet, laid out like the paper form.
    Always light, whatever the app theme: it is meant for paper. */
 @page { size: A4; margin: 12mm; }
 
@@ -48,7 +48,37 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .small { font-size: 8.5pt; }
 .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
 
+/* ---------- Proforma invoice (proformas/views/print.ejs), like the paper one ---------- */
+.draft-note { justify-content: center; color: #b54708; font-weight: 600; padding-top: 0; }
+.proforma { position: relative; font-size: 11pt; }
+.proforma.is-draft::after { content: "DRAFT"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 120pt Archivo, Arial, sans-serif; color: rgb(180 35 24 / .12); transform: rotate(-30deg); pointer-events: none; }
+.pf-company-name { font: italic 700 24pt/1.1 Archivo, Arial, sans-serif; color: #1d3fbf; text-transform: uppercase; text-align: center; }
+.pf-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-top: 10px; }
+.pf-address { font-weight: 600; font-style: italic; text-transform: uppercase; font-size: 10pt; line-height: 1.5; }
+.pf-address div:nth-last-child(2) { text-transform: none; }
+.pf-date { text-align: right; margin: 14px 0; text-transform: uppercase; }
+.pf-to { text-transform: uppercase; line-height: 1.9; margin-bottom: 14px; }
+.pf-title { text-decoration: underline; color: #1d3fbf; font: 400 11pt Figtree, Arial, sans-serif; letter-spacing: 0; margin-bottom: 4px; }
+.pf-lines th { text-transform: uppercase; font-weight: 700; }
+.pf-lines .qty { width: 22mm; text-transform: uppercase; vertical-align: middle; text-align: center; }
+.pf-lines .money { width: 28mm; text-align: right; vertical-align: middle; white-space: nowrap; }
+.pf-lines td.desc { font-size: 11.5pt; padding: 6px 10px 10px; }
+.pf-lines td.desc ul { margin: 0; padding-left: 28px; }
+.pf-lines tfoot th { text-transform: uppercase; }
+.pf-lines .blank { border-left: 1px solid #111827; }
+.pf-lines .vat { font-size: 9pt; color: #475467; text-align: right; }
+.pf-bank { margin-top: -1px; }
+.pf-bank td, .pf-bank th { border: 0; padding: 2px 8px; text-transform: uppercase; }
+.pf-bank { border: 1px solid #111827; }
+.pf-bank th { text-decoration: underline; text-align: left; padding-top: 6px; }
+.pf-bank td:first-child { width: 55%; }
+.pf-bank td:last-child { font-weight: 700; }
+.pf-notes { margin-top: 10px; white-space: pre-line; }
+.pf-sign { margin-top: 16px; line-height: 2.1; }
+.pf-sign-line { width: 60mm; height: 14mm; border-bottom: 1px dotted #111827; }
+
 @media print {
+  .draft-note { display: none; }
   body { background: #fff; }
   .toolbar { display: none; }
   .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }

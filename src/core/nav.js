@@ -21,7 +21,7 @@ export const nav = [
       { label: 'Customers', href: '/customers', icon: 'person', permission: VIEW_CUSTOMERS, ready: true },
       { label: 'Vehicles', href: '/vehicles', icon: 'truck-front', permission: VIEW_CUSTOMERS, ready: true },
       { label: 'Enquiries', href: '/enquiries', icon: 'inbox', permission: 'enquiries.manage', ready: true },
-      { label: 'Quotations', href: '/quotations', icon: 'file-earmark-text', permission: ['quotations.manage', 'quotations.approve'] },
+      { label: 'Proformas', href: '/proformas', icon: 'file-earmark-text', permission: 'quotations.manage', ready: true },
       { label: 'Invoices', href: '/invoices', icon: 'receipt', permission: 'invoices.manage' },
     ],
   },

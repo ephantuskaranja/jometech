@@ -21,7 +21,7 @@ export const config = {
   appName: process.env.APP_NAME || 'Jome-Tech',
   // Dates, times and yearly document numbers (CHK-2026-…) follow this zone, not the server's.
   timezone: process.env.TIMEZONE || 'Africa/Nairobi',
-  // Letterhead on printed documents (receiving note; later quotations and invoices).
+  // Letterhead on printed documents (receiving note, proformas; later invoices).
   // Defaults are from the paper Truck Receiving Document; moves to company settings when that screen exists.
   company: {
     name: process.env.COMPANY_NAME || 'Jome-Tech Engineering Ltd',
@@ -29,7 +29,22 @@ export const config = {
     address: (process.env.COMPANY_ADDRESS || 'Eastern Bypass, Ruai|P.O. Box 14554 - 00400, Nairobi').split('|').map((line) => line.trim()).filter(Boolean),
     phone: process.env.COMPANY_PHONE || '0705 656 398',
     email: process.env.COMPANY_EMAIL || 'jometechltd@gmail.com',
+    kraPin: process.env.COMPANY_KRA_PIN || 'P052233213I',
+    // Who signs proformas ("For & on behalf of … Director")
+    signatory: process.env.COMPANY_SIGNATORY || 'Director',
+    // Bank details printed on proformas, from the paper proforma
+    bank: {
+      accountName: process.env.BANK_ACCOUNT_NAME || 'Jome-Tech Engineering Ltd',
+      accountNumber: process.env.BANK_ACCOUNT_NUMBER || '01100210891001',
+      bank: process.env.BANK_NAME || 'Co-operative Bank',
+      branch: process.env.BANK_BRANCH || 'Githurai',
+    },
   },
+  // Prices include VAT; documents show how much of the total is VAT.
+  vatRate: Number(process.env.VAT_RATE || 16),
+  // Number of the first proforma made in the app: the next one after the last paper proforma.
+  // Only read until the first proforma is saved; after that the numbers just count on.
+  proformaFirstNumber: Number(process.env.PROFORMA_FIRST_NUMBER || 490),
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 3306),

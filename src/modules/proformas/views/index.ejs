@@ -1,0 +1,58 @@
+<%#
+  Proformas. "Sent" (the default) is the ones waiting for the customer's answer.
+  A search looks through all of them, including replaced versions.
+%>
+<%
+  const tabs = [['draft', 'Drafts'], ['sent', 'Sent'], ['closed', 'Accepted / declined'], ['all', 'All']];
+  const empty = {
+    draft: { icon: 'file-earmark', heading: 'No drafts', text: 'A new proforma stays here until you mark it as sent.' },
+    sent: { icon: 'send', heading: 'Nothing waiting for an answer', text: 'Proformas the customer has, but hasn’t said yes or no to.' },
+    closed: { icon: 'archive', heading: 'Nothing accepted or declined yet', text: 'Proformas move here once the customer has answered.' },
+    all: { icon: 'file-earmark-text', heading: 'No proformas yet', text: 'Make one from an enquiry, or start a new one here.' },
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Sales', 'Proformas'],
+  heading: 'Proformas',
+  sub: 'Proforma invoices sent to customers. Prices include VAT.',
+  actions: [{ label: 'New proforma', href: '/proformas/new', icon: 'plus-lg', primary: true }],
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/proformas?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/proformas">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Number, customer or what it’s for (e.g. bowser)" aria-label="Search proformas">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/proformas?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'proforma' : 'proformas' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the number, part of the customer’s name, or a word from the description.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Proforma</th><th>Customer</th><th>For</th><th class="d-none d-md-table-cell">Date</th><th class="text-end">Total (KES)</th></tr></thead>
+        <tbody>
+          <% list.forEach((p) => { const st = statuses[p.status]; %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/proformas/<%= p.id %>"><%= p.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= p.customer_name %><% if (p.declined_reason) { %><span class="jt-sub"><%= p.declined_reason %></span><% } %></td>
+              <td><span class="jt-clamp"><%= String(p.first_line ?? '').split('\n')[0] %></span></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.date(`${p.proforma_date}T12:00:00Z`) %></td>
+              <td class="text-end jt-num"><%= fmt.money(p.total) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
