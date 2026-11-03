@@ -1,0 +1,80 @@
+<%# Log a call (or edit it). The caller can be a prospect: name and phone only. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Enquiries', href: '/enquiries' }, enquiry ? enquiry.number : 'New'],
+  heading: enquiry ? `Edit ${enquiry.number}` : 'New enquiry',
+  sub: enquiry ? 'Change what was recorded. Notes from call-backs stay as they are.' : 'Who called, what they want, and when to call them back.',
+}) %>
+
+<form method="post" action="<%= enquiry ? `/enquiries/${enquiry.id}` : '/enquiries' %>" novalidate class="col-xl-9"
+      x-data="enquiryForm(<%= JSON.stringify({ hasCustomer: Boolean(values.customer_id), vehicles: vehicleOptions, workType: values.work_type ?? '' }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Who called</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'caller_name', label: 'Name', value: values.caller_name, error: errors.caller_name, required: true, autocomplete: 'off' }) %>
+        <%- include('partials/field', { name: 'caller_phone', label: 'Phone', type: 'tel', value: values.caller_phone, error: errors.caller_phone,
+              placeholder: '0712 345 678', attrs: '@blur="checkPhone($el.value)"', hint: 'Needed for someone who isn’t a customer yet' }) %>
+      </div>
+      <div class="jt-info-box" x-show="match" x-cloak>
+        <i class="bi bi-person-check"></i>
+        <span>This number belongs to <strong x-text="match?.name"></strong> (<span x-text="match?.number"></span>).
+          <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="useMatch()">Link this enquiry to them</button></span>
+      </div>
+      <%- include('partials/field', { name: 'customer_id', label: 'Existing customer', type: 'select', url: '/api/customers',
+            options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
+            hint: 'Leave empty for a new caller: they stay a prospect until you add them as a customer.',
+            attrs: 'x-ref="customer" @change="customerChanged($el.value)"' }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">What they want</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-choices-compact"><%- include('partials/choices', { name: 'work_type', label: 'Type of work', required: true, columns: 3, model: 'workType',
+            options: workTypes.map((w) => ({ value: w, label: w })), value: values.work_type, error: errors.work_type }) %></div>
+      <div x-show="workType === 'Other'" x-cloak class="jt-fields">
+        <%- include('partials/field', { name: 'other_work_type', label: 'What kind of work?', value: values.other_work_type, error: errors.other_work_type, required: true, placeholder: 'e.g. Cattle body' }) %>
+        <label class="form-check align-self-center mt-3">
+          <input class="form-check-input" type="checkbox" name="save_work_type" value="1" <%= values.save_work_type === '1' || values.save_work_type === true ? 'checked' : '' %>>
+          <span class="form-check-label">Add to the list for next time</span>
+        </label>
+      </div>
+      <%- include('partials/field', { name: 'description', label: 'Details', type: 'textarea', rows: 3, value: values.description, error: errors.description, required: true,
+            placeholder: 'e.g. 18 m³ tipper on a new Isuzu FVZ, needs it by end of month, asked about hydraulics' }) %>
+      <div class="jt-fields">
+        <div x-show="hasCustomer && vehicles.length" x-cloak>
+          <div class="jt-field">
+            <label class="form-label" for="f-vehicle_id">Their vehicle</label>
+            <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id">
+              <option value="">Not one of these</option>
+              <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
+            </select>
+            <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
+          </div>
+        </div>
+        <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. new Isuzu FRR chassis' }) %>
+        <%- include('partials/field', { name: 'budget', label: 'Budget', type: 'money', value: values.budget, error: errors.budget, hint: 'Optional: what they said they can spend' }) %>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Follow up</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-choices-compact"><%- include('partials/choices', { name: 'source', label: 'How they reached us', columns: 5,
+            options: sources.map((s) => ({ value: s.value, label: s.label })), value: values.source }) %></div>
+      <div style="max-width: 16rem">
+        <%- include('partials/field', { name: 'follow_up_on', label: 'Call them back on', type: 'date', value: values.follow_up_on, error: errors.follow_up_on,
+              hint: 'Leave empty if nothing to follow up', attrs: `min="${enquiry ? '' : today}"` }) %>
+      </div>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="small text-body-secondary me-auto"><i class="bi bi-person"></i> Taken by <%= enquiry?.assigned_name ?? user.name %></span>
+    <a class="btn btn-outline-secondary" href="<%= enquiry ? `/enquiries/${enquiry.id}` : '/enquiries' %>">Cancel</a>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= enquiry ? 'Save changes' : 'Save enquiry' %></button>
+  </div>
+</form>

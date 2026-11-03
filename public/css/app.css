@@ -474,3 +474,5 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-site-choice { justify-content: center; padding-block: 1rem; font-size: 1.15rem; }
 /* Short labels ("Delivery", "Supplier"): two per row even on a small phone */
 @media (max-width: 420px) { .jt-choices-compact .jt-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Long text in a table cell: two lines, then … */
+.jt-clamp { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 28rem; }

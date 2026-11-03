@@ -302,6 +302,26 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Enquiry form (enquiries/views/form.ejs): the customer's vehicles, and "this phone is a customer".
+  Alpine.data('enquiryForm', ({ hasCustomer = false, vehicles = [], workType = '' } = {}) => ({
+    hasCustomer, vehicles, workType, match: null,
+    async customerChanged(id) {
+      this.hasCustomer = Boolean(id);
+      this.match = null;
+      this.vehicles = id ? await getJson(`/api/enquiries/vehicles?customer_id=${id}`).catch(() => []) : [];
+    },
+    async checkPhone(phone) {
+      if (this.hasCustomer || phone.replace(/\D/g, '').length < 9) { this.match = null; return; }
+      const { matches } = await getJson(`/api/customers/check-phone?phone=${encodeURIComponent(phone)}`).catch(() => ({ matches: [] }));
+      this.match = matches[0] ?? null;
+    },
+    useMatch() {
+      const ts = this.$refs.customer.tomselect;
+      ts.addOption({ value: this.match.id, label: `${this.match.name} (${this.match.number})` });
+      ts.setValue(this.match.id); // fires change → customerChanged
+    },
+  }));
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

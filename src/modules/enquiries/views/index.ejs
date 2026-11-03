@@ -1,0 +1,63 @@
+<%#
+  Enquiries. "Follow up" (the default) is the day's call list: open enquiries whose
+  call-back day has come, oldest first. A search looks through all of them.
+%>
+<%
+  const tabs = [['follow', 'Follow up'], ['open', 'Open'], ['quoted', 'Proforma sent'], ['closed', 'Closed']];
+  const empty = {
+    follow: { icon: 'telephone', heading: 'No calls to make today', text: 'Enquiries appear here on the day you planned to call them back.' },
+    open: { icon: 'inbox', heading: 'No open enquiries', text: 'When a customer calls, log it here so it isn’t forgotten.' },
+    quoted: { icon: 'file-earmark-text', heading: 'No proformas waiting', text: 'Enquiries move here once a proforma has been sent.' },
+    closed: { icon: 'archive', heading: 'Nothing closed yet', text: 'Won and lost enquiries are kept here.' },
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Sales', 'Enquiries'],
+  heading: 'Enquiries',
+  sub: 'Calls and requests from customers and new callers, until they become a job or are lost.',
+  actions: [{ label: 'New enquiry', href: '/enquiries/new', icon: 'telephone-plus', primary: true }],
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/enquiries?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill<%= key === 'follow' && counts.follow ? ' text-bg-warning' : '' %>"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/enquiries">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name, phone, ENQ number or what they want" aria-label="Search enquiries">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/enquiries?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'enquiry' : 'enquiries' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try part of the name, the phone number, or the ENQ number.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Enquiry</th><th>Who</th><th>Wants</th><th class="d-none d-lg-table-cell text-end">Budget</th><th><%= tab === 'closed' && !q ? 'Closed' : 'Call back' %></th></tr></thead>
+        <tbody>
+          <% list.forEach((e) => { const st = statuses[e.status]; const late = e.follow_up_on && e.follow_up_on < today && ['open', 'quoted'].includes(e.status); %>
+            <tr>
+              <td><a class="jt-row-link font-monospace small" href="/enquiries/<%= e.id %>"><%= e.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= e.customer_name ?? e.caller_name %>
+                <span class="jt-sub"><%= e.customer_id ? (e.caller_name !== e.customer_name ? `Called: ${e.caller_name}` : '') : 'Prospect' %><%= e.caller_phone ? ` · ${fmt.phone(e.caller_phone)}` : '' %></span></td>
+              <td><%= e.work_type %><span class="jt-sub jt-clamp"><%= e.description %></span></td>
+              <td class="d-none d-lg-table-cell text-end jt-num"><%= e.budget != null ? fmt.money(e.budget) : '—' %></td>
+              <td class="text-nowrap">
+                <% if (tab === 'closed' && !q) { %><%= fmt.date(e.closed_at) %><% if (e.lost_reason) { %><span class="jt-sub"><%= e.lost_reason %></span><% } %>
+                <% } else if (e.follow_up_on) { %><span class="<%= late ? 'text-danger fw-semibold' : '' %>"><%= e.follow_up_on === today ? 'Today' : fmt.date(`${e.follow_up_on}T12:00:00Z`) %></span><% if (late) { %><span class="jt-sub text-danger">Overdue</span><% } %>
+                <% } else { %>—<% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

@@ -9,6 +9,9 @@ export default {
     charset: 'utf8mb4',
     // Dates are stored in UTC and shown in Nairobi time by the app.
     timezone: 'Z',
+    // DATE columns (a follow-up day, a due date) are calendar days, not moments:
+    // they come back as '2026-11-05', never shifted by a time zone.
+    dateStrings: ['DATE'],
     connectTimeout: 5000,
     // DECIMAL columns (money, quantities) come back as strings so no cents are
     // lost to floating point. Convert them deliberately where you calculate.

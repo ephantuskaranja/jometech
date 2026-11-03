@@ -1,0 +1,149 @@
+<%# One enquiry: what they want, call-back notes, and closing it as won or lost. %>
+<%
+  const st = statuses[enquiry.status];
+  const closed = ['won', 'lost'].includes(enquiry.status);
+  const late = enquiry.follow_up_on && enquiry.follow_up_on < today && !closed;
+  const day = (d) => (d === today ? 'today' : fmt.date(`${d}T12:00:00Z`));
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Sales <i class="bi bi-chevron-right"></i><a href="/enquiries">Enquiries</a><i class="bi bi-chevron-right"></i><span><%= enquiry.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= enquiry.work_type %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-person"></i><% if (enquiry.customer_id) { %><a href="/customers/<%= enquiry.customer_id %>"><%= enquiry.customer_name %></a><% } else { %><%= enquiry.caller_name %> <span class="text-body-tertiary">(prospect)</span><% } %></span>
+          <span><i class="bi bi-telephone"></i><%= sourceLabel(enquiry.source) %>, <%= fmt.dateTime(enquiry.created_at) %></span>
+          <span><i class="bi bi-person-badge"></i>Taken by <%= enquiry.assigned_name ?? '—' %></span>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <span class="font-monospace small text-body-secondary align-self-center"><%= enquiry.number %></span>
+        <a class="btn btn-outline-secondary" href="/enquiries/<%= enquiry.id %>/edit"><i class="bi bi-pencil"></i>Edit</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">What they want</h2></div>
+      <div class="card-body">
+        <p class="mb-3" style="white-space: pre-line"><%= enquiry.description %></p>
+        <dl class="jt-kv mb-0">
+          <div><dt>Vehicle</dt><dd>
+            <% if (enquiry.vehicle_id) { %><a href="/vehicles/<%= enquiry.vehicle_id %>"><%= enquiry.vehicle_label %></a><%= [enquiry.make, enquiry.model].filter(Boolean).length ? ` · ${[enquiry.make, enquiry.model].filter(Boolean).join(' ')}` : '' %>
+            <% } else { %><%= enquiry.vehicle_description ?? '—' %><% } %>
+          </dd></div>
+          <div><dt>Budget</dt><dd class="jt-num"><%= enquiry.budget != null ? `KES ${fmt.money(enquiry.budget)}` : '—' %></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card" id="notes">
+      <div class="card-header"><h2 class="h6 mb-0">Call-backs and notes</h2></div>
+      <% if (!closed) { %>
+        <form method="post" action="/enquiries/<%= enquiry.id %>/notes" class="card-body d-grid gap-3 border-bottom" x-data="{ next: <%= JSON.stringify(enquiry.follow_up_on ?? '') %> }">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <%- include('partials/field', { name: 'note', label: 'What was said', type: 'textarea', rows: 2, required: true, placeholder: 'e.g. Called back: wants a 20 ft version, will confirm the chassis by Friday' }) %>
+          <div class="d-flex align-items-end gap-2 flex-wrap">
+            <div class="jt-field">
+              <label class="form-label" for="f-next">Call again on</label>
+              <input class="form-control" type="date" id="f-next" name="follow_up_on" x-model="next" min="<%= today %>" style="max-width: 11rem">
+            </div>
+            <% nextDays.forEach((n) => { %><button type="button" class="btn btn-sm btn-outline-secondary mb-1" @click="next = '<%= n.day %>'">+<%= n.days === 7 ? '1 week' : `${n.days} day${n.days === 1 ? '' : 's'}` %></button><% }) %>
+            <button type="button" class="btn btn-sm btn-link mb-1" @click="next = ''">No follow-up</button>
+            <button class="btn btn-primary ms-auto" type="submit"><i class="bi bi-check2"></i>Save note</button>
+          </div>
+        </form>
+      <% } %>
+      <% if (enquiry.notes.length === 0) { %>
+        <div class="card-body text-body-secondary small">No notes yet. After each call back, write what was said and when to call again.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% enquiry.notes.forEach((n) => { %>
+            <li class="list-group-item">
+              <div style="white-space: pre-line"><%= n.note %></div>
+              <div class="small text-body-secondary mt-1"><%= n.by_name ?? '' %>, <%= fmt.dateTime(n.created_at) %><%= n.follow_up_on ? ` · call again ${day(n.follow_up_on)}` : '' %></div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Caller</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Name</dt><dd><%= enquiry.caller_name %></dd></div>
+          <div><dt>Phone</dt><dd class="font-monospace"><%= enquiry.caller_phone ? fmt.phone(enquiry.caller_phone) : '—' %></dd></div>
+          <div><dt>Customer</dt><dd><% if (enquiry.customer_id) { %><a href="/customers/<%= enquiry.customer_id %>"><%= enquiry.customer_name %></a> <span class="text-body-tertiary small"><%= enquiry.customer_number %></span><% } else { %>Not yet (prospect)<% } %></dd></div>
+        </dl>
+        <% if (!enquiry.customer_id) { %>
+          <form method="post" action="/enquiries/<%= enquiry.id %>/make-customer" class="mt-3">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% if (phoneMatch) { %>
+              <div class="jt-info-box mb-2"><i class="bi bi-person-check"></i><span><%= fmt.phone(enquiry.caller_phone) %> already belongs to <strong><%= phoneMatch.name %></strong> (<%= phoneMatch.number %>).</span></div>
+              <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-link-45deg"></i>Link to <%= phoneMatch.name %></button>
+            <% } else { %>
+              <button class="btn btn-outline-primary w-100" type="submit" <%= enquiry.caller_phone ? '' : 'disabled' %>><i class="bi bi-person-plus"></i>Add as customer</button>
+              <% if (!enquiry.caller_phone) { %><div class="form-text">Add their phone number first (Edit).</div><% } %>
+            <% } %>
+          </form>
+        <% } %>
+      </div>
+    </section>
+
+    <section class="card" x-data="{ closing: '' }">
+      <div class="card-header"><h2 class="h6 mb-0">Status</h2></div>
+      <div class="card-body d-grid gap-3">
+        <% if (closed) { %>
+          <div><%- include('partials/pill', { text: st.label, tone: st.tone }) %> <span class="small text-body-secondary"><%= fmt.dateTime(enquiry.closed_at) %></span>
+            <% if (enquiry.lost_reason) { %><div class="mt-1"><%= enquiry.lost_reason %></div><% } %></div>
+          <form method="post" action="/enquiries/<%= enquiry.id %>/reopen"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-arrow-counterclockwise"></i>Reopen</button></form>
+        <% } else { %>
+          <div class="<%= late ? 'text-danger fw-semibold' : '' %>">
+            <i class="bi bi-calendar-event"></i>
+            <%= enquiry.follow_up_on ? `Call back ${day(enquiry.follow_up_on)}${late ? ' (overdue)' : ''}` : 'No follow-up date set' %>
+          </div>
+          <div class="small text-body-secondary">A proforma for this enquiry comes with the next step (proformas).</div>
+          <div class="d-flex gap-2" x-show="!closing">
+            <button type="button" class="btn btn-outline-success" @click="closing = 'won'"><i class="bi bi-trophy"></i>Won</button>
+            <button type="button" class="btn btn-outline-secondary" @click="closing = 'lost'"><i class="bi bi-x-circle"></i>Lost</button>
+          </div>
+          <div x-show="closing === 'won'" x-cloak>
+            <form method="post" action="/enquiries/<%= enquiry.id %>/close" class="d-grid gap-2">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="status" value="won">
+              <p class="small mb-0">The customer has agreed to the work. Close this enquiry as won?</p>
+              <div class="d-flex gap-2"><button class="btn btn-success" type="submit">Yes, won</button><button class="btn btn-link" type="button" @click="closing = ''">Cancel</button></div>
+            </form>
+          </div>
+          <div x-show="closing === 'lost'" x-cloak>
+            <form method="post" action="/enquiries/<%= enquiry.id %>/close" class="d-grid gap-2" x-data="{ reason: '' }">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="status" value="lost">
+              <fieldset class="jt-field">
+                <legend class="form-label">Why was it lost?</legend>
+                <div class="jt-choices" style="--jt-cols: 1">
+                  <% [...lostReasons, 'other'].forEach((r, i) => { %>
+                    <label class="jt-choice" for="lost-<%= i %>"><input class="form-check-input" type="radio" id="lost-<%= i %>" name="lost_reason" value="<%= r %>" x-model="reason"><span class="jt-choice-label"><%= r === 'other' ? 'Something else' : r %></span></label>
+                  <% }) %>
+                </div>
+              </fieldset>
+              <div x-show="reason === 'other'"><%- include('partials/field', { name: 'other_reason', label: 'Reason', placeholder: 'e.g. Customer bought a ready-made body' }) %></div>
+              <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit" :disabled="!reason">Close as lost</button><button class="btn btn-link" type="button" @click="closing = ''">Cancel</button></div>
+            </form>
+          </div>
+        <% } %>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>
