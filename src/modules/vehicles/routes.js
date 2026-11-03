@@ -7,7 +7,7 @@ import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-forma
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import * as vehicles from './service.js';
 import * as customers from '../customers/service.js';
-import { daysIn } from '../checkins/service.js';
+import { daysIn, visitsOf, STATUSES } from '../checkins/service.js';
 
 export const router = Router();
 const view = canAny(...VIEW_CUSTOMERS);
@@ -101,6 +101,9 @@ router.get('/vehicles/:id', view, async (req, res) => {
     title: vehicleLabel(vehicle),
     vehicle, vehicleLabel,
     entries: await history('vehicle', vehicle.id),
+    visits: await visitsOf(vehicle.id), daysIn, statuses: STATUSES,
+    // A visit at a site the user doesn't work at is listed, but not linked (its page would refuse).
+    mySiteIds: req.user.sites.map((s) => s.id),
     typeLabel: vehicles.typeLabel,
     canEdit: EDIT_VEHICLES.some((p) => req.user.can(p)),
     canCheckIn: req.user.can('checkin.manage'),

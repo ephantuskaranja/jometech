@@ -21,6 +21,34 @@
 
 <div class="row g-4">
   <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <%# Every check-in of this vehicle, newest first. %>
+    <section class="card">
+      <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Visits</h2><span class="small text-body-secondary"><%= visits.length %></span></div>
+      <% if (visits.length === 0) { %>
+        <div class="card-body text-body-secondary small">Not checked in yet.<% if (canCheckIn) { %> Use <strong>Check in</strong> above when it arrives.<% } %></div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table jt-table mb-0">
+            <thead><tr><th>Check-in</th><th>Site</th><th>Arrived</th><th>Left</th><th class="text-end">Days in</th></tr></thead>
+            <tbody>
+              <% visits.forEach((c) => { const st = statuses[c.status]; %>
+                <tr>
+                  <td>
+                    <% if (mySiteIds.includes(c.site_id)) { %><a class="font-monospace small jt-row-link" href="/check-in/<%= c.id %>"><%= c.number %></a><% } else { %><span class="font-monospace small"><%= c.number %></span><% } %>
+                    <% if (c.status !== 'checked_out') { %><span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span><% } %>
+                    <% if (c.brought_by) { %><span class="jt-sub">By <%= c.brought_by %></span><% } %>
+                  </td>
+                  <td><%= c.site_name %></td>
+                  <td class="text-nowrap"><%= fmt.date(c.checked_in_at) %><% if (c.odometer_km != null) { %><span class="jt-sub"><%= fmt.qty(c.odometer_km) %> km</span><% } %></td>
+                  <td class="text-nowrap"><%= c.checked_out_at ? fmt.date(c.checked_out_at) : '—' %></td>
+                  <td class="text-end text-nowrap jt-num"><%= c.status === 'cancelled' ? '—' : daysIn(c.checked_in_at, c.checked_out_at ?? new Date()) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
       <div class="card-body">
@@ -35,7 +63,7 @@
       </div>
     </section>
     <section class="card">
-      <div class="card-header"><h2 class="h6 mb-0">Brought in by</h2></div>
+      <div class="card-header"><h2 class="h6 mb-0">Usual contact</h2></div>
       <% if (vehicle.contact_name) { %>
         <div class="jt-contact">
           <span class="jt-avatar"><%= vehicle.contact_name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() %></span>
@@ -53,7 +81,7 @@
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
       <div class="card-body">
-        <%- include('partials/history', { entries, labels: { reg_no: 'Reg', chassis_no: 'Chassis', temp_tag: 'Temporary tag', customer: 'Owner', contact: 'Brought in by', type: 'Type', make: 'Make', model: 'Model', year: 'Year', body_type: 'Body', colour: 'Colour', notes: 'Notes' } }) %>
+        <%- include('partials/history', { entries, labels: { reg_no: 'Reg', chassis_no: 'Chassis', temp_tag: 'Temporary tag', customer: 'Owner', contact: 'Usual contact', type: 'Type', make: 'Make', model: 'Model', year: 'Year', body_type: 'Body', colour: 'Colour', notes: 'Notes' } }) %>
       </div>
     </section>
   </div>

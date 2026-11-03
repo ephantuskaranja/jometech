@@ -76,7 +76,7 @@ test('moving a vehicle to a new owner shows in its history', async () => {
     .send({ _csrf: csrfFrom(page.text), reg_no: 'KZZ 901A', customer_id: otherCustomer.id, type: 'truck', make: 'Isuzu' }).expect(302);
   const show = (await supervisor.get(`/vehicles/${v.id}`)).text;
   assert.match(show, /Owner<\/span>\s*<span class="jt-changes-old">Lakeview Logistics<\/span> <i class="bi bi-arrow-right"><\/i> Other Owner/);
-  assert.match(show, /Brought in by<\/span>\s*<span class="jt-changes-old">Ali Hassan<\/span>/);
+  assert.match(show, /Usual contact<\/span>\s*<span class="jt-changes-old">Ali Hassan<\/span>/);
 });
 
 test('global search finds a vehicle typed any way, and customers by phone', async () => {

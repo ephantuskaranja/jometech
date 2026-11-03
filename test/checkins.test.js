@@ -373,3 +373,13 @@ test('“brought in by” can be anyone: a typed name and phone, not saved as a 
   assert.match((await supervisor.get('/check-in')).text, /Eunice Wairimu/);
   assert.match((await supervisor.get(`/check-in/${c.id}/print`)).text, /Eunice Wairimu/);
 });
+
+test('a vehicle’s page lists its visits', async () => {
+  const v = await db('vehicles').where({ reg_no: 'KZY 309C' }).first();
+  const page = (await sales.get(`/vehicles/${v.id}`).expect(200)).text;
+  assert.match(page, /Visits/);
+  const numbers = await db('checkins').where({ vehicle_id: v.id }).pluck('number');
+  assert.equal(numbers.length, 2, 'checked out, then back in');
+  for (const n of numbers) assert.match(page, new RegExp(n));
+  assert.match(page, /In the workshop/, 'the current visit shows its status');
+});

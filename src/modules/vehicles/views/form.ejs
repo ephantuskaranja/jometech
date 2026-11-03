@@ -45,7 +45,7 @@
             hint: 'Not found? Type the name and choose “Add new customer”.', attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
 
       <div class="jt-field">
-        <label class="form-label" for="f-contact_id">Brought in by <span class="text-body-tertiary fw-normal">(contact person)</span></label>
+        <label class="form-label" for="f-contact_id">Usual contact <span class="text-body-tertiary fw-normal">(who normally brings it in)</span></label>
         <select class="form-select<%= errors.contact_id ? ' is-invalid' : '' %>" id="f-contact_id" name="contact_id" x-model="contactId" :disabled="contacts.length === 0">
           <option value="" x-text="contacts.length ? 'Nobody in particular' : 'This customer has no contacts yet'"></option>
           <template x-for="c in contacts" :key="c.value">

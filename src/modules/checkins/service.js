@@ -269,6 +269,18 @@ export async function listCheckins(siteId, status = 'in_workshop') {
       db.raw('COALESCE(contact.name, checkins.brought_by_name, checkins.driver_name) as contact_name'));
 }
 
+/** Every visit of one vehicle, newest first: for its page. */
+export function visitsOf(vehicleId) {
+  return db('checkins')
+    .join('sites', 'sites.id', 'checkins.site_id')
+    .leftJoin('customer_contacts as contact', 'contact.id', 'checkins.contact_id')
+    .where({ 'checkins.vehicle_id': vehicleId })
+    .orderBy('checkins.checked_in_at', 'desc')
+    .select('checkins.id', 'checkins.number', 'checkins.status', 'checkins.site_id', 'checkins.checked_in_at', 'checkins.checked_out_at',
+      'checkins.odometer_km', 'sites.name as site_name',
+      db.raw('COALESCE(contact.name, checkins.brought_by_name, checkins.driver_name) as brought_by'));
+}
+
 export async function countInWorkshop(siteId) {
   const [{ count }] = await db('checkins').where({ status: 'in_workshop', site_id: siteId }).count({ count: '*' });
   return Number(count);
