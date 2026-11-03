@@ -68,7 +68,7 @@
       <div class="jt-fields" x-show="more" x-cloak>
         <%- include('partials/field', { name: 'make', label: 'Make', value: values.make, error: errors.make, placeholder: 'e.g. Isuzu' }) %>
         <%- include('partials/field', { name: 'model', label: 'Model', value: values.model, error: errors.model, placeholder: 'e.g. FRR 90' }) %>
-        <%- include('partials/field', { name: 'year', label: 'Year', type: 'number', inputmode: 'numeric', value: values.year, error: errors.year, placeholder: 'e.g. 2019' }) %>
+        <%- include('partials/field', { name: 'year', label: 'Year', type: 'number', grouping: false, inputmode: 'numeric', value: values.year, error: errors.year, placeholder: 'e.g. 2019' }) %>
         <%- include('partials/field', { name: 'colour', label: 'Colour', value: values.colour, error: errors.colour }) %>
         <%- include('partials/field', { name: 'body_type', label: 'Body', value: values.body_type, error: errors.body_type, class: 'jt-full', placeholder: 'e.g. Dropside 14 ft, bare chassis, skeletal 40 ft' }) %>
         <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', value: values.notes, error: errors.notes, class: 'jt-full', rows: 2 }) %>

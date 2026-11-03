@@ -25,6 +25,7 @@ const checkinSchema = z.object({
   vehicle_mode: z.enum(['existing', 'new']).catch('existing'),
   vehicle_id: optionalId(),
   contact_id: optionalId(),
+  brought_by_phone: optionalPhone(),
   odometer_km: odometer,
   odometer_not_working: ticked,
   fuel_quarters: z.union([z.literal(''), z.coerce.number().int().min(0).max(4)]).optional().catch('').transform((v) => (v === '' || v === undefined ? null : v)),
@@ -43,9 +44,18 @@ const newVehicleSchema = z.object({
 });
 
 const blank = {
-  vehicle_mode: 'existing', vehicle_id: '', contact_id: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
+  vehicle_mode: 'existing', vehicle_id: '', contact_id: '', brought_by_phone: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
   reg_no: '', chassis_no: '', issue_tag: '', customer_id: '', type: 'truck', make: '', model: '',
 };
+
+/**
+ * "Brought in by" is a saved contact (an id) or, for anyone else, the name as typed:
+ * the dropdown sends "name:Eunice Wairimu" (data-tom-free in public/js/app.js).
+ */
+function broughtByName(value) {
+  const s = String(value ?? '');
+  return s.startsWith('name:') ? s.slice(5).trim().replace(/\s+/g, ' ') : null;
+}
 
 /** Item rows arrive as two lists, item_description and item_quantity; empty rows are skipped. */
 function readItems(body) {
@@ -71,7 +81,9 @@ async function renderForm(res, { status = 200, values, rows = [], errors = {}, e
     title: 'New check-in',
     values, errors, existingId, vehicle,
     rows: rows.length ? rows : [{ description: '', quantity: '1' }],
-    contact: await checkins.contactOption(Number(values.contact_id) || null),
+    contact: broughtByName(values.contact_id) !== null
+      ? { value: values.contact_id, label: `${broughtByName(values.contact_id)} (not a saved contact)` }
+      : await checkins.contactOption(Number(values.contact_id) || null),
     ownerOption: owner ? [{ value: owner.id, label: `${owner.name} (${owner.number})` }] : [],
     presets: await checkins.itemPresets(),
     fuelLevels: checkins.FUEL_LEVELS,
@@ -113,8 +125,10 @@ router.post('/check-in', manage, async (req, res) => {
   needSite(req);
   const values = { ...blank, ...req.body };
   const { rows, items, error: itemsError } = readItems(req.body);
-  const result = check(checkinSchema, req.body);
+  const typedName = broughtByName(req.body.contact_id);
+  const result = check(checkinSchema, { ...req.body, contact_id: typedName === null ? req.body.contact_id : '' });
   const errors = { ...result.errors };
+  if (typedName !== null && (typedName.length < 2 || typedName.length > 100)) errors.contact_id = 'Type their full name (2 to 100 characters)';
   let newVehicle = null;
 
   if (result.data?.vehicle_mode === 'new' || values.vehicle_mode === 'new') {
@@ -133,7 +147,8 @@ router.post('/check-in', manage, async (req, res) => {
   if (Object.keys(errors).length) return renderForm(res, { status: 422, values, rows, errors });
 
   try {
-    const { id, number } = await checkins.createCheckin({ ...result.data, new_vehicle: newVehicle, items }, req);
+    const brought = typedName ? { brought_by_name: typedName, brought_by_phone: result.data.brought_by_phone } : { brought_by_name: null, brought_by_phone: null };
+    const { id, number } = await checkins.createCheckin({ ...result.data, ...brought, new_vehicle: newVehicle, items }, req);
     req.session.flash = { type: 'success', text: `Saved as ${number}. Now hand the device to the driver to confirm.` };
     res.redirect(`/check-in/${id}/sign`);
   } catch (err) {
@@ -241,7 +256,8 @@ router.get('/check-in/:id/sign', manage, async (req, res) => {
   const checkin = await loadCheckin(req);
   if (checkin.driver_signed_at || checkin.not_signed_reason) return res.redirect(`/check-in/${checkin.id}`);
   // Whoever was chosen as "brought in by" is most likely the person signing.
-  renderSign(res, checkin, { values: { driver_name: checkin.contact_name ?? '', driver_phone: checkin.contact_phone ? fmt.phone(checkin.contact_phone) : '', driver_id_no: '' } });
+  const phone = checkin.contact_phone ?? checkin.brought_by_phone;
+  renderSign(res, checkin, { values: { driver_name: checkin.contact_name ?? checkin.brought_by_name ?? '', driver_phone: phone ? fmt.phone(phone) : '', driver_id_no: '' } });
 });
 
 router.post('/check-in/:id/sign', manage, async (req, res) => {

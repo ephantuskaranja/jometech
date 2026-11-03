@@ -6,6 +6,7 @@
 
   name, label           required
   type                  text (default) | tel | email | number | money | date | password | textarea | select
+                        number and money show 3,000 as you type; number: decimals: true for 12.5, grouping: false for a year
   value                 current value (for select with multiple: an array)
   error                 message shown under the field, turns it red
   required              adds the red * (the server still validates)
@@ -67,7 +68,7 @@
   <% } else if (fieldType === 'money') { %>
     <div class="input-group has-validation">
       <span class="input-group-text">KES</span>
-      <input class="<%= inputClass %> text-end jt-num" type="text" inputmode="decimal" value="<%= val %>" <%- common %> <%- extra %>>
+      <input class="<%= inputClass %> text-end jt-num" type="text" inputmode="decimal" data-number="decimal" value="<%= val %>" <%- common %> <%- extra %>>
       <%- errorHtml %>
     </div>
 
@@ -76,8 +77,10 @@
       const htmlType = { tel: 'tel', email: 'email', date: 'date', password: 'password', number: 'text' }[fieldType] ?? 'text';
       const mode = locals.inputmode ?? { tel: 'tel', number: 'decimal', email: 'email' }[fieldType];
     %>
+    <%# Numbers get thousands separators as you type (public/js/app.js), unless grouping: false (a year). %>
+    <% const grouped = fieldType === 'number' && locals.grouping !== false ? `data-number="${locals.decimals ? 'decimal' : 'whole'}"` : ''; %>
     <input class="<%= inputClass %><%= fieldType === 'number' ? ' text-end jt-num' : '' %>" type="<%= htmlType %>" value="<%= val %>"
-      <%- mode ? `inputmode="${mode}"` : '' %> <%- common %> <%- extra %>>
+      <%- mode ? `inputmode="${mode}"` : '' %> <%- grouped %> <%- common %> <%- extra %>>
     <%- errorHtml %>
   <% } %>
 

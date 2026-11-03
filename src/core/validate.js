@@ -53,6 +53,14 @@ export const optionalReading = () => z.preprocess(
   z.union([z.literal(''), z.coerce.number().int().max(9_999_999, 'Check the reading')]).optional().transform((v) => (v === '' || v === undefined ? null : v)),
 );
 
+/** Optional amount in KES, as typed in a money field: "12,500.50" → 12500.5; '' → null. */
+export const optionalAmount = (max = 999_999_999) => z.preprocess(
+  (v) => (typeof v === 'string' ? v.replace(/[,\s]/g, '').replace(/^KES/i, '') : v),
+  z.union([z.literal(''), z.coerce.number({ message: 'Check the amount' }).min(0, 'Check the amount').max(max, 'Check the amount')
+    .refine((n) => Number.isInteger(Math.round(n * 100)) && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Use at most two decimals')], { error: 'Check the amount' })
+    .optional().transform((v) => (v === '' || v === undefined ? null : v)),
+);
+
 /** An Error carrying an HTTP status, for the error page. */
 export function httpError(status, message) {
   return Object.assign(new Error(message), { status, expose: true });

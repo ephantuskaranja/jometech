@@ -5,8 +5,8 @@
 %>
 <%
   const blank = '—';
-  const receivedFrom = checkin.driver_name ?? checkin.contact_name;
-  const contactPhone = checkin.driver_phone ?? checkin.contact_phone;
+  const receivedFrom = checkin.driver_name ?? checkin.contact_name ?? checkin.brought_by_name;
+  const contactPhone = checkin.driver_phone ?? checkin.contact_phone ?? checkin.brought_by_phone;
   const rows = [...checkin.items];
   while (rows.length < 10) rows.push(null); // the paper form has 10 lines; keep its shape
   const odometer = checkin.odometer_not_working ? 'Not working' : (checkin.odometer_km != null ? `${fmt.qty(checkin.odometer_km)} km` : blank);

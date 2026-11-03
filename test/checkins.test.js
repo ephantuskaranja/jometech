@@ -347,3 +347,29 @@ test('the vehicles list splits vehicles by where they are now', async () => {
   assert.match(await tab('all'), /KZY 311C/);
   assert.match((await sales.get('/vehicles?q=kzy311c').expect(200)).text, /KZY 311C/, 'a search looks through all vehicles');
 });
+
+test('“brought in by” can be anyone: a typed name and phone, not saved as a contact', async () => {
+  const page = await sales.get('/vehicles/new');
+  await sales.post('/vehicles').type('form').send({ _csrf: csrfFrom(page.text), reg_no: 'KZY 312C', customer_id: owner.id, type: 'truck' });
+  const v = await db('vehicles').where({ reg_no: 'KZY 312C' }).first();
+  const contactsBefore = (await db('customer_contacts').count({ n: '*' }))[0].n;
+
+  let res = await checkIn({ vehicle_mode: 'existing', vehicle_id: v.id, contact_id: 'name: E' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Type their full name/);
+
+  res = await checkIn({ vehicle_mode: 'existing', vehicle_id: v.id, contact_id: 'name:Eunice  Wairimu', brought_by_phone: '0700 000 334' });
+  assert.equal(res.status, 302, res.text);
+  const c = await db('checkins').where({ vehicle_id: v.id }).first();
+  assert.equal(c.contact_id, null);
+  assert.equal(c.brought_by_name, 'Eunice Wairimu');
+  assert.equal(c.brought_by_phone, '+254700000334');
+  assert.equal((await db('customer_contacts').count({ n: '*' }))[0].n, contactsBefore, 'no contact added');
+
+  assert.match((await supervisor.get(`/check-in/${c.id}/sign`)).text, /value="Eunice Wairimu"/, 'the signing screen suggests her');
+  const show = (await supervisor.get(`/check-in/${c.id}`)).text;
+  assert.match(show, /Eunice Wairimu/);
+  assert.match(show, /Not saved as a contact/);
+  assert.match((await supervisor.get('/check-in')).text, /Eunice Wairimu/);
+  assert.match((await supervisor.get(`/check-in/${c.id}/print`)).text, /Eunice Wairimu/);
+});

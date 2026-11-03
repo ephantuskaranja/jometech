@@ -67,6 +67,9 @@ export async function createCheckin(input, actor) {
       vehicle_id: vehicleId,
       customer_id: customerId,
       contact_id: input.contact_id ?? null,
+      // Anyone else who brought it: kept here, not added to a customer's contacts.
+      brought_by_name: input.contact_id ? null : input.brought_by_name ?? null,
+      brought_by_phone: input.contact_id ? null : input.brought_by_phone ?? null,
       odometer_km: input.odometer_not_working ? null : input.odometer_km,
       odometer_not_working: input.odometer_not_working,
       fuel_quarters: input.fuel_quarters,
@@ -262,7 +265,8 @@ export async function listCheckins(siteId, status = 'in_workshop') {
     .select('checkins.id', 'checkins.number', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
       'move_to.name as moving_to',
       'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name',
-      db.raw('COALESCE(contact.name, checkins.driver_name) as contact_name')); // not a contact: the name given when signing
+      // Not a saved contact: the name typed at check-in, else the one given when signing.
+      db.raw('COALESCE(contact.name, checkins.brought_by_name, checkins.driver_name) as contact_name'));
 }
 
 export async function countInWorkshop(siteId) {

@@ -23,6 +23,41 @@ function formatReg(input) {
 /** Same as regLooksUsual() in src/core/vehicle-format.js: KDA 123A, ZF 1234, GKB 123A. */
 const regLooksUsual = (reg) => /^(K[A-Z]{2} \d{3}[A-Z]|Z[A-Z] \d{4}|GK[A-Z] \d{3}[A-Z])$/.test(reg);
 
+// ---------- Numbers with thousands separators while typing ----------
+// Any <input data-number> shows 3000 as 3,000 as you type (data-number="decimal" also
+// allows two decimals: 12,500.50). The server strips the commas again when it reads the form.
+
+/** "1234567.891" → "1,234,567.89" (decimal) or "1,234,567" (whole numbers). */
+function groupDigits(value, decimal) {
+  const s = String(value).replace(decimal ? /[^\d.]/g : /\D/g, '');
+  const [whole, ...rest] = s.split('.');
+  const fraction = decimal && s.includes('.') ? `.${rest.join('').slice(0, 2)}` : '';
+  return whole.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') + fraction;
+}
+
+// Capture phase: runs before Alpine's x-model listener, so the model gets the formatted value too.
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || !el.matches('[data-number]')) return;
+  const decimal = el.dataset.number === 'decimal';
+  const counts = decimal ? /[\d.]/ : /\d/;
+  // Keep the cursor after the same digit it was after, though commas come and go.
+  const caret = el.selectionStart ?? el.value.length;
+  const digitsBefore = [...el.value.slice(0, caret)].filter((c) => counts.test(c)).length;
+  const next = groupDigits(el.value, decimal);
+  if (next === el.value) return;
+  el.value = next;
+  let pos = 0;
+  for (let seen = 0; pos < next.length && seen < digitsBefore; pos++) if (counts.test(next[pos])) seen++;
+  el.setSelectionRange(pos, pos);
+}, true);
+
+// Values already in the page (after a form error, or when editing) get their commas too.
+// Something that isn't a number (a mistake shown with its error) is left as typed, to be corrected.
+document.querySelectorAll('input[data-number]').forEach((el) => {
+  if (/^[\d,.\s]+$/.test(el.value)) el.value = groupDigits(el.value, el.dataset.number === 'decimal');
+});
+
 /**
  * Phone photos are 3–6 MB: shrink to 1600 px JPEG (about 300 KB) before uploading, so it's quick
  * on a slow workshop connection. Drawing on a canvas also drops the location data.
@@ -67,6 +102,14 @@ function initSearchableSelects(root = document) {
       };
       options.createOnBlur = false;
       options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-plus-lg"></i> Add new ${escape(el.dataset.tomCreate)} “${escape(data.input)}”</div>`;
+    }
+    // data-tom-free: a name that isn't in the list can be used as typed ("Use “Eunice”"),
+    // sent as "name:Eunice" for the server to keep as plain text.
+    if (el.dataset.tomFree) {
+      options.create = (input) => ({ value: `name:${input.trim()}`, label: `${input.trim()} (not a saved contact)` });
+      options.createOnBlur = true;
+      options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-person-plus"></i> Use “${escape(data.input)}” (not a saved contact)</div>`;
+      options.render.no_results = () => '<div class="no-results">Not found. Keep typing the full name to use it.</div>';
     }
     if (url) {
       Object.assign(options, {
@@ -146,8 +189,9 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // Check-in form: chosen vehicle's details, usual contact, odometer warning, item rows.
-  Alpine.data('checkinForm', ({ mode = 'existing', vehicle = null, issueTag = false, odometer = '', odometerBroken = false, fuel = '', rows = [] } = {}) => ({
+  Alpine.data('checkinForm', ({ mode = 'existing', vehicle = null, issueTag = false, odometer = '', odometerBroken = false, fuel = '', rows = [], freeName = false } = {}) => ({
     mode, vehicle, issueTag, odometer, odometerBroken, fuel, rows, regOdd: false,
+    freeName, // "brought in by" is a typed name, not a saved contact: ask for their phone
     get odometerLow() {
       const last = this.vehicle?.lastVisit?.odometer;
       const now = Number(String(this.odometer).replace(/\D/g, ''));

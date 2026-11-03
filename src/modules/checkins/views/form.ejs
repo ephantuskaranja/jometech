@@ -5,6 +5,7 @@
 <%
   const initial = {
     mode: values.vehicle_mode === 'new' ? 'new' : 'existing',
+    freeName: String(values.contact_id ?? '').startsWith('name:'),
     vehicle,
     issueTag: values.issue_tag === '1' || values.issue_tag === 'on',
     odometer: values.odometer_km ?? '',
@@ -98,7 +99,12 @@
       <%- include('partials/field', { name: 'contact_id', label: 'Contact person', type: 'select', url: '/api/check-in/contacts',
             options: contact ? [contact] : [], value: values.contact_id, error: errors.contact_id,
             blank: 'Type a name, phone or company', auto: contact && vehicle && vehicle.contact && vehicle.contact.value === contact.value ? 'usual' : false,
-            hint: 'The owner’s staff, or another company’s salesman. Add new people on the customer’s page.', attrs: 'x-ref="contact"' }) %>
+            hint: 'A saved contact (the owner’s staff, a dealer’s salesman), or type anyone’s name and choose “Use …”.',
+            attrs: `x-ref="contact" data-tom-free="1" @change="freeName = $el.value.startsWith('name:')"` }) %>
+      <div x-show="freeName" x-cloak class="mt-3" style="max-width: 22rem">
+        <%- include('partials/field', { name: 'brought_by_phone', label: 'Their phone', type: 'tel', value: values.brought_by_phone, error: errors.brought_by_phone,
+              placeholder: '0712 345 678', hint: 'Optional. Kept on this check-in only, not saved as a contact.' }) %>
+      </div>
     </div>
   </section>
 
@@ -109,8 +115,8 @@
       <div class="jt-field">
         <label class="form-label" for="f-odometer_km">Odometer</label>
         <div class="input-group has-validation">
-          <input class="form-control text-end jt-num<%= errors.odometer_km ? ' is-invalid' : '' %>" type="text" inputmode="numeric" id="f-odometer_km" name="odometer_km"
-                 x-model="odometer" :disabled="odometerBroken" placeholder="e.g. 245 300">
+          <input class="form-control text-end jt-num<%= errors.odometer_km ? ' is-invalid' : '' %>" type="text" inputmode="numeric" data-number id="f-odometer_km" name="odometer_km"
+                 x-model="odometer" :disabled="odometerBroken" placeholder="e.g. 245,300">
           <span class="input-group-text">km</span>
           <% if (errors.odometer_km) { %><div class="invalid-feedback"><%= errors.odometer_km %></div><% } %>
         </div>
