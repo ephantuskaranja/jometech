@@ -1,16 +1,19 @@
 import { PERMISSIONS, ROLES } from '../../src/core/permissions.js';
 
-// Writes the permission list and the six built-in roles.
-// Safe to run again: new permissions are added and descriptions updated,
-// but a role's permissions are only filled in when the role is first created,
-// so changes an admin makes later are kept.
+// Writes the permission list and the built-in roles.
+// Safe to run again: new permissions are added and descriptions updated.
+// A role's permissions are filled in when the role is first created; after that,
+// only permissions that are new in this run are added to it, so changes an
+// admin made to older permissions are kept.
 
 /** @param {import('knex').Knex} knex */
 export async function seed(knex) {
+  const known = new Set(await knex('permissions').pluck('key'));
   await knex('permissions')
     .insert(PERMISSIONS.map(([module, key, description]) => ({ module, key, description })))
     .onConflict('key')
     .merge(['module', 'description']);
+  const added = new Set(PERMISSIONS.map(([, key]) => key).filter((key) => !known.has(key)));
 
   const permissionIds = Object.fromEntries(
     (await knex('permissions').select('id', 'key')).map((p) => [p.key, p.id]),
@@ -18,19 +21,26 @@ export async function seed(knex) {
 
   for (const role of ROLES) {
     const existing = await knex('roles').where({ key: role.key }).first('id');
-    if (existing) continue;
-
-    const [roleId] = await knex('roles').insert({
-      key: role.key,
-      name: role.name,
-      description: role.description,
-      all_sites: role.all_sites ?? false,
-      is_system: true,
-    });
+    let roleId = existing?.id;
+    if (existing) {
+      await knex('roles').where({ id: roleId }).update({ site_at_login: role.site_at_login ?? false });
+    } else {
+      [roleId] = await knex('roles').insert({
+        key: role.key,
+        name: role.name,
+        description: role.description,
+        all_sites: role.all_sites ?? false,
+        site_at_login: role.site_at_login ?? false,
+        is_system: true,
+      });
+    }
 
     if (role.permissions === '*') continue; // admin: everything, checked in code
-    await knex('role_permissions').insert(
-      role.permissions.map((key) => ({ role_id: roleId, permission_id: permissionIds[key] })),
-    );
+    const keys = existing ? role.permissions.filter((key) => added.has(key)) : role.permissions;
+    if (keys.length) {
+      await knex('role_permissions')
+        .insert(keys.map((key) => ({ role_id: roleId, permission_id: permissionIds[key] })))
+        .onConflict().ignore();
+    }
   }
 }

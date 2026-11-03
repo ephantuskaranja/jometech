@@ -1,0 +1,46 @@
+<%# Gate (or Reception, for a walk-in) signs a visitor in. Phone first: a returning visitor fills in the rest. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Visitors', href: '/visitors' }, 'Sign in'],
+  heading: 'Sign a visitor in',
+  sub: `At ${site.name}. Start with the phone number: someone who has visited before is filled in for you.`,
+}) %>
+
+<form method="post" action="/visitors" novalidate class="card" x-data="visitorForm({ purpose: <%= JSON.stringify(values.purpose ?? '') %> })">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="card-body d-grid gap-4">
+    <div class="jt-fields">
+      <%- include('partials/field', { name: 'phone', label: 'Phone number', type: 'tel', value: values.phone, error: errors.phone, required: true,
+            placeholder: '0712 345 678', autocomplete: 'off', attrs: '@blur="lookup($el.value)" x-ref="phone"' }) %>
+      <%- include('partials/field', { name: 'name', label: 'Full name', value: values.name, error: errors.name, required: true, autocomplete: 'off', attrs: 'x-ref="name"' }) %>
+    </div>
+    <div class="jt-info-box" x-show="returning" x-cloak><i class="bi bi-arrow-repeat"></i><span x-text="returning"></span></div>
+
+    <div class="jt-choices-compact"><%- include('partials/choices', { name: 'purpose', label: 'Why are they here?', required: true, columns: 4, model: 'purpose',
+          options: purposes.map((p) => ({ value: p, label: p })), value: values.purpose, error: errors.purpose }) %></div>
+    <div x-show="purpose === 'Other'" x-cloak>
+      <%- include('partials/field', { name: 'other_purpose', label: 'Reason', value: values.other_purpose, error: errors.other_purpose, placeholder: 'e.g. Meeting the director about a tender' }) %>
+    </div>
+
+    <div class="jt-fields">
+      <%- include('partials/field', { name: 'host', label: 'Who are they seeing?', value: values.host, error: errors.host, autocomplete: 'off', attrs: 'list="staff-names" x-ref="host"', hint: 'A staff member, or “Reception”' }) %>
+      <%- include('partials/field', { name: 'company', label: 'Company', value: values.company, error: errors.company, attrs: 'x-ref="company"' }) %>
+      <%- include('partials/field', { name: 'id_no', label: 'ID number', value: values.id_no, error: errors.id_no, inputmode: 'numeric', attrs: 'x-ref="id_no"' }) %>
+      <%- include('partials/field', { name: 'vehicle_reg', label: 'Their vehicle', value: values.vehicle_reg, error: errors.vehicle_reg, placeholder: 'KDA 123A', attrs: '@blur="tidyReg($el)" x-ref="vehicle_reg"' }) %>
+      <%- include('partials/field', { name: 'pass_no', label: 'Gate pass no.', value: values.pass_no, error: errors.pass_no, hint: 'If you gave them a pass or badge' }) %>
+      <%- include('partials/field', { name: 'people', label: 'People in the group', value: values.people, error: errors.people, inputmode: 'numeric', hint: 'Including the visitor' }) %>
+    </div>
+    <datalist id="staff-names"><option value="Reception"><% staff.forEach((n) => { %><option value="<%= n %>"><% }) %></datalist>
+    <%- include('partials/field', { name: 'notes', label: 'Notes', value: values.notes, error: errors.notes, hint: 'Optional, e.g. carrying tools, delivery note number' }) %>
+
+    <% if (canReceive && !receptionOnly) { %>
+      <label class="form-check">
+        <input class="form-check-input" type="checkbox" name="at_reception" value="1" <%= values.at_reception === '1' ? 'checked' : '' %>>
+        <span class="form-check-label">Already at reception (received now)</span>
+      </label>
+    <% } %>
+  </div>
+  <div class="card-footer d-flex gap-2 flex-wrap">
+    <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-box-arrow-in-right"></i><%= receptionOnly ? 'Sign in and receive' : 'Sign in' %></button>
+    <a class="btn btn-link" href="/visitors">Cancel</a>
+  </div>
+</form>

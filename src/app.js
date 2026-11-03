@@ -21,6 +21,7 @@ import { router as vehicleRoutes } from './modules/vehicles/routes.js';
 import { router as searchRoutes } from './modules/search/routes.js';
 import { router as checkinRoutes } from './modules/checkins/routes.js';
 import { router as movementRoutes } from './modules/movements/routes.js';
+import { router as visitorRoutes } from './modules/visitors/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -57,7 +58,7 @@ export function createApp() {
   app.use((req, res, next) => {
     Object.assign(res.locals, {
       appName: config.appName, title: config.appName, path: req.path,
-      isActive, formatPhone, fmt, nav: [], user: null, site: null, flash: null, csrfToken: '',
+      isActive, formatPhone, fmt, nav: [], user: null, site: null, siteLocked: false, flash: null, csrfToken: '',
     });
     next();
   });
@@ -114,6 +115,7 @@ export function createApp() {
   app.use(searchRoutes);
   app.use(checkinRoutes);
   app.use(movementRoutes);
+  app.use(visitorRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

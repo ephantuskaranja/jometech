@@ -11,6 +11,9 @@ export const PERMISSIONS = [
   ['Workshop', 'jobs.manage', 'Create jobs, move stages, assign work'],
   ['Workshop', 'jobs.progress', 'Update own tasks and add photos'],
   ['Workshop', 'qc.manage', 'Carry out quality checks'],
+  ['Gate', 'visitors.gate', 'Sign visitors in and clear them out at the gate'],
+  ['Gate', 'visitors.receive', 'Confirm visitors were received; sign in walk-ins at reception'],
+  ['Gate', 'visitors.view', 'See the visitor register'],
   ['Sales', 'customers.manage', 'Add and edit customers and vehicles'],
   ['Sales', 'enquiries.manage', 'Record and follow up enquiries'],
   ['Sales', 'quotations.manage', 'Prepare quotations'],
@@ -43,7 +46,7 @@ export const ROLES = [
   {
     key: 'supervisor', name: 'Supervisor',
     description: 'Jobs, check-in, attendance and quality checks at their sites',
-    permissions: ['checkin.manage', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view'],
+    permissions: ['checkin.manage', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view'],
   },
   {
     key: 'sales', name: 'Sales',
@@ -59,5 +62,16 @@ export const ROLES = [
     key: 'technician', name: 'Technician',
     description: 'Own tasks: progress updates and photos',
     permissions: ['jobs.progress'],
+  },
+  // Gate and Reception choose their site when they log in and keep it until they log out.
+  {
+    key: 'gate', name: 'Gate', site_at_login: true,
+    description: 'Visitor register at the gate: sign visitors in and clear them out',
+    permissions: ['visitors.gate', 'visitors.view'],
+  },
+  {
+    key: 'reception', name: 'Reception', site_at_login: true,
+    description: 'Visitor register at reception: confirm visitors were received',
+    permissions: ['visitors.receive', 'visitors.view'],
   },
 ];

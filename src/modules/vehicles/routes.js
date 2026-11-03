@@ -7,6 +7,7 @@ import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-forma
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import * as vehicles from './service.js';
 import * as customers from '../customers/service.js';
+import { daysIn } from '../checkins/service.js';
 
 export const router = Router();
 const view = canAny(...VIEW_CUSTOMERS);
@@ -76,9 +77,14 @@ async function save(req, res, vehicle) {
 router.get('/vehicles', view, async (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   const type = vehicles.VEHICLE_TYPES.some((t) => t.value === req.query.type) ? req.query.type : '';
+  // A search looks through every vehicle; otherwise start with those in the workshop.
+  const place = vehicles.PLACES.includes(req.query.place) ? req.query.place : (q ? 'all' : 'in');
+  const siteId = req.user.sites.some((s) => s.id === Number(req.query.site)) ? Number(req.query.site) : null;
   res.render('vehicles/views/index', {
-    title: 'Vehicles', list: await vehicles.listVehicles({ q, type }), q, type,
-    types: vehicles.VEHICLE_TYPES, typeLabel: vehicles.typeLabel,
+    title: 'Vehicles', list: await vehicles.listVehicles({ q, type, place, siteId }), q, type, place, siteId,
+    counts: await vehicles.countByPlace(),
+    sites: req.user.sites,
+    types: vehicles.VEHICLE_TYPES, typeLabel: vehicles.typeLabel, daysIn,
   });
 });
 

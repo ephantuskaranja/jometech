@@ -59,14 +59,36 @@ export async function getVehicle(id) {
       'customer_contacts.name as contact_name', 'customer_contacts.role as contact_role', 'customer_contacts.phone as contact_phone');
 }
 
-export async function listVehicles({ q = '', type = '' } = {}) {
+/** Tabs on the vehicles list: where each vehicle is now. */
+export const PLACES = ['in', 'left', 'new', 'all'];
+
+/**
+ * Vehicles for the list, with where each one is now:
+ *   in    an open check-in (in the workshop at some site), newest arrival first
+ *   left  visited before, not in now, most recently left first
+ *   new   registered but never checked in, newest first
+ *   all   everything, by reg
+ */
+export async function listVehicles({ q = '', type = '', place = 'all', siteId = null } = {}) {
+  // One row per vehicle: its visit count and when it last left.
+  const visits = db('checkins').whereNot({ status: 'cancelled' })
+    .groupBy('vehicle_id').select('vehicle_id', db.raw('COUNT(*) as visits'), db.raw('MAX(checked_out_at) as last_left_at'));
   const query = db('vehicles')
     .join('customers', 'customers.id', 'vehicles.customer_id')
     .leftJoin('customer_contacts', 'customer_contacts.id', 'vehicles.contact_id')
-    .orderBy('vehicles.reg_no')
+    .leftJoin('checkins as open', (j) => j.on('open.vehicle_id', 'vehicles.id').andOnVal('open.status', 'in_workshop'))
+    .leftJoin('sites as open_site', 'open_site.id', 'open.site_id')
+    .leftJoin(visits.as('hist'), 'hist.vehicle_id', 'vehicles.id')
     .limit(200)
     .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.type', 'vehicles.make', 'vehicles.model', 'vehicles.body_type',
-      'customers.id as customer_id', 'customers.name as customer_name', 'customer_contacts.name as contact_name');
+      'vehicles.created_at', 'customers.id as customer_id', 'customers.name as customer_name', 'customer_contacts.name as contact_name',
+      'open.id as open_id', 'open.number as open_number', 'open.checked_in_at as open_since', 'open_site.name as open_site',
+      db.raw('COALESCE(hist.visits, 0) as visits'), 'hist.last_left_at');
+  if (place === 'in') query.whereNotNull('open.id').orderBy('open.checked_in_at', 'desc');
+  else if (place === 'left') query.whereNull('open.id').where('hist.visits', '>', 0).orderBy('hist.last_left_at', 'desc');
+  else if (place === 'new') query.whereNull('hist.vehicle_id').orderBy('vehicles.created_at', 'desc');
+  else query.orderBy('vehicles.reg_no');
+  if (place === 'in' && siteId) query.where('open.site_id', siteId);
   if (type) query.where('vehicles.type', type);
   const term = q.trim();
   if (term) {
@@ -80,6 +102,20 @@ export async function listVehicles({ q = '', type = '' } = {}) {
     });
   }
   return query;
+}
+
+/** How many vehicles are in each tab, for the badges. */
+export async function countByPlace() {
+  const [row] = await db('vehicles')
+    .leftJoin(db('checkins').where({ status: 'in_workshop' }).distinct('vehicle_id').as('open'), 'open.vehicle_id', 'vehicles.id')
+    .leftJoin(db('checkins').whereNot({ status: 'cancelled' }).distinct('vehicle_id').as('seen'), 'seen.vehicle_id', 'vehicles.id')
+    .select(
+      db.raw('SUM(open.vehicle_id IS NOT NULL) as `in`'),
+      db.raw('SUM(open.vehicle_id IS NULL AND seen.vehicle_id IS NOT NULL) as `left`'),
+      db.raw('SUM(seen.vehicle_id IS NULL) as `new`'),
+      db.raw('COUNT(*) as `all`'),
+    );
+  return Object.fromEntries(PLACES.map((p) => [p, Number(row[p] ?? 0)]));
 }
 
 /** Another vehicle already using this reg or chassis number (for the warning while typing). */

@@ -1,0 +1,68 @@
+<%#
+  Visitor register for the current site. "On site now" is the working view for
+  Gate (Clear out) and Reception (Received); "Register" shows a day, or a search.
+%>
+<%- include('partials/page-header', {
+  crumb: ['Workshop', 'Visitors'],
+  heading: tab === 'now' ? `Visitors at ${site.name}` : 'Visitor register',
+  sub: tab === 'now' ? 'Everyone signed in and not yet cleared out, longest here first.' : `Who came to ${site.name}: one day at a time, or search all days.`,
+  actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= tab === 'now' ? list.length : onSiteCount %></span></a>
+    <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Register</a>
+  </nav>
+
+  <% if (tab === 'register') { %>
+    <form class="jt-toolbar" method="get" action="/visitors">
+      <input type="hidden" name="show" value="register">
+      <input class="form-control" type="date" name="day" value="<%= day %>" max="<%= today %>" aria-label="Day" style="max-width: 11rem" <%= q ? 'disabled' : '' %>>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Search name, phone, company, vehicle, ID" aria-label="Search" style="max-width: 22rem">
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i>Show</button>
+      <% if (q) { %><a class="btn btn-link" href="/visitors?show=register">Clear search</a><% } %>
+    </form>
+  <% } %>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', tab === 'now'
+          ? { icon: 'person-badge', heading: 'Nobody on site', text: 'Visitors appear here when the gate signs them in, until they are cleared out.', action: canSignIn ? { label: 'Sign a visitor in', href: '/visitors/new' } : null }
+          : { icon: 'search', heading: q ? 'No visitors found' : 'No visitors that day', text: q ? 'Try part of the name, or the phone number.' : 'Pick another day, or search.' }) %>
+  <% } else { %>
+    <ul class="list-group list-group-flush jt-visitors">
+      <% list.forEach((v) => { const late = overdue(v, today); const st = statuses[v.status]; %>
+        <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>">
+          <div class="jt-visitor-main">
+            <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
+            <div class="small text-body-secondary">
+              <%= [fmt.phone(v.phone), v.company, v.purpose, v.host && `seeing ${v.host}`].filter(Boolean).join(' · ') %>
+            </div>
+            <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
+              <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
+              <% if (late) { %><%- include('partials/pill', { text: `Still on site since ${fmt.date(v.arrived_at)}`, tone: 'bad' }) %><% } %>
+              <% if (v.status === 'cleared' && !v.received_at) { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } %>
+              <% if (v.vehicle_reg) { %><%- include('partials/plate', { reg: v.vehicle_reg }) %><% } %>
+              <% if (v.pass_no) { %><span class="text-body-secondary">Pass <%= v.pass_no %></span><% } %>
+              <span class="text-body-secondary">
+                In <%= fmt.time(v.arrived_at) %><%= tab === 'register' && q ? `, ${fmt.date(v.arrived_at)}` : '' %><%= v.received_at ? ` · received ${fmt.time(v.received_at)}` : '' %><%= v.cleared_at ? ` · out ${fmt.time(v.cleared_at)}` : '' %>
+              </span>
+            </div>
+          </div>
+          <% if (v.status !== 'cleared' && (canReceive || canClear)) { %>
+            <div class="jt-visitor-actions">
+              <% if (canReceive && v.status === 'arrived') { %>
+                <form method="post" action="/visitors/<%= v.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>
+              <% } %>
+              <% if (canClear) { %>
+                <form method="post" action="/visitors/<%= v.id %>/clear"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-outline-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out</button></form>
+              <% } %>
+            </div>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>

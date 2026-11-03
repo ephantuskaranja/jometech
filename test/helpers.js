@@ -57,6 +57,9 @@ export async function cleanup() {
     if (!before.has(key(row))) await db('number_sequences').where(where).delete();           // created by this test file
     else if (before.get(key(row)) !== row.counter) await db('number_sequences').where(where).update({ counter: before.get(key(row)) });
   }
+  const visitorIds = await db('visitors').where('phone', 'like', '+25470000%').pluck('id');
+  await db('audit_log').where({ entity: 'visitor' }).whereIn('entity_id', visitorIds).delete();
+  await db('visitors').whereIn('id', visitorIds).delete();
   const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
   await db('audit_log').where({ entity: 'user' }).whereIn('entity_id', ids).delete();
   await db('users').whereIn('id', ids).delete();

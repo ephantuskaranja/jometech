@@ -12,6 +12,7 @@ export const nav = [
       { label: 'Check-in', href: '/check-in', icon: 'truck', permission: 'checkin.manage', ready: true },
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress'] },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage' },
+      { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
     ],
   },
   {

@@ -19,6 +19,7 @@ export const NUMBER_FORMATS = {
   temp_tag:  { prefix: 'JTT', yearly: true },   // painted on trailers that have no reg/chassis number yet
   checkin:   { prefix: 'CHK', yearly: true },
   movement:  { prefix: 'MOV', yearly: true },   // a vehicle sent from one site to the other
+  visitor:   { prefix: 'VIS', yearly: true },
   enquiry:   { prefix: 'ENQ', yearly: true },
   quotation: { prefix: 'QT', yearly: true },
   job:       { prefix: 'JOB', yearly: true },

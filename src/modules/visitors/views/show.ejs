@@ -1,0 +1,59 @@
+<%# One visitor: details, the three stages and who did each, and the history. %>
+<% const st = statuses[visitor.status]; %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Visitors', href: '/visitors' }, visitor.number],
+  heading: visitor.name,
+  sub: [fmt.phone(visitor.phone), visitor.company].filter(Boolean).join(' · '),
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">Visit</h2>
+        <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
+        <% if (overdue) { %><%- include('partials/pill', { text: 'Still on site from an earlier day', tone: 'bad' }) %><% } %>
+      </div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Why</dt><dd><%= visitor.purpose %></dd></div>
+          <div><dt>Seeing</dt><dd><%= visitor.host ?? '—' %></dd></div>
+          <div><dt>ID number</dt><dd><%= visitor.id_no ?? '—' %></dd></div>
+          <div><dt>Vehicle</dt><dd><% if (visitor.vehicle_reg) { %><%- include('partials/plate', { reg: visitor.vehicle_reg }) %><% } else { %>—<% } %></dd></div>
+          <div><dt>Gate pass</dt><dd><%= visitor.pass_no ?? '—' %></dd></div>
+          <div><dt>People</dt><dd><%= visitor.people %></dd></div>
+          <% if (visitor.notes) { %><div><dt>Notes</dt><dd style="white-space: pre-line"><%= visitor.notes %></dd></div><% } %>
+        </dl>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">At the gate and reception</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Signed in</dt><dd><%= fmt.dateTime(visitor.arrived_at) %><span class="d-block small text-body-secondary"><%= visitor.arrived_by_name ?? '' %></span></dd></div>
+          <div><dt>Received</dt><dd><% if (visitor.received_at) { %><%= fmt.dateTime(visitor.received_at) %><span class="d-block small text-body-secondary"><%= visitor.received_by_name ?? '' %></span><% } else if (visitor.status === 'cleared') { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } else { %>Not yet<% } %></dd></div>
+          <div><dt>Cleared out</dt><dd><% if (visitor.cleared_at) { %><%= fmt.dateTime(visitor.cleared_at) %><span class="d-block small text-body-secondary"><%= visitor.cleared_by_name ?? '' %></span><% } else { %>Not yet<% } %></dd></div>
+        </dl>
+        <% if (visitor.status !== 'cleared' && (canReceive || canClear)) { %>
+          <div class="d-flex gap-2 flex-wrap mt-3">
+            <% if (canReceive && visitor.status === 'arrived') { %>
+              <form method="post" action="/visitors/<%= visitor.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="visitor">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>
+            <% } %>
+            <% if (canClear) { %>
+              <form method="post" action="/visitors/<%= visitor.id %>/clear"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="visitor">
+                <button class="btn btn-outline-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out</button></form>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>

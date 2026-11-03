@@ -3,7 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { db } from '../../core/db.js';
 import { audit } from '../../core/audit.js';
-import { burnPasswordCheck, safeNextUrl, verifyPassword } from '../../core/auth.js';
+import { burnPasswordCheck, loadUser, safeNextUrl, verifyPassword } from '../../core/auth.js';
 import { normalizePhone } from '../../core/phone.js';
 import { check } from '../../core/validate.js';
 import { config } from '../../config.js';
@@ -78,6 +78,10 @@ router.post('/login', loginLimiter, async (req, res) => {
   // Checked after the password so a stranger can't learn which accounts exist.
   if (!user.is_active) return fail('This account is switched off. Ask an administrator to switch it back on.');
 
+  // Gate and Reception work at one site per shift: it is chosen now and kept until logout.
+  const account = await loadUser(user.id);
+  if (account.siteAtLogin && account.sites.length === 0) return fail('You haven’t been given a site yet. Ask an administrator to add one to your account.');
+
   await db('users').where({ id: user.id }).update({ failed_logins: 0, locked_until: null, last_login_at: new Date() });
   await audit(db, { user: { id: user.id }, ip: req.ip }, { entity: 'user', id: user.id, action: 'login' });
 
@@ -85,6 +89,11 @@ router.post('/login', loginLimiter, async (req, res) => {
   await new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
   req.session.userId = user.id;
   req.session.siteId = user.default_site_id;
+  if (account.siteAtLogin) {
+    req.session.siteLocked = true;
+    if (account.sites.length === 1) req.session.siteId = account.sites[0].id;
+    else req.session.chooseSite = true; // requireLogin sends them to /choose-site first
+  }
   res.redirect(safeNextUrl(data.next));
 });
 

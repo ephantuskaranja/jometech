@@ -258,6 +258,25 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
+  Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
+    purpose, returning: '',
+    async lookup(phone) {
+      if (phone.replace(/\D/g, '').length < 9) return;
+      const last = await getJson(`/api/visitors/last?phone=${encodeURIComponent(phone)}`).catch(() => null);
+      if (!last) { this.returning = ''; return; }
+      // Fill only empty boxes: never overwrite what the guard already typed.
+      for (const key of ['name', 'company', 'id_no', 'vehicle_reg', 'host']) {
+        const el = this.$refs[key];
+        if (el && !el.value && last[key]) el.value = last[key];
+      }
+      if (!this.purpose && last.purpose) this.purpose = last.purpose;
+      const when = new Date(last.arrived_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      this.returning = `Welcome back: ${last.name} last visited on ${when}. Check the details are still right.`;
+    },
+    tidyReg(el) { el.value = formatReg(el.value); },
+  }));
+
   // Check-in photos (checkins/views/photos.ejs): each photo is shrunk, then uploaded on its own,
   // one at a time, so a dropped connection loses one photo and it can be tried again.
   Alpine.data('checkinPhotos', ({ url, max, photos = [] }) => ({

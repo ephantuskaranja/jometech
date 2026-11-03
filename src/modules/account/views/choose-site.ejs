@@ -1,0 +1,20 @@
+<%# Gate and Reception: where they work this shift. Kept until they log out. %>
+<div class="card jt-auth-card">
+  <div class="card-body">
+    <h1 class="h4 mb-1">Which site are you at?</h1>
+    <p class="text-body-secondary mb-4">Everything you record until you log out is saved for this site.</p>
+    <div class="d-grid gap-3">
+      <% sites.forEach((s) => { %>
+        <form method="post" action="/choose-site">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="site_id" value="<%= s.id %>">
+          <button class="btn btn-outline-primary btn-lg w-100 jt-site-choice" type="submit"><i class="bi bi-geo-alt"></i><%= s.name %></button>
+        </form>
+      <% }) %>
+    </div>
+    <form method="post" action="/logout" class="mt-4 text-center">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-link btn-sm" type="submit">Not you? Log out</button>
+    </form>
+  </div>
+</div>

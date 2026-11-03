@@ -32,6 +32,9 @@
     <%# Current site. A dropdown only when the user works at more than one. %>
     <% if (!site) { %>
       <span class="jt-site-pill text-warning-emphasis" title="Ask an administrator to give you a site"><i class="bi bi-exclamation-triangle"></i><span class="d-none d-md-inline">No site</span></span>
+    <% } else if (siteLocked) { %>
+      <%# Gate and Reception: chosen at login, kept until logout. %>
+      <span class="jt-site-pill" title="Chosen when you logged in. Log out to change site."><i class="bi bi-lock"></i><span><%= site.name %></span></span>
     <% } else if (user.sites.length === 1) { %>
       <span class="jt-site-pill" title="Current site"><span class="jt-dot"></span><span class="d-none d-md-inline"><%= site.name %></span></span>
     <% } else { %>

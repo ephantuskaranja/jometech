@@ -50,11 +50,29 @@ router.post('/account/theme', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Gate and Reception with more than one site: "Which site are you at?" right after logging in.
+router.get('/choose-site', (req, res) => {
+  if (!req.session.chooseSite) return res.redirect('/');
+  res.render('account/views/choose-site', { layout: 'layout-auth', title: 'Choose your site', sites: req.user.sites });
+});
+
+router.post('/choose-site', async (req, res) => {
+  const site = req.user.sites.find((s) => s.id === Number(req.body?.site_id));
+  if (!req.session.chooseSite || !site) return res.redirect('/choose-site');
+  req.session.siteId = site.id;
+  delete req.session.chooseSite;
+  await audit(db, req, { entity: 'user', id: req.user.id, action: 'site_chosen', summary: `Working at ${site.name} until logout` });
+  res.redirect('/');
+});
+
 // Site switcher in the top bar.
 router.post('/account/site', (req, res) => {
   const siteId = Number(req.body?.site_id);
   const site = req.user.sites.find((s) => s.id === siteId);
-  if (site) {
+  if (req.session.siteLocked) {
+    // Chosen at login for the whole shift; a different site means logging out and in again.
+    req.session.flash = { type: 'warning', text: `You are working at ${req.site?.name} until you log out. Log out and in again to change site.` };
+  } else if (site) {
     req.session.siteId = site.id;
     req.session.flash = { type: 'success', text: `Now working at ${site.name}.` };
   }

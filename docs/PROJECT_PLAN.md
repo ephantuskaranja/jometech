@@ -228,6 +228,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 6 | Customers, contact people, vehicles, global search | Done |
 | 7 | Vehicle check-in (tables, check-in screen, driver signature, photos, check-out, printable receiving note) | Done |
 | 8 | Sites HQ and Site B; vehicle movements between them (send, receive, cancel) | Done |
+| 9 | Visitor register (gate signs in and clears out, reception receives); Gate and Reception roles choose their site at login | Done |
 
 ### Step 7 decisions (updated 2026-10-31)
 

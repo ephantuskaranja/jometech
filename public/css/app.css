@@ -465,3 +465,12 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-photo.is-failed .jt-photo-status { background: rgb(180 35 24 / .8); text-shadow: none; }
 .jt-photo-delete { position: absolute; top: .25rem; right: .25rem; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; }
 .jt-photo-delete:hover, .jt-photo-delete:focus-visible { background: var(--bs-danger); }
+
+/* Visitor register: one card-like row per visitor, big buttons for the gate */
+.jt-visitor { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; padding: .9rem 1.125rem; }
+.jt-visitor-main { flex: 1 1 18rem; min-width: 0; }
+.jt-visitor-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.jt-visitor.is-overdue { box-shadow: inset 3px 0 0 var(--bs-danger); }
+.jt-site-choice { justify-content: center; padding-block: 1rem; font-size: 1.15rem; }
+/* Short labels ("Delivery", "Supplier"): two per row even on a small phone */
+@media (max-width: 420px) { .jt-choices-compact .jt-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

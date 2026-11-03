@@ -48,7 +48,7 @@ export async function loadUser(id) {
   const roles = await db('roles')
     .join('user_roles', 'roles.id', 'user_roles.role_id')
     .where('user_roles.user_id', id)
-    .select('roles.id', 'roles.key', 'roles.name', 'roles.all_sites');
+    .select('roles.id', 'roles.key', 'roles.name', 'roles.all_sites', 'roles.site_at_login');
 
   const isAdmin = roles.some((r) => r.key === 'admin');
   const permissions = new Set(
@@ -74,6 +74,8 @@ export async function loadUser(id) {
     roleNames: roles.map((r) => r.name).join(', ') || 'No role',
     isAdmin,
     sites,
+    // Gate and Reception: choose a site when logging in, then keep it until logout.
+    siteAtLogin: roles.some((r) => r.site_at_login),
     can: (permission) => isAdmin || permissions.has(permission),
   };
 }
@@ -107,6 +109,7 @@ export async function attachUser(req, res, next) {
   req.site = site;
   res.locals.user = user;
   res.locals.site = site;
+  res.locals.siteLocked = Boolean(req.session.siteLocked);
   next();
 }
 
@@ -120,6 +123,10 @@ export function requireLogin(req, res, next) {
   // A new or reset account must choose its own password before anything else.
   if (req.user.must_change_password && !['/account/password', '/logout'].includes(req.path)) {
     return res.redirect('/account/password');
+  }
+  // Gate and Reception with more than one site say where they are before anything else.
+  if (req.session.chooseSite && !['/choose-site', '/logout'].includes(req.path)) {
+    return res.redirect('/choose-site');
   }
   next();
 }

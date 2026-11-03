@@ -327,3 +327,23 @@ test('the receiving note follows the paper form, with the signature', async () =
   assert.equal((html.match(/<td class="no">/g) ?? []).length, 10, 'ten item lines, like the paper form');
   assert.doesNotMatch(html, /jt-sidebar/, 'no app menu on the printed page');
 });
+
+test('the vehicles list splits vehicles by where they are now', async () => {
+  const page = await sales.get('/vehicles/new');
+  await sales.post('/vehicles').type('form').send({ _csrf: csrfFrom(page.text), reg_no: 'KZY 311C', customer_id: owner.id, type: 'truck' });
+  const id = (await db('checkins').join('vehicles', 'vehicles.id', 'checkins.vehicle_id').where({ 'vehicles.reg_no': 'KZY 310C' }).first('checkins.id')).id;
+  await checkOut(id);
+  await sales.get('/customers'); // shows (and clears) the "KZY 311C added." message
+
+  const tab = async (place) => (await sales.get(`/vehicles${place ? `?place=${place}` : ''}`).expect(200)).text;
+  const inNow = await tab('');
+  assert.match(inNow, /In the workshop/);
+  assert.match(inNow, /KZY 302C/, 'checked in, not out');
+  assert.doesNotMatch(inNow, /KZY 310C|KZY 311C/);
+  assert.match(await tab('left'), /KZY 310C/);
+  const fresh = await tab('new');
+  assert.match(fresh, /KZY 311C/);
+  assert.doesNotMatch(fresh, /KZY 310C/);
+  assert.match(await tab('all'), /KZY 311C/);
+  assert.match((await sales.get('/vehicles?q=kzy311c').expect(200)).text, /KZY 311C/, 'a search looks through all vehicles');
+});
