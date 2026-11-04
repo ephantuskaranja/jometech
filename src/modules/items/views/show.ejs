@@ -1,5 +1,8 @@
 <%# One item: its price, and for plates what any size of sheet comes to. %>
-<% const area = item.priced_by === 'area'; %>
+<%
+  const area = item.priced_by === 'area';
+  const amount = (v) => (area ? fmt.money(v) : fmt.qty(v));
+%>
 <section class="card mb-4">
   <div class="card-body jt-record">
     <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/items">Items</a><i class="bi bi-chevron-right"></i><span><%= item.code %></span></div>
@@ -40,13 +43,45 @@
     <% } %>
 
     <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Stock</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv mb-0">
+          <div><dt>In stock, all sites</dt><dd class="jt-num"><%= amount(item.on_hand_qty) %> <%= item.unit %></dd></div>
+          <div><dt>Average cost, excl. VAT</dt><dd class="jt-num"><%= item.avg_cost === null ? '—' : `KES ${fmt.money(item.avg_cost)}` %></dd></div>
+          <div><dt>Value</dt><dd class="jt-num">KES <%= fmt.money(item.stock_value) %></dd></div>
+          <% stock.balances.forEach((b) => { %>
+            <div><dt><%= b.site_name %></dt><dd class="jt-num"><% if (b.size_key) { %><%= fmt.qty(b.quantity) %> × <%= Number(b.length) %> × <%= Number(b.width) %> <%= b.size_unit %><% } else { %><%= fmt.qty(b.quantity) %> <%= item.unit %><% } %></dd></div>
+          <% }) %>
+        </dl>
+      </div>
+      <% if (stock.movements.length) { %>
+        <div class="table-responsive border-top">
+          <table class="table jt-table mb-0">
+            <thead><tr><th>Movement</th><th>Site</th><th class="text-end">Qty</th><th class="text-end">Value (KES)</th></tr></thead>
+            <tbody>
+              <% stock.movements.forEach((m) => { %>
+                <tr>
+                  <td><%= m.type === 'receive' ? 'Received' : 'Reversed' %><% if (m.receipt_id) { %> <a class="font-monospace small" href="/goods-received/<%= m.receipt_id %>"><%= m.receipt_number %></a><% } %>
+                    <span class="jt-sub"><%= fmt.dateTime(m.created_at) %><%= m.by_name ? `, ${m.by_name}` : '' %></span></td>
+                  <td><%= m.site_name %></td>
+                  <td class="text-end jt-num text-nowrap"><%= amount(m.stock_qty) %> <%= item.unit %></td>
+                  <td class="text-end jt-num"><%= fmt.money(m.value) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
       <div class="card-body">
         <dl class="jt-kv">
           <div><dt>Category</dt><dd><%= item.category %></dd></div>
           <div><dt>Priced</dt><dd><%= area ? 'By area, per sq ft' : `By unit, per ${item.unit}` %></dd></div>
           <% if (area) { %><div><dt>Thickness</dt><dd><%= fmt.qty(item.thickness_mm) %> mm</dd></div><% } %>
-          <div><dt>Price excl. VAT</dt><dd><%= item.current_price === null ? '—' : `KES ${fmt.money(item.current_price)}` %></dd></div>
+          <div><dt>Price last paid, excl. VAT</dt><dd><%= item.current_price === null ? '—' : `KES ${fmt.money(item.current_price)}` %></dd></div>
           <div><dt>Reorder at</dt><dd><%= item.reorder_level === null ? '—' : `${fmt.qty(item.reorder_level)} ${item.unit}` %></dd></div>
           <div><dt>Added</dt><dd><%= fmt.date(item.created_at) %><% if (item.created_name) { %><span class="d-block small text-body-secondary">By <%= item.created_name %></span><% } %></dd></div>
         </dl>

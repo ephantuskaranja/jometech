@@ -58,6 +58,10 @@ export async function updateItem(id, input, actor) {
     const before = await trx('items').where({ id }).forUpdate().first();
     if (!before) throw httpError(404, 'That item doesn’t exist.');
     await checkName(trx, input.name, id);
+    // Its stock and average are counted in this unit, so it can't change underneath them.
+    if ((input.priced_by !== before.priced_by || input.unit !== before.unit) && await trx('stock_movements').where({ item_id: id }).first('id')) {
+      throw err(422, `This item has stock history in ${before.unit}, so how it is priced can’t change. Add a new item instead.`, before.priced_by === 'area' ? 'name' : 'unit');
+    }
     const beforeCategory = await trx('item_categories').where({ id: before.category_id }).first('name');
     const category_id = await categoryId(trx, input.category);
     await trx('items').where({ id }).update({ ...fields(input), category_id });
@@ -98,7 +102,7 @@ function filter(q, { status, categoryId: category }) {
 export function listItems({ status = 'active', categoryId: category = null, q = '' } = {}) {
   const query = filter(db('items as i').join('item_categories as c', 'c.id', 'i.category_id'), { status, categoryId: category })
     .orderBy('c.sort_order').orderBy('i.name').limit(500)
-    .select('i.id', 'i.code', 'i.name', 'i.priced_by', 'i.unit', 'i.thickness_mm', 'i.current_price', 'i.is_active', 'c.name as category');
+    .select('i.id', 'i.code', 'i.name', 'i.priced_by', 'i.unit', 'i.thickness_mm', 'i.current_price', 'i.is_active', 'i.on_hand_qty', 'i.reorder_level', 'c.name as category');
   const term = q.trim();
   if (term) {
     query.where((w) => w.where('i.code', 'like', `%${term}%`)

@@ -235,6 +235,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 13 | Production steps: job types with step lists an admin edits under System (add, rename, remove, reorder; starting lists from §27). A job copies its list and keeps it; one button moves it on ("Welding done → Assembly"), with skip and undo; the last step completes the job. Steps print on the job card | Done |
 | 14 | Item setup: items priced by unit or by area (sq ft), categories, prices excluding VAT, reorder level, switch off, plate calculator for any size in feet or mm | Done |
 | 15 | Suppliers and purchase orders: optional prices, plate sizes in feet or mm, a line can be for a job, one approval (draft → waiting → approved → sent), printed like the paper order. Numbers PO-2026-0001 | Done |
+| 16 | Goods received against an order: real prices, part deliveries, rejected goods, transport shared by value. Stock by site and by sheet size, weighted average, permanent movement record, reverse a delivery, low stock | Done |
 
 ### Materials and costing decisions (agreed 2026-11-04)
 
@@ -250,7 +251,6 @@ Sample: `docs/source/Purchase Order/` (git-ignored, client data). Paper purchase
 
 | Next | What |
 |---|---|
-| 16 | Goods received, stock and the weighted average, including transport |
 | 17 | Issuing materials to jobs, so each job shows its material cost |
 
 ### Step 7 decisions (updated 2026-10-31)

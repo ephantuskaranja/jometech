@@ -1,0 +1,70 @@
+<%# Goods arrive against a purchase order. What is left is filled in, so a full delivery only needs its prices. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Purchase orders', href: '/purchase-orders' }, { label: order.number, href: `/purchase-orders/${order.id}` }, 'Receive'],
+  heading: `Receive ${order.number}`,
+  sub: `From ${order.supplier_name}, into stock at ${site.name}. Prices come from the eTIMS receipt, excluding VAT.`,
+}) %>
+
+<form method="post" action="/purchase-orders/<%= order.id %>/receive" novalidate x-data="receiveForm(<%= JSON.stringify({ rows, transport: values.transport_cost ?? '' }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-body jt-fields">
+      <%- include('partials/field', { name: 'received_on', label: 'Date received', type: 'date', value: values.received_on, error: errors.received_on, required: true }) %>
+      <%- include('partials/field', { name: 'invoice_ref', label: 'eTIMS receipt no.', value: values.invoice_ref, error: errors.invoice_ref }) %>
+      <%- include('partials/field', { name: 'delivery_note', label: 'Delivery note no.', value: values.delivery_note, error: errors.delivery_note }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center gap-3">
+      <h2 class="h6 mb-0 me-auto">What arrived</h2>
+      <button type="button" class="btn btn-link btn-sm p-0" @click="clearAll()">None of it yet: clear all</button>
+    </div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <template x-for="row in rows" :key="row.line_id">
+        <div class="jt-po-line jt-grn-line">
+          <input type="hidden" name="line_id" :value="row.line_id">
+          <div>
+            <div class="fw-semibold" x-text="row.name"></div>
+            <div class="small text-body-secondary"><span x-show="row.size" x-text="`${row.size} · `"></span><span x-text="`${row.left} ${row.unit} left of ${row.ordered}`"></span></div>
+          </div>
+          <div class="jt-po-fields">
+            <div><label class="form-label" :for="`g-q-${row.line_id}`" x-text="`Received (${row.unit})`"></label><input class="form-control text-end jt-num" :id="`g-q-${row.line_id}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
+            <div><label class="form-label" :for="`g-r-${row.line_id}`">Rejected or damaged</label><input class="form-control text-end jt-num" :id="`g-r-${row.line_id}`" name="line_rejected" inputmode="decimal" data-number="decimal" x-model="row.rejected"></div>
+            <div><label class="form-label" :for="`g-p-${row.line_id}`" x-text="`Price per ${row.price_unit}`"></label><input class="form-control text-end jt-num" :id="`g-p-${row.line_id}`" name="line_price" inputmode="decimal" data-number="decimal" x-model="row.price"></div>
+          </div>
+          <div class="jt-po-sums small text-body-secondary">
+            <span x-show="row.area && stockQty(row)" x-text="`${money(stockQty(row))} sq ft`"></span>
+            <span x-show="share(row)" x-text="`Transport ${money(share(row))}`"></span>
+            <span class="ms-auto fw-semibold text-body" x-show="goods(row)" x-text="`KES ${money(goods(row))}`"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'transport_cost', label: 'Transport for this delivery', type: 'money', value: values.transport_cost, error: errors.transport_cost,
+              hint: 'Optional. Shared across the items by value, and added to their stock cost.', attrs: 'x-model="transport"' }) %>
+        <dl class="jt-totals mb-0">
+          <div><dt>Goods</dt><dd class="jt-num" x-text="`KES ${money(goodsTotal)}`"></dd></div>
+          <div><dt>Transport</dt><dd class="jt-num" x-text="money(transportNum)"></dd></div>
+          <div class="fw-semibold"><dt>Into stock, excl. VAT</dt><dd class="jt-num" x-text="`KES ${money(goodsTotal + transportNum)}`"></dd></div>
+        </dl>
+      </div>
+      <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, value: values.notes, error: errors.notes, hint: 'Optional, e.g. what was wrong with a rejected sheet.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-box-arrow-in-down"></i>Saving adds this to stock at <%= site.name %>.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="/purchase-orders/<%= order.id %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Receive into stock</button>
+    </div>
+  </div>
+</form>

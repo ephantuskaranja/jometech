@@ -1,9 +1,10 @@
 <%# Purchase orders. "Not sent yet" (the default) is everything still being prepared or approved. %>
 <%
-  const tabs = [['open', 'Not sent yet'], ['sent', 'Sent'], ['all', 'All']];
+  const tabs = [['open', 'Not sent yet'], ['sent', 'Waiting for goods'], ['received', 'Received'], ['all', 'All']];
   const empty = {
     open: { icon: 'cart', heading: 'Nothing being prepared', text: 'New orders stay here until they go to the supplier.' },
-    sent: { icon: 'send', heading: 'Nothing sent yet', text: 'Orders move here once they have gone to the supplier.' },
+    sent: { icon: 'send', heading: 'Nothing on its way', text: 'Orders move here once they have gone to the supplier.' },
+    received: { icon: 'box-arrow-in-down', heading: 'Nothing received yet', text: 'Orders move here once the goods have all arrived.' },
     all: { icon: 'cart', heading: 'No purchase orders yet', text: 'Start one when materials are needed.' },
   };
 %>

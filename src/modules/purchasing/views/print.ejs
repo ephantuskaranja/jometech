@@ -5,7 +5,7 @@
   Not approved yet: prints with DRAFT across it, so it can't be mistaken for an order.
 %>
 <%
-  const official = ['approved', 'sent'].includes(order.status);
+  const official = ['approved', 'sent', 'partly_received', 'received'].includes(order.status);
   const cancelled = order.status === 'cancelled';
   const anyPrice = order.lines.some((l) => l.unit_price !== null);
   const trim = (v) => fmt.money(v).replace(/\.00$/, '');

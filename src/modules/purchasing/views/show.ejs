@@ -31,13 +31,14 @@
       <div class="card-header"><h2 class="h6 mb-0">Materials</h2></div>
       <div class="table-responsive">
         <table class="table jt-table mb-0">
-          <thead><tr><th>Item</th><th>For</th><th class="text-end">Qty</th><th class="text-end">Sq ft</th><th class="text-end">Price</th><th class="text-end">Amount (KES)</th></tr></thead>
+          <thead><tr><th>Item</th><th>For</th><th class="text-end">Qty</th><th class="text-end">Received</th><th class="text-end">Sq ft</th><th class="text-end">Price</th><th class="text-end">Amount (KES)</th></tr></thead>
           <tbody>
             <% order.lines.forEach((l) => { %>
               <tr>
                 <td><%= l.item_name %><% if (size(l)) { %><span class="jt-sub"><%= size(l) %></span><% } %></td>
                 <td><% if (l.job_id) { %><% if (canSeeJobs) { %><a class="font-monospace small text-nowrap" href="/jobs/<%= l.job_id %>"><%= l.job_number %></a><% } else { %><span class="font-monospace small text-nowrap"><%= l.job_number %></span><% } %><% } else { %><%= l.for_text ?? '—' %><% } %></td>
                 <td class="text-end text-nowrap"><%= qty(l) %></td>
+                <td class="text-end jt-num"><%= Number(l.received_qty) > 0 ? fmt.qty(l.received_qty) : '—' %></td>
                 <td class="text-end jt-num"><%= l.area_sq_ft === null ? '—' : fmt.money(Number(l.area_sq_ft) * Number(l.quantity)) %></td>
                 <td class="text-end jt-num text-nowrap"><%= l.unit_price === null ? '—' : fmt.money(l.unit_price) %></td>
                 <td class="text-end jt-num"><%= l.amount === null ? '—' : fmt.money(l.amount) %></td>
@@ -45,7 +46,7 @@
             <% }) %>
           </tbody>
           <% if (order.total !== null) { %>
-            <tfoot><tr><th colspan="5" class="text-end">Total excl. VAT<%= someUnpriced ? ', lines with a price' : '' %></th><th class="text-end jt-num">KES <%= fmt.money(order.total) %></th></tr></tfoot>
+            <tfoot><tr><th colspan="6" class="text-end">Total excl. VAT<%= someUnpriced ? ', lines with a price' : '' %></th><th class="text-end jt-num">KES <%= fmt.money(order.total) %></th></tr></tfoot>
           <% } %>
         </table>
       </div>
@@ -69,12 +70,19 @@
         <% } else if (order.status === 'approved') { %>
           <p class="small mb-0">Approved by <%= order.approved_name ?? 'a removed user' %>, <%= fmt.dateTime(order.approved_at) %>. Print it, and mark it as sent once the supplier has it.</p>
         <% } else if (order.status === 'sent') { %>
-          <p class="small mb-0">Sent <%= fmt.dateTime(order.sent_at) %>. Goods received comes next.</p>
+          <p class="small mb-0">Sent <%= fmt.dateTime(order.sent_at) %>. When the delivery arrives, receive it here.</p>
+        <% } else if (order.status === 'partly_received') { %>
+          <p class="small mb-0">Part of it has arrived. Receive the rest when it comes.</p>
+        <% } else if (order.status === 'received') { %>
+          <p class="small mb-0">Finished: see the deliveries below.</p>
         <% } else { %>
           <div class="small">Cancelled <%= fmt.dateTime(order.cancelled_at) %><div class="mt-1"><%= order.cancelled_reason %></div></div>
         <% } %>
 
         <div class="d-grid gap-2" x-show="!step">
+          <% if (canReceive) { %>
+            <a class="btn btn-success w-100" href="/purchase-orders/<%= order.id %>/receive"><i class="bi bi-box-arrow-in-down"></i>Receive goods</a>
+          <% } %>
           <% if (canApprove && ['draft', 'pending'].includes(order.status)) { %>
             <form method="post" action="/purchase-orders/<%= order.id %>/approve">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -93,14 +101,24 @@
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-send"></i>Mark as sent</button>
             </form>
           <% } %>
-          <% if (['pending', 'approved', 'sent'].includes(order.status)) { %>
+          <% if (['pending', 'approved', 'sent'].includes(order.status) && !receipts.length) { %>
             <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary" @click="step = 'draft'"><%= order.status === 'pending' && canApprove ? 'Send back for changes' : 'Change it: back to draft' %></button>
           <% } %>
-          <% if (order.status !== 'cancelled') { %>
+          <% if (['draft', 'pending', 'approved', 'sent'].includes(order.status)) { %>
             <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary" @click="step = 'cancel'">Cancel this order</button>
+          <% } %>
+          <% if (canManage && order.status === 'partly_received') { %>
+            <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary" @click="step = 'close'">Nothing more is coming: close it</button>
           <% } %>
         </div>
 
+        <div x-show="step === 'close'" x-cloak>
+          <form method="post" action="/purchase-orders/<%= order.id %>/close" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'reason', id: 'close-reason', label: 'Why is nothing more coming?', required: true, placeholder: 'e.g. Supplier out of stock' }) %>
+            <div class="d-flex gap-2"><button class="btn btn-primary" type="submit">Close the order</button><button class="btn btn-link" type="button" @click="step = ''">Keep it open</button></div>
+          </form>
+        </div>
         <div x-show="step === 'draft'" x-cloak>
           <form method="post" action="/purchase-orders/<%= order.id %>/draft" class="d-grid gap-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -117,6 +135,21 @@
         </div>
       </div>
     </section>
+
+    <% if (receipts.length) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Deliveries</h2></div>
+        <ul class="list-group list-group-flush">
+          <% receipts.forEach((g) => { %>
+            <li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
+              <a class="font-monospace small" href="/goods-received/<%= g.id %>"><%= g.number %></a>
+              <span class="small text-body-secondary"><%= fmt.date(`${g.received_on}T12:00:00Z`) %></span>
+              <span class="ms-auto"><% if (g.reversed_at) { %><%- include('partials/pill', { text: 'Reversed', tone: 'bad' }) %><% } else { %><span class="small jt-num">KES <%= fmt.money(Number(g.goods_total) + Number(g.transport_cost)) %></span><% } %></span>
+            </li>
+          <% }) %>
+        </ul>
+      </section>
+    <% } %>
 
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>

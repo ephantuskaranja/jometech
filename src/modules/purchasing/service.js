@@ -15,12 +15,14 @@ export const STATUSES = {
   draft: { label: 'Draft', tone: 'neutral' },
   pending: { label: 'Waiting for approval', tone: 'warn' },
   approved: { label: 'Approved', tone: 'info' },
-  sent: { label: 'Sent', tone: 'ok' },
+  sent: { label: 'Sent', tone: 'info' },
+  partly_received: { label: 'Partly received', tone: 'warn' },
+  received: { label: 'Received', tone: 'ok' },
   cancelled: { label: 'Cancelled', tone: 'bad' },
 };
 
-/** List tabs. "open" = not yet sent. */
-export const TABS = ['open', 'sent', 'all'];
+/** List tabs. "open" = not yet sent; "sent" = waiting for goods. */
+export const TABS = ['open', 'sent', 'received', 'all'];
 
 const err = (status, message, field) => Object.assign(httpError(status, message), { field });
 const totalOf = (lines) => {
@@ -103,6 +105,8 @@ export async function backToDraft(id, reason, actor) {
   await db.transaction(async (trx) => {
     const order = await lock(trx, id);
     if (!['pending', 'approved', 'sent'].includes(order.status)) throw wrongStatus(order, 'taken back to draft');
+    // Deliveries point at the order's lines, and stay on record even when reversed.
+    if (await trx('goods_receipts').where({ order_id: id }).first('id')) throw httpError(409, `${order.number} has had a delivery recorded, so it can’t be changed. Start a new order instead.`);
     await trx('purchase_orders').where({ id }).update({ status: 'draft', approved_by: null, approved_at: null, sent_at: null });
     await audit(trx, actor, { entity: 'purchase_order', id, action: 'po_redraft', summary: reason || null });
   });
@@ -111,7 +115,7 @@ export async function backToDraft(id, reason, actor) {
 export async function cancelOrder(id, reason, actor) {
   await db.transaction(async (trx) => {
     const order = await lock(trx, id);
-    if (order.status === 'cancelled') throw wrongStatus(order, 'cancelled');
+    if (['cancelled', 'partly_received', 'received'].includes(order.status)) throw wrongStatus(order, 'cancelled');
     await trx('purchase_orders').where({ id }).update({ status: 'cancelled', cancelled_at: trx.fn.now(), cancelled_reason: reason });
     await audit(trx, actor, { entity: 'purchase_order', id, action: 'po_cancelled', summary: reason });
   });
@@ -139,6 +143,7 @@ export async function getOrder(id) {
 
 function tabFilter(q, tab) {
   if (tab === 'open') q.whereIn('o.status', ['draft', 'pending', 'approved']);
+  else if (tab === 'sent') q.whereIn('o.status', ['sent', 'partly_received']);
   else if (tab !== 'all') q.where('o.status', tab);
 }
 

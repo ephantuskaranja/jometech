@@ -37,7 +37,7 @@
   <% } else { %>
     <div class="table-responsive">
       <table class="table jt-table">
-        <thead><tr><th>Item</th><th>Category</th><th class="text-end">Price excl. VAT (KES)</th></tr></thead>
+        <thead><tr><th>Item</th><th>Category</th><th class="text-end">In stock</th><th class="text-end">Price excl. VAT (KES)</th></tr></thead>
         <tbody>
           <% list.forEach((i) => { %>
             <tr>
@@ -45,6 +45,8 @@
                 <% if (!i.is_active) { %><%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %><% } %>
                 <span class="jt-sub font-monospace"><%= i.code %></span></td>
               <td><%= i.category %></td>
+              <td class="text-end jt-num text-nowrap"><%= Number(i.on_hand_qty) > 0 ? `${i.priced_by === 'area' ? fmt.money(i.on_hand_qty) : fmt.qty(i.on_hand_qty)} ${i.unit}` : '—' %>
+                <% if (i.reorder_level !== null && Number(i.on_hand_qty) <= Number(i.reorder_level)) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Low stock', tone: 'warn' }) %></span><% } %></td>
               <td class="text-end jt-num text-nowrap">
                 <% if (i.current_price === null) { %><span class="text-body-tertiary">Not set</span><% } else { %><%= fmt.money(i.current_price) %><span class="jt-sub">per <%= i.unit %></span><% } %>
               </td>

@@ -1,0 +1,94 @@
+<%# One goods received note: what came, what it cost, and what that did to stock. %>
+<%
+  const day = fmt.date(`${receipt.received_on}T12:00:00Z`);
+  const change = (l) => {
+    if (l.previous_price === null || l.unit_price === null || Number(l.previous_price) === Number(l.unit_price)) return null;
+    return Math.round(((Number(l.unit_price) - Number(l.previous_price)) / Number(l.previous_price)) * 100);
+  };
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/goods-received">Goods received</a><i class="bi bi-chevron-right"></i><span><%= receipt.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= receipt.number %><% if (receipt.reversed_at) { %> <%- include('partials/pill', { text: 'Reversed', tone: 'bad' }) %><% } %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-building"></i><a href="/suppliers/<%= receipt.supplier_id %>"><%= receipt.supplier_name %></a></span>
+          <span><i class="bi bi-cart"></i><a class="font-monospace" href="/purchase-orders/<%= receipt.order_id %>"><%= receipt.order_number %></a></span>
+          <span><i class="bi bi-calendar"></i><%= day %></span>
+          <span><i class="bi bi-geo-alt"></i><%= receipt.site_name %></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<% if (receipt.reversed_at) { %>
+  <div class="jt-warn-box mb-4"><i class="bi bi-arrow-counterclockwise"></i><span>Reversed <%= fmt.dateTime(receipt.reversed_at) %><%= receipt.reversed_name ? ` by ${receipt.reversed_name}` : '' %>: <%= receipt.reversed_reason %>. These goods are no longer in stock.</span></div>
+<% } %>
+
+<section class="card mb-4">
+  <div class="card-header"><h2 class="h6 mb-0">What arrived</h2></div>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Item</th><th class="text-end">Received</th><th class="text-end">Price</th><th class="text-end">Goods (KES)</th><th class="text-end">Transport</th><th class="text-end">Cost per unit</th></tr></thead>
+          <tbody>
+            <% receipt.lines.forEach((l) => { const pct = change(l); const stockQty = Number(l.stock_qty); %>
+              <tr>
+                <td><%= l.item_name %>
+                  <% if (l.size_unit) { %><span class="jt-sub"><%= Number(l.length) %> × <%= Number(l.width) %> <%= l.size_unit %></span><% } %>
+                  <% if (Number(l.rejected_qty) > 0) { %><span class="jt-sub text-danger"><%= fmt.qty(l.rejected_qty) %> rejected or damaged: not in stock</span><% } %></td>
+                <td class="text-end text-nowrap"><%= fmt.qty(l.quantity) %> <%= l.priced_by === 'area' ? 'pcs' : l.item_unit %>
+                  <% if (l.priced_by === 'area') { %><span class="jt-sub"><%= fmt.money(stockQty) %> sq ft</span><% } %></td>
+                <td class="text-end jt-num text-nowrap"><%= l.unit_price === null ? '—' : fmt.money(l.unit_price) %>
+                  <% if (pct !== null) { %><span class="jt-sub<%= Math.abs(pct) >= 10 ? ' text-danger' : '' %>">was <%= fmt.money(l.previous_price) %> (<%= pct > 0 ? '+' : '' %><%= pct %>%)</span><% } %></td>
+                <td class="text-end jt-num"><%= fmt.money(l.goods_amount) %></td>
+                <td class="text-end jt-num"><%= fmt.money(l.transport_share) %></td>
+                <td class="text-end jt-num text-nowrap"><%= stockQty > 0 ? fmt.money((Number(l.goods_amount) + Number(l.transport_share)) / stockQty) : '—' %><% if (stockQty > 0) { %><span class="jt-sub">per <%= l.item_unit %></span><% } %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+          <tfoot>
+            <tr><th colspan="3" class="text-end">Into stock, excl. VAT</th><th class="text-end jt-num"><%= fmt.money(receipt.goods_total) %></th><th class="text-end jt-num"><%= fmt.money(receipt.transport_cost) %></th><th class="text-end jt-num text-nowrap">KES <%= fmt.money(Number(receipt.goods_total) + Number(receipt.transport_cost)) %></th></tr>
+          </tfoot>
+        </table>
+      </div>
+      <% if (receipt.notes) { %><div class="card-body border-top small" style="white-space: pre-line"><%= receipt.notes %></div><% } %>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>eTIMS receipt</dt><dd><%= receipt.invoice_ref ?? '—' %></dd></div>
+          <div><dt>Delivery note</dt><dd><%= receipt.delivery_note ?? '—' %></dd></div>
+          <div><dt>Received by</dt><dd><%= receipt.received_name ?? '—' %></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <% if (canReverse) { %>
+      <section class="card" x-data="{ open: false }">
+        <div class="card-header"><h2 class="h6 mb-0">Entered by mistake?</h2></div>
+        <div class="card-body d-grid gap-2">
+          <p class="small mb-0">A goods received note can’t be edited. Reverse it to take it back out of stock, then receive the goods again correctly.</p>
+          <button type="button" class="btn btn-outline-danger btn-sm" x-show="!open" @click="open = true"><i class="bi bi-arrow-counterclockwise"></i>Reverse this</button>
+          <form method="post" action="/goods-received/<%= receipt.id %>/reverse" class="d-grid gap-2" x-show="open" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'reason', label: 'What was wrong?', required: true, placeholder: 'e.g. Wrong price typed' }) %>
+            <div class="d-flex gap-2"><button class="btn btn-danger btn-sm" type="submit">Reverse it</button><button class="btn btn-link btn-sm" type="button" @click="open = false">Keep it</button></div>
+          </form>
+        </div>
+      </section>
+    <% } %>
+  </div>
+</div>

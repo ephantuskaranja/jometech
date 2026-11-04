@@ -503,6 +503,22 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('quickAddSupplier', quickAdd({ url: '/api/suppliers', focus: '#qas-phone', fields: () => ({ name: '', phone: '' }) }));
   Alpine.data('quickAddItem', quickAdd({ url: '/api/items', focus: '#qai-category', fields: () => ({ name: '', category: '', priced_by: 'unit', unit: 'Pc', thickness_mm: '' }) }));
 
+  // Receiving goods (stock/views/receive.ejs): running totals, and transport shared by value.
+  // The sums here are only for showing; the server works out what is saved.
+  Alpine.data('receiveForm', ({ rows = [], transport = '' } = {}) => {
+    const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
+    return {
+      rows, transport,
+      stockQty(r) { return num(r.quantity) * (r.area ?? 1); },
+      goods(r) { return Math.round(this.stockQty(r) * num(r.price) * 100) / 100; },
+      get goodsTotal() { return this.rows.reduce((sum, r) => sum + this.goods(r), 0); },
+      get transportNum() { return num(this.transport); },
+      share(r) { return this.goodsTotal ? Math.round((this.transportNum * this.goods(r) / this.goodsTotal) * 100) / 100 : 0; },
+      money: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      clearAll() { this.rows.forEach((r) => { r.quantity = ''; }); },
+    };
+  });
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

@@ -1,0 +1,47 @@
+<%# What is in stock at this site. Costs are one weighted average per item across all sites, excluding VAT. %>
+<% const amount = (i, v) => (i.priced_by === 'area' ? fmt.money(v) : fmt.qty(v)); %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', 'Inventory'],
+  heading: 'Inventory',
+  sub: `Stock at ${site.name}. Plates show their sheets by size. Costs exclude VAT and include transport.`,
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/inventory">
+    <% if (lowOnly) { %><input type="hidden" name="show" value="low"><% } %>
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name or code" aria-label="Search stock">
+    </div>
+    <nav class="jt-seg" aria-label="Show">
+      <a href="/inventory<%= q ? `?q=${encodeURIComponent(q)}` : '' %>" class="<%= lowOnly ? '' : 'active' %>"<%- lowOnly ? '' : ' aria-current="true"' %>>Everything</a>
+      <a href="/inventory?show=low<%= q ? `&q=${encodeURIComponent(q)}` : '' %>" class="<%= lowOnly ? 'active' : '' %>"<%- lowOnly ? ' aria-current="true"' : '' %>>Low stock (<%= totals.low %>)</a>
+    </nav>
+    <span class="jt-count">Worth KES <%= fmt.money(totals.value) %>, all sites</span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q || lowOnly ? { icon: 'search', heading: 'Nothing here', text: lowOnly ? 'No item has fallen to its reorder level.' : 'Try part of the name, or the code.' } : { icon: 'stack', heading: 'No stock yet', text: 'Stock comes in when goods are received against a purchase order.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Item</th><th class="text-end">At <%= site.name %></th><th class="text-end">All sites</th><th class="text-end">Average cost</th><th class="text-end">Value (KES)</th></tr></thead>
+        <tbody>
+          <% list.forEach((i) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/items/<%= i.id %>"><%= i.name %></a>
+                <% if (i.isLow) { %><%- include('partials/pill', { text: 'Low stock', tone: 'warn' }) %><% } %>
+                <span class="jt-sub"><%= i.category %></span>
+                <% i.sizes.forEach((b) => { %><span class="jt-sub"><%= fmt.qty(b.quantity) %> × <%= Number(b.length) %> × <%= Number(b.width) %> <%= b.size_unit %></span><% }) %></td>
+              <td class="text-end jt-num text-nowrap"><%= amount(i, i.here) %> <%= i.unit %></td>
+              <td class="text-end jt-num text-nowrap"><%= amount(i, i.on_hand_qty) %> <%= i.unit %>
+                <% if (i.reorder_level !== null) { %><span class="jt-sub">reorder at <%= amount(i, i.reorder_level) %></span><% } %></td>
+              <td class="text-end jt-num text-nowrap"><%= i.avg_cost === null ? '—' : fmt.money(i.avg_cost) %></td>
+              <td class="text-end jt-num"><%= fmt.money(i.stock_value) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

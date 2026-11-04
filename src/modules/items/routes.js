@@ -5,6 +5,7 @@ import { history } from '../../core/audit.js';
 import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
 import { check, httpError, optionalAmount, optionalText } from '../../core/validate.js';
 import * as items from './service.js';
+import { stockOfItem } from '../stock/service.js';
 
 // Items: the list of what the workshop buys and uses, with prices excluding VAT.
 
@@ -88,6 +89,7 @@ router.get('/items/:id', view, async (req, res) => {
   res.render('items/views/show', {
     title: item.name, item,
     entries: await history('item', item.id),
+    stock: await stockOfItem(item.id),
     canManage: req.user.can('inventory.manage'),
   });
 });

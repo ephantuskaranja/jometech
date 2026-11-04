@@ -9,6 +9,7 @@ import { config } from '../../config.js';
 import * as orders from './service.js';
 import { getSupplier } from '../suppliers/service.js';
 import { listCategories } from '../items/service.js';
+import { receiptsForOrder, RECEIVABLE } from '../stock/service.js';
 
 // Purchase orders: write one, have it approved, print it for the supplier.
 
@@ -163,6 +164,8 @@ router.get('/purchase-orders/:id', view, async (req, res) => {
     canManage: req.user.can('purchasing.manage'),
     canApprove: req.user.can('purchasing.approve'),
     canSeeJobs: req.user.can('jobs.view') || req.user.can('jobs.progress') || req.user.can('jobs.manage'),
+    receipts: await receiptsForOrder(order.id),
+    canReceive: req.user.can('purchasing.manage') && RECEIVABLE.includes(order.status),
   });
 });
 

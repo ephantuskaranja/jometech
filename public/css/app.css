@@ -475,6 +475,9 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 }
 .jt-lines-job .jt-lines-row textarea { min-height: 4.5rem; }
 
+/* Alpine's x-show hides with an inline display:none, which Bootstrap's d-flex and d-grid override (they are !important). */
+[x-show][style*="display: none"] { display: none !important; }
+
 /* ---------- Production steps ---------- */
 /* Editing the list (job-types/views/form.ejs) */
 .jt-step-row { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) repeat(3, 2.375rem); gap: .25rem; align-items: center; }
@@ -501,6 +504,9 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-po-fields .form-label { font-size: .8rem; margin-bottom: .25rem; }
 .jt-po-for { grid-column: span 2; }
 .jt-po-sums { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .75rem; min-height: 1.25rem; }
+
+/* Receiving goods (stock/views/receive.ejs): the same line cards, with no remove button */
+.jt-grn-line { grid-template-columns: minmax(0, 1fr); }
 
 /* ---------- Driver confirms (check-in/:id/sign) ---------- */
 .jt-sign { max-width: 46rem; }
