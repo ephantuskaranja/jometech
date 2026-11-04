@@ -105,6 +105,7 @@ test('copying another proforma brings its lines and notes, for any customer', as
   assert.match(form, /10,000-litre water bowser/);
   assert.match(form, /Delivery 3 weeks from deposit/);
   assert.match(form, /Otieno Farms/, 'the customer chosen stays');
+  assert.match(form, /id="quick-add-customer"/, 'a new customer can be added without leaving the form');
   const found = await sales.get(`/api/proformas?q=${source.base_no}`).expect(200);
   assert.ok(found.body.some((o) => o.value === source.id));
 

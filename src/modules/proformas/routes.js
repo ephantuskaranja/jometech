@@ -88,6 +88,7 @@ async function renderForm(res, { status = 200, proforma = null, values, rows, er
     rows: rows.length ? rows : [blankRow()],
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await enquiries.vehicleOptions(customer.id) : [],
+    categories: customers.CATEGORIES, // "Add new customer" window
     vatRate: config.vatRate,
   });
 }

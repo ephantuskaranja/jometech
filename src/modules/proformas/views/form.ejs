@@ -33,7 +33,8 @@
       <div class="jt-fields">
         <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', required: true,
               options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
-              attrs: 'x-ref="customer" @change="customerChanged($el.value)"' }) %>
+              hint: 'Not found? Type the name and choose “Add new customer”.',
+              attrs: 'x-ref="customer" data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
         <div style="max-width: 14rem">
           <%- include('partials/field', { name: 'proforma_date', label: 'Date', type: 'date', value: values.proforma_date, error: errors.proforma_date, required: true }) %>
         </div>
@@ -103,3 +104,5 @@
     </div>
   </div>
 </form>
+
+<%- include('customers/views/quick-add') %>
