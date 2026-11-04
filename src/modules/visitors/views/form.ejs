@@ -22,14 +22,14 @@
     </div>
 
     <div class="jt-fields">
-      <%- include('partials/field', { name: 'host', label: 'Who are they seeing?', value: values.host, error: errors.host, autocomplete: 'off', attrs: 'list="staff-names" x-ref="host"', hint: 'A staff member, or “Reception”' }) %>
+      <%- include('partials/field', { name: 'host', label: 'Who are they seeing?', type: 'select', searchable: true, options: hostOptions, value: hostValue, error: errors.host,
+            hint: 'Reception, or a staff member. Anyone else (e.g. a welder): choose Reception.', attrs: 'x-ref="host"' }) %>
       <%- include('partials/field', { name: 'company', label: 'Company', value: values.company, error: errors.company, attrs: 'x-ref="company"' }) %>
       <%- include('partials/field', { name: 'id_no', label: 'ID number', value: values.id_no, error: errors.id_no, inputmode: 'numeric', attrs: 'x-ref="id_no"' }) %>
       <%- include('partials/field', { name: 'vehicle_reg', label: 'Their vehicle', value: values.vehicle_reg, error: errors.vehicle_reg, placeholder: 'KDA 123A', attrs: '@blur="tidyReg($el)" x-ref="vehicle_reg"' }) %>
       <%- include('partials/field', { name: 'pass_no', label: 'Gate pass no.', value: values.pass_no, error: errors.pass_no, hint: 'If you gave them a pass or badge' }) %>
       <%- include('partials/field', { name: 'people', label: 'People in the group', value: values.people, error: errors.people, inputmode: 'numeric', hint: 'Including the visitor' }) %>
     </div>
-    <datalist id="staff-names"><option value="Reception"><% staff.forEach((n) => { %><option value="<%= n %>"><% }) %></datalist>
     <%- include('partials/field', { name: 'notes', label: 'Notes', value: values.notes, error: errors.notes, hint: 'Optional, e.g. carrying tools, delivery note number' }) %>
 
     <% if (canReceive && !receptionOnly) { %>

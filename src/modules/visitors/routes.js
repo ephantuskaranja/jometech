@@ -22,7 +22,7 @@ const visitorSchema = z.object({
   name: z.string().trim().min(2, 'Enter the visitor’s name').max(100, 'Use 100 characters or fewer'),
   purpose: z.string().trim().min(1, 'Choose why they are here').max(60),
   other_purpose: optionalText(60),
-  host: optionalText(100),
+  host: optionalText(100), // "Reception" or a staff member; checked against the list in validHost()
   company: optionalText(120),
   id_no: optionalText(20),
   vehicle_reg: optionalText(20).transform((v) => v && formatReg(v)),
@@ -32,7 +32,7 @@ const visitorSchema = z.object({
   notes: optionalText(500),
 });
 
-const blank = { phone: '', name: '', purpose: '', other_purpose: '', host: '', company: '', id_no: '', vehicle_reg: '', pass_no: '', people: '1', notes: '' };
+const blank = { phone: '', name: '', purpose: '', other_purpose: '', host: 'Reception', company: '', id_no: '', vehicle_reg: '', pass_no: '', people: '1', notes: '' };
 
 function needSite(req) {
   if (!req.site) throw httpError(400, 'You have no site. Ask an administrator to add one to your account.');
@@ -63,13 +63,19 @@ router.get('/visitors', view, async (req, res) => {
   });
 });
 
+/** "Who are they seeing?": Reception (the default; reception sends on anyone else, e.g. welders), then staff at the site. */
+function hostChoices(staff, host) {
+  const hostOptions = ['Reception', ...staff].map((n) => ({ value: n, label: n }));
+  return { hostOptions, hostValue: staff.includes(host) ? host : 'Reception' };
+}
+
 async function renderForm(req, res, { status = 200, values, errors = {} }) {
   const staff = await visitors.staffAt(req.site.id);
   res.status(status).render('visitors/views/form', {
     title: 'Sign a visitor in',
     values, errors,
     purposes: visitors.PURPOSES,
-    staff,
+    ...hostChoices(staff, values.host),
     // Reception signing in a walk-in: they are already at reception.
     receptionOnly: req.user.can('visitors.receive') && !req.user.can('visitors.gate'),
     canReceive: req.user.can('visitors.receive'),
@@ -87,6 +93,9 @@ router.post('/visitors', signsIn, async (req, res) => {
   const { data, errors } = check(visitorSchema, req.body);
   const allErrors = { ...errors };
   if (data?.purpose === 'Other' && !data.other_purpose) allErrors.other_purpose = 'Say why they are here';
+  if (data?.host && data.host !== 'Reception' && !(await visitors.staffAt(req.site.id)).includes(data.host)) {
+    allErrors.host = 'Choose someone from the list, or Reception';
+  }
   if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors });
 
   const purpose = data.purpose === 'Other' ? data.other_purpose : data.purpose;

@@ -124,3 +124,15 @@ test('the register finds visitors by phone; supervisors only look', async () => 
   const v = await db('visitors').where({ phone: '+254700000504' }).first();
   assert.equal((await post(supervisor, `/visitors/${v.id}/clear`)).status, 403);
 });
+
+test('“Who are they seeing?” is Reception (the default) or a staff member at the site', async () => {
+  const form = (await gate.get('/visitors/new')).text;
+  assert.match(form, /<option value="Reception" selected>Reception<\/option>/, 'Reception is the default');
+  assert.match(form, /<option value="Test reception">Test reception<\/option>/, 'staff at the site are listed');
+  let res = await post(gate, '/visitors', visitor({ phone: '0700 000 509', name: 'Joseph Mutua', host: 'Peter Kioko' }));
+  assert.equal(res.status, 422, 'someone not on the list: reception sends them on');
+  assert.match(res.text, /Choose someone from the list, or Reception/);
+  res = await post(gate, '/visitors', visitor({ phone: '0700 000 509', name: 'Joseph Mutua', host: 'Test reception' }));
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await db('visitors').where({ name: 'Joseph Mutua' }).first()).host, 'Test reception');
+});
