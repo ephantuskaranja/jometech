@@ -7,6 +7,7 @@ import { normalizePhone } from '../../core/phone.js';
 import { httpError } from '../../core/validate.js';
 import { saveFile, removeFile } from '../../core/storage.js';
 import { createVehicle, typeLabel } from '../vehicles/service.js';
+import { linkCheckin } from '../jobs/service.js';
 
 // Check-in: the digital Truck Receiving Document.
 // The driver's signature (part 3), photos (part 4) and check-out (part 5) build on this.
@@ -81,6 +82,7 @@ export async function createCheckin(input, actor) {
     }
     const vehicle = await trx('vehicles').where({ id: vehicleId }).first('reg_no', 'chassis_no', 'temp_tag');
     await audit(trx, actor, { entity: 'checkin', id, action: 'create', summary: `Checked in ${vehicleLabel(vehicle)} (${number})` });
+    await linkCheckin(trx, vehicleId, { id, number, site_id: actor.site.id }, actor); // jobs waiting for this vehicle
     return { id, number };
   });
 }

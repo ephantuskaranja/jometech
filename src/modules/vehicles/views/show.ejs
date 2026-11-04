@@ -50,6 +50,24 @@
       <% } %>
     </section>
     <section class="card">
+      <div class="card-header d-flex align-items-center">
+        <h2 class="h6 mb-0 me-auto">Jobs</h2>
+        <% if (canStartJob) { %><a class="btn btn-outline-secondary btn-sm" href="/jobs/new?vehicle_id=<%= vehicle.id %>"><i class="bi bi-plus-lg"></i>New job</a><% } %>
+      </div>
+      <% if (jobs.length === 0) { %>
+        <div class="card-body text-body-secondary small">No jobs for this vehicle yet.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% jobs.forEach((j) => { const js = jobStatuses[j.status]; %>
+            <li class="list-group-item d-flex align-items-center gap-2">
+              <% if (mySiteIds.includes(j.site_id)) { %><a class="font-monospace small" href="/jobs/<%= j.id %>"><%= j.number %></a><% } else { %><span class="font-monospace small"><%= j.number %></span><% } %>
+              <span class="ms-auto"><%- include('partials/pill', { text: js.label, tone: js.tone }) %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+    <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
       <div class="card-body">
         <dl class="jt-kv">

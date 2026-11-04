@@ -230,7 +230,8 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 8 | Sites HQ and Site B; vehicle movements between them (send, receive, cancel) | Done |
 | 9 | Visitor register (gate signs in and clears out, reception receives); Gate and Reception roles choose their site at login | Done |
 | 10 | Enquiries from calls: prospects or customers, work types, call-back notes and follow-up list, won / lost | Done |
-| 11 | Proformas, kept simple: numbers from 490, lines with VAT-inclusive prices, draft → sent → accepted / declined, revisions (490-R1), copy another proforma, A4 print like the paper one. Templates, discounts, variations and convert-to-job later | Done |
+| 11 | Proformas, kept simple: numbers from 490, lines with VAT-inclusive prices, draft → sent → accepted / declined, revisions (490-R1), copy another proforma, A4 print like the paper one. Templates, discounts and variations later | Done |
+| 12 | Basic jobs: from an accepted proforma in one click (customer, vehicle and lines copied, no prices) or with no proforma; the vehicle can be added later and its check-in links by itself; open → in progress → completed / cancelled, reopen; printable A4 job card. Stages, tasks, materials, labour, QC and variations later | Done |
 
 ### Step 7 decisions (updated 2026-10-31)
 

@@ -107,7 +107,14 @@
           </div>
         <% } else if (proforma.status === 'accepted') { %>
           <div><%- include('partials/pill', { text: st.label, tone: st.tone }) %> <span class="small text-body-secondary"><%= fmt.dateTime(proforma.closed_at) %></span></div>
-          <p class="small text-body-secondary mb-0">Turning it into a job comes with the jobs step.</p>
+          <% if (proforma.job) { %>
+            <a class="btn btn-outline-primary" href="/jobs/<%= proforma.job.id %>"><i class="bi bi-wrench-adjustable"></i>Open job <%= proforma.job.number %></a>
+          <% } else { %>
+            <form method="post" action="/proformas/<%= proforma.id %>/job">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-primary w-100" type="submit"><i class="bi bi-wrench-adjustable"></i>Start the job</button>
+            </form>
+          <% } %>
         <% } else if (proforma.status === 'declined') { %>
           <div><%- include('partials/pill', { text: st.label, tone: st.tone }) %> <span class="small text-body-secondary"><%= fmt.dateTime(proforma.closed_at) %></span>
             <div class="mt-1"><%= proforma.declined_reason %></div></div>

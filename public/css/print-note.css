@@ -77,6 +77,28 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .pf-sign { margin-top: 16px; line-height: 2.1; }
 .pf-sign-line { width: 60mm; height: 14mm; border-bottom: 1px dotted #111827; }
 
+/* ---------- Job card (jobs/views/print.ejs): our own design, one A4 page, partly filled in by hand ---------- */
+.job-card { position: relative; font-size: 10pt; }
+.job-card.is-cancelled::after { content: "CANCELLED"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 80pt Archivo, Arial, sans-serif; color: rgb(180 35 24 / .12); transform: rotate(-30deg); pointer-events: none; }
+.job-card .title-row { margin: 8px 0 6px; }
+.jc-number { font: 700 15pt/1.2 'IBM Plex Mono', Consolas, monospace; }
+.job-card h2 { margin: 8px 0 3px; text-align: left; font-size: 9.5pt; }
+.jc-grid td { height: 7.5mm; padding: 3px 6px; vertical-align: middle; }
+.job-card th { padding: 3px 6px; font-size: 8.5pt; text-transform: uppercase; }
+.job-card td { padding: 4px 6px; }
+.jc-work .qty { width: 20mm; white-space: nowrap; }
+.jc-work .tick { width: 12mm; text-align: center; }
+.jc-work ul { margin: 0; padding-left: 18px; }
+.jc-instructions { margin-top: -1px; padding: 4px 6px; border: 1px solid #111827; white-space: pre-line; font-weight: 600; }
+.jc-blank td { height: 7mm; }
+.jc-fill .date { width: 20mm; }
+.jc-fill .who { width: 32mm; }
+.jc-fill .hrs { width: 14mm; }
+.jc-fill .sign { width: 30mm; }
+.jc-signoff { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 10px; }
+.jc-sign-line { height: 11mm; border-bottom: 1px solid #111827; }
+.job-card footer { margin-top: 8px; }
+
 @media print {
   .draft-note { display: none; }
   body { background: #fff; }

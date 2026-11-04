@@ -1,0 +1,125 @@
+<%#
+  The job card: one A4 page for the workshop floor (more if the work list is long).
+  Jome-Tech had no paper one, so this layout is ours. Top half comes from the system; the
+  work log, materials and sign-off are blank, to fill in by hand. No prices: technicians handle it.
+  Standalone (no app layout) so it prints cleanly; "Print" also saves as PDF.
+%>
+<%
+  const blank = '—';
+  const bullet = /^\s*[-•*]\s+/;
+  const cancelled = job.status === 'cancelled';
+  const vehicleNo = job.reg_no ?? job.temp_tag ?? job.vehicle_description;
+  const odometer = job.odometer_not_working ? 'Not working' : (job.odometer_km != null ? `${fmt.qty(job.odometer_km)} km` : blank);
+  const spare = Math.max(0, 3 - job.lines.length); // room to add work by hand
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/jobs/<%= job.id %>">&larr; Back to <%= job.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+  <% if (cancelled) { %><div class="toolbar draft-note">This job is cancelled: it prints with “CANCELLED” across it.</div><% } %>
+
+  <main class="sheet job-card<%= cancelled ? ' is-cancelled' : '' %>">
+    <header class="letterhead">
+      <img src="/img/brand/icon.svg" alt="" width="52" height="52">
+      <div class="company">
+        <div class="company-name"><%= company.name %></div>
+        <div><%= company.address.join(' · ') %></div>
+        <div>Tel: <%= company.phone %></div>
+      </div>
+    </header>
+
+    <div class="title-row">
+      <h1>Job card</h1>
+      <div class="doc-meta">
+        <div class="jc-number"><%= job.number %></div>
+        <div><span>Opened:</span> <%= fmt.date(job.created_at) %> · <span>Site:</span> <%= job.site_name %></div>
+      </div>
+    </div>
+
+    <table class="grid jc-grid">
+      <tr>
+        <td colspan="2"><span class="label">Customer:</span> <%= job.customer_name %></td>
+        <td colspan="2"><span class="label">Phone:</span> <%= fmt.phone(job.customer_phone) %></td>
+      </tr>
+      <tr>
+        <td><span class="label">Reg / tag:</span> <span class="mono"><%= vehicleNo ?? '' %></span></td>
+        <td><span class="label">Make:</span> <%= job.make ?? '' %></td>
+        <td><span class="label">Model:</span> <%= job.model ?? '' %></td>
+        <td><span class="label">Odometer:</span> <%= job.vehicle_id ? odometer : '' %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Chassis no:</span> <span class="mono"><%= job.chassis_no ?? '' %></span></td>
+        <td><span class="label">Check-in:</span> <span class="mono"><%= job.checkin_number ?? '' %></span></td>
+        <td><span class="label">Proforma:</span> <span class="mono"><%= job.proforma_number ?? '' %></span></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Supervisor:</span> <%= job.supervisor_name ?? '' %></td>
+        <td colspan="2"><span class="label">Promised by:</span> <strong><%= job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : '' %></strong></td>
+      </tr>
+    </table>
+
+    <h2>Work to be done</h2>
+    <table class="jc-work">
+      <thead><tr><th class="qty">Qty</th><th>Description</th><th class="tick">Done</th></tr></thead>
+      <tbody>
+        <% job.lines.forEach((l) => { %>
+          <tr>
+            <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+            <td>
+              <% let list = []; const flush = () => { if (list.length) { %><ul><% list.forEach((b) => { %><li><%= b %></li><% }) %></ul><% list = []; } }; %>
+              <% String(l.description).split('\n').forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
+            </td>
+            <td class="tick"></td>
+          </tr>
+        <% }) %>
+        <% for (let i = 0; i < spare; i++) { %><tr class="jc-blank"><td></td><td></td><td></td></tr><% } %>
+      </tbody>
+    </table>
+
+    <% if (job.instructions) { %>
+      <div class="jc-instructions"><span class="label">Instructions:</span> <%= job.instructions %></div>
+    <% } %>
+
+    <h2>Work log</h2>
+    <table class="jc-fill">
+      <thead><tr><th class="date">Date</th><th>Work done</th><th class="who">Done by</th><th class="hrs">Hours</th><th class="sign">Supervisor</th></tr></thead>
+      <tbody><% for (let i = 0; i < 6; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+    </table>
+
+    <h2>Materials used</h2>
+    <table class="jc-fill">
+      <thead><tr><th class="date">Date</th><th>Item</th><th class="hrs">Qty</th><th class="who">Issued by</th><th class="sign">Received by</th></tr></thead>
+      <tbody><% for (let i = 0; i < 4; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+    </table>
+
+    <div class="jc-signoff">
+      <% ['Work completed by', 'Checked by (supervisor)', 'Approved for release'].forEach((who) => { %>
+        <div>
+          <div class="label"><%= who %></div>
+          <div class="jc-sign-line"></div>
+          <div class="muted small">Name, signature and date</div>
+        </div>
+      <% }) %>
+    </div>
+
+    <footer class="muted small">
+      <span><%= job.number %></span>
+      <span>Printed <%= fmt.dateTime(printedAt) %></span>
+    </footer>
+  </main>
+</body>
+</html>

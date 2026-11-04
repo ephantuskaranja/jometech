@@ -1,0 +1,148 @@
+<%# One job: the work to be done, who it is for, and what happens next. No prices here: the proforma keeps those. %>
+<%
+  const st = statuses[job.status];
+  const active = ['open', 'in_progress'].includes(job.status);
+  const late = active && job.due_on && job.due_on < today;
+  const promised = job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : null;
+  const details = [job.make, job.model].filter(Boolean).join(' ');
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Workshop <i class="bi bi-chevron-right"></i><a href="/jobs">Jobs</a><i class="bi bi-chevron-right"></i><span><%= job.number %></span></div>
+    <div class="jt-record-top">
+      <% if (job.reg_no) { %><%- include('partials/plate', { reg: job.reg_no, size: 'lg' }) %><% } %>
+      <div class="jt-record-title">
+        <h1 class="h3"><%= job.number %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %><% if (late) { %> <%- include('partials/pill', { text: 'Late', tone: 'warn' }) %><% } %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-person"></i><%= job.customer_name %></span>
+          <span><i class="bi bi-geo-alt"></i><%= job.site_name %></span>
+          <% if (promised) { %><span><i class="bi bi-calendar-check"></i>Promised <%= promised %></span><% } %>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <% if (canManage && active) { %><a class="btn btn-outline-secondary" href="/jobs/<%= job.id %>/edit"><i class="bi bi-pencil"></i>Edit</a><% } %>
+        <a class="btn btn-primary" href="/jobs/<%= job.id %>/print"><i class="bi bi-printer"></i>Job card</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Work to be done</h2></div>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Qty</th><th>Description</th></tr></thead>
+          <tbody>
+            <% job.lines.forEach((l) => { %>
+              <tr>
+                <td class="text-nowrap"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+                <td>
+                  <% String(l.description).split('\n').forEach((text) => { const bullet = /^\s*[-•*]\s+/.test(text); %>
+                    <div class="<%= bullet ? 'jt-bullet' : '' %>"><%= bullet ? text.replace(/^\s*[-•*]\s+/, '') : text %></div>
+                  <% }) %>
+                </td>
+              </tr>
+            <% }) %>
+            <% if (!job.lines.length) { %><tr><td colspan="2" class="text-body-secondary small">No work listed.</td></tr><% } %>
+          </tbody>
+        </table>
+      </div>
+      <% if (job.instructions) { %>
+        <div class="card-body border-top">
+          <div class="small fw-semibold mb-1">Instructions</div>
+          <p class="mb-0" style="white-space: pre-line"><%= job.instructions %></p>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>
+    </section>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card" x-data="{ step: '' }">
+      <div class="card-header"><h2 class="h6 mb-0">Next step</h2></div>
+      <div class="card-body d-grid gap-3">
+        <% if (job.status === 'open') { %>
+          <p class="small mb-0">Print the job card for the workshop, then start the job when work begins.</p>
+        <% } else if (job.status === 'in_progress') { %>
+          <p class="small mb-0">Started <%= fmt.dateTime(job.started_at) %>. Mark it completed when the work is done.</p>
+        <% } else if (job.status === 'completed') { %>
+          <p class="small mb-0">Completed <%= fmt.dateTime(job.completed_at) %>.</p>
+        <% } else { %>
+          <div class="small">Cancelled <%= fmt.dateTime(job.cancelled_at) %><div class="mt-1"><%= job.cancelled_reason %></div></div>
+        <% } %>
+
+        <% if (canManage) { %>
+          <% if (job.status === 'open') { %>
+            <form method="post" action="/jobs/<%= job.id %>/start" x-show="!step">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-primary w-100" type="submit"><i class="bi bi-play-fill"></i>Start the job</button>
+            </form>
+          <% } else if (job.status === 'in_progress') { %>
+            <form method="post" action="/jobs/<%= job.id %>/complete" x-show="!step">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-success w-100" type="submit"><i class="bi bi-check2-circle"></i>Mark completed</button>
+            </form>
+          <% } else { %>
+            <form method="post" action="/jobs/<%= job.id %>/reopen">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-arrow-counterclockwise"></i>Reopen</button>
+            </form>
+          <% } %>
+
+          <% if (active) { %>
+            <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" x-show="!step" @click="step = 'cancel'">Cancel this job</button>
+            <div x-show="step === 'cancel'" x-cloak>
+              <form method="post" action="/jobs/<%= job.id %>/cancel" class="d-grid gap-2">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <%- include('partials/field', { name: 'reason', label: 'Why is it being cancelled?', placeholder: 'e.g. Customer changed their mind', required: true }) %>
+                <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit">Cancel the job</button><button class="btn btn-link" type="button" @click="step = ''">Keep it</button></div>
+              </form>
+            </div>
+          <% } %>
+        <% } %>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Customer</dt><dd>
+            <% if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %>
+            <span class="d-block small font-monospace"><%= fmt.phone(job.customer_phone) %></span>
+          </dd></div>
+          <div><dt>Vehicle</dt><dd>
+            <% if (job.vehicle_id) { %>
+              <% if (canSeeCustomers) { %><a href="/vehicles/<%= job.vehicle_id %>"><%= job.vehicle_label %></a><% } else { %><%= job.vehicle_label %><% } %>
+              <% if (details) { %><span class="d-block small text-body-secondary"><%= details %></span><% } %>
+            <% } else if (job.vehicle_description) { %>
+              <%= job.vehicle_description %><span class="d-block small text-body-secondary">Not registered yet</span>
+            <% } else { %>
+              <span class="text-body-secondary">Not chosen yet</span>
+            <% } %>
+            <% if (!job.vehicle_id && canManage && active) { %><a class="d-block small" href="/jobs/<%= job.id %>/edit">Add the vehicle when it arrives</a><% } %>
+          </dd></div>
+          <div><dt>Check-in</dt><dd>
+            <% if (job.checkin_id) { %>
+              <% if (canSeeCustomers) { %><a class="font-monospace" href="/check-in/<%= job.checkin_id %>"><%= job.checkin_number %></a><% } else { %><span class="font-monospace"><%= job.checkin_number %></span><% } %>
+              <% if (job.checkin_status === 'checked_out') { %><span class="d-block small text-body-secondary">Vehicle has left</span><% } %>
+            <% } else { %><span class="text-body-secondary"><%= job.vehicle_id ? 'Not in the workshop' : '—' %></span><% } %>
+          </dd></div>
+          <div><dt>Proforma</dt><dd>
+            <% if (job.proforma_id && canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.proforma_id %>"><%= job.proforma_number %></a>
+            <% } else { %><span class="font-monospace"><%= job.proforma_number ?? '—' %></span><% } %>
+          </dd></div>
+          <div><dt>Supervisor</dt><dd><%= job.supervisor_name ?? '—' %></dd></div>
+          <div><dt>Promised by</dt><dd><%= promised ?? '—' %></dd></div>
+          <div><dt>Opened</dt><dd><%= fmt.date(job.created_at) %><% if (job.created_name) { %><span class="d-block small text-body-secondary">By <%= job.created_name %></span><% } %></dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
+</div>

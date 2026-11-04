@@ -167,6 +167,10 @@
               <% if (!checkin.driver_signed_at && !checkin.not_signed_reason) { %>
                 <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>The driver hasn’t confirmed this check-in. After check-out it can’t be signed.</span></div>
               <% } %>
+              <% const unfinished = jobs.filter((j) => ['open', 'in_progress'].includes(j.status)); %>
+              <% if (unfinished.length) { %>
+                <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>Not finished yet: <%= unfinished.map((j) => j.number).join(', ') %>.</span></div>
+              <% } %>
               <p class="small mb-0">This records that the vehicle has left the workshop. The check-in, its signature and photos can’t be changed after this.</p>
               <div class="d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Yes, check it out</button>
@@ -175,6 +179,26 @@
             </form>
           </div>
         </div>
+      </section>
+    <% } %>
+    <% if (jobs.length || canStartJob) { %>
+      <section class="card">
+        <div class="card-header d-flex align-items-center">
+          <h2 class="h6 mb-0 me-auto">Jobs</h2>
+          <% if (canStartJob) { %><a class="btn btn-outline-secondary btn-sm" href="/jobs/new?vehicle_id=<%= checkin.vehicle_id %>"><i class="bi bi-plus-lg"></i>New job</a><% } %>
+        </div>
+        <% if (jobs.length) { %>
+          <ul class="list-group list-group-flush">
+            <% jobs.forEach((j) => { const js = jobStatuses[j.status]; %>
+              <li class="list-group-item d-flex align-items-center gap-2">
+                <a class="font-monospace small" href="/jobs/<%= j.id %>"><%= j.number %></a>
+                <span class="ms-auto"><%- include('partials/pill', { text: js.label, tone: js.tone }) %></span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } else { %>
+          <div class="card-body text-body-secondary small">No job for this visit yet.</div>
+        <% } %>
       </section>
     <% } %>
     <section class="card">

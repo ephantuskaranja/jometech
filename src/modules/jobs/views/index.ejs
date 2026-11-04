@@ -1,0 +1,78 @@
+<%#
+  Jobs at the current site. "Active" (the default) is open and in progress, soonest promised first.
+  A search looks through every site the user works at.
+%>
+<%
+  const tabs = [['active', 'Active'], ['completed', 'Completed'], ['all', 'All']];
+  const empty = {
+    active: { icon: 'wrench-adjustable', heading: 'No active jobs', text: 'Start one from an accepted proforma, or open a new job.' },
+    completed: { icon: 'check2-circle', heading: 'Nothing completed yet', text: 'Jobs move here once the work is done.' },
+    all: { icon: 'wrench-adjustable', heading: 'No jobs yet', text: 'Start one from an accepted proforma, or open a new job.' },
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Workshop', 'Jobs'],
+  heading: 'Jobs',
+  sub: `Work in the workshop at ${site.name}.`,
+  actions: canManage ? [{ label: 'New job', href: '/jobs/new', icon: 'plus-lg', primary: true }] : [],
+}) %>
+
+<% if (waiting.length) { %>
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Accepted proformas waiting for a job</h2><span class="small text-body-secondary"><%= waiting.length %></span></div>
+    <ul class="list-group list-group-flush">
+      <% waiting.forEach((p) => { %>
+        <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+          <span class="font-monospace small"><%= p.number %></span>
+          <span class="flex-grow-1" style="min-width: 12rem"><%= p.customer_name %><span class="jt-sub jt-clamp"><%= String(p.first_line ?? '').split('\n')[0] %></span></span>
+          <form method="post" action="/proformas/<%= p.id %>/job">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-wrench-adjustable"></i>Start job</button>
+          </form>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+<% } %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/jobs?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/jobs">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Job number, customer, reg or work" aria-label="Search jobs">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/jobs?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'job' : 'jobs' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the job number, part of the customer’s name, the reg, or a word from the work.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Job</th><th>Customer</th><th>Vehicle</th><th>Work</th><th class="d-none d-md-table-cell">Promised</th></tr></thead>
+        <tbody>
+          <% list.forEach((j) => { const st = statuses[j.status]; const late = j.due_on && j.due_on < today && ['open', 'in_progress'].includes(j.status); %>
+            <tr>
+              <td><a class="jt-row-link font-monospace text-nowrap" href="/jobs/<%= j.id %>"><%= j.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= j.customer_name %><% if (j.supervisor_name) { %><span class="jt-sub"><%= j.supervisor_name %></span><% } %><% if (q && manySites) { %><span class="jt-sub"><%= j.site_name %></span><% } %></td>
+              <td class="text-nowrap"><%= j.vehicle_label ?? j.vehicle_description ?? '—' %></td>
+              <td><span class="jt-clamp"><%= String(j.first_line ?? '').split('\n')[0] %></span></td>
+              <td class="d-none d-md-table-cell text-nowrap">
+                <%= j.due_on ? fmt.date(`${j.due_on}T12:00:00Z`) : '—' %>
+                <% if (late) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Late', tone: 'warn' }) %></span><% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

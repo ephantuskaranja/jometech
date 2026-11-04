@@ -365,6 +365,27 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // Job form (jobs/views/form.ejs): work rows and the customer's vehicles.
+  Alpine.data('jobForm', ({ rows = [], vehicles = [], hasCustomer = false } = {}) => {
+    let next = 0;
+    const row = (r = {}) => ({ key: next++, quantity: '1', unit: 'Unit', description: '', ...r });
+    return {
+      rows: rows.map(row), vehicles, hasCustomer,
+      addRow() {
+        this.rows.push(row());
+        this.$nextTick(() => this.$root.querySelector('.jt-lines-row:last-child textarea')?.focus());
+      },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+      async customerChanged(id) {
+        this.hasCustomer = Boolean(id);
+        this.vehicles = id ? await getJson(`/api/jobs/vehicles?customer_id=${id}`).catch(() => []) : [];
+      },
+    };
+  });
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

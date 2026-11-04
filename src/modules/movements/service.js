@@ -3,6 +3,7 @@ import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
 import { httpError } from '../../core/validate.js';
+import { followVehicle } from '../jobs/service.js';
 
 // A vehicle in the workshop moving between sites (HQ ⇄ Site B):
 //
@@ -68,6 +69,7 @@ export async function receiveVehicle(movementId, input, actor) {
     });
     await trx('checkins').where({ id: move.checkin_id }).update({ site_id: move.to_site_id });
     await audit(trx, actor, { entity: 'checkin', id: move.checkin_id, action: 'received', summary: `Received at ${move.to_site_name} (${move.number})` });
+    await followVehicle(trx, move.checkin_id, { id: move.to_site_id, name: move.to_site_name }, actor);
     return move;
   });
 }

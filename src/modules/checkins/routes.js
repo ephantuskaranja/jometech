@@ -9,6 +9,7 @@ import { check, httpError, optionalId, optionalPhone, optionalReading, optionalT
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
 import * as movements from '../movements/service.js';
+import { forCheckin, STATUSES as JOB_STATUSES } from '../jobs/service.js';
 import { fmt } from '../../core/format.js';
 import { config } from '../../config.js';
 import * as customers from '../customers/service.js';
@@ -182,6 +183,8 @@ router.get('/check-in/:id', view, async (req, res) => {
     canReceive: Boolean(move) && manages && worksAt(req, move.to_site_id),
     canCancelMove: Boolean(move) && manages && worksAt(req, move.from_site_id),
     moveForm,
+    jobs: await forCheckin(checkin.id), jobStatuses: JOB_STATUSES,
+    canStartJob: req.user.can('jobs.manage') && checkin.status === 'in_workshop',
   });
 });
 

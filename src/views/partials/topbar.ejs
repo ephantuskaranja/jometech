@@ -20,7 +20,7 @@
       <template x-for="(r, i) in results" :key="r.url">
         <a class="jt-search-item" :href="r.url" role="option" :class="i === active && 'active'" :aria-selected="i === active" @mouseenter="active = i">
           <template x-if="r.plate"><span class="jt-plate" x-text="r.plate"></span></template>
-          <template x-if="!r.plate"><i class="bi" :class="r.type === 'customer' ? 'bi-person' : 'bi-truck'"></i></template>
+          <template x-if="!r.plate"><i class="bi" :class="{ customer: 'bi-person', job: 'bi-wrench-adjustable' }[r.type] ?? 'bi-truck'"></i></template>
           <span class="jt-search-text"><span x-text="r.title"></span><small x-text="r.sub"></small></span>
           <span class="jt-search-meta" x-text="r.meta"></span>
         </a>

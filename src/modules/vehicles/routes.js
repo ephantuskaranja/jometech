@@ -8,6 +8,7 @@ import { check, httpError, optionalId, optionalText } from '../../core/validate.
 import * as vehicles from './service.js';
 import * as customers from '../customers/service.js';
 import { daysIn, visitsOf, STATUSES } from '../checkins/service.js';
+import { forVehicle, STATUSES as JOB_STATUSES } from '../jobs/service.js';
 
 export const router = Router();
 const view = canAny(...VIEW_CUSTOMERS);
@@ -107,6 +108,8 @@ router.get('/vehicles/:id', view, async (req, res) => {
     typeLabel: vehicles.typeLabel,
     canEdit: EDIT_VEHICLES.some((p) => req.user.can(p)),
     canCheckIn: req.user.can('checkin.manage'),
+    jobs: await forVehicle(vehicle.id), jobStatuses: JOB_STATUSES,
+    canStartJob: req.user.can('jobs.manage'),
   });
 });
 

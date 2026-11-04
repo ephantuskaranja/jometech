@@ -169,6 +169,7 @@ export async function getProforma(id) {
   p.vehicle_label = p.vehicle_id ? vehicleLabel(p) : null;
   p.lines = await db('proforma_lines').where({ proforma_id: id }).orderBy('sort_order');
   p.versions = await db('proformas').where({ base_no: p.base_no }).orderBy('revision').select('id', 'number', 'status', 'total', 'proforma_date');
+  p.job = await db('jobs').where({ proforma_id: id }).first('id', 'number');
   return p;
 }
 

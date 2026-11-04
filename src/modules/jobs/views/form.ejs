@@ -1,0 +1,97 @@
+<%#
+  Open a job with no proforma, or change one. A job from a proforma keeps the customer and
+  work that were agreed; its vehicle, supervisor, date and instructions can still change.
+%>
+<% const fixed = Boolean(job?.proforma_id); %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Jobs', href: '/jobs' }, job ? job.number : 'New'],
+  heading: job ? `Edit ${job.number}` : 'New job',
+  sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : 'Only the customer and the work are needed. The vehicle can be added when it arrives.'),
+}) %>
+
+<form method="post" action="<%= job ? `/jobs/${job.id}` : '/jobs' %>" novalidate
+      x-data="jobForm(<%= JSON.stringify({ rows, vehicles: vehicleOptions, hasCustomer: Boolean(values.customer_id) }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Customer and vehicle</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (fixed) { %>
+        <dl class="jt-kv mb-0"><div><dt>Customer</dt><dd><%= job.customer_name %></dd></div></dl>
+      <% } else { %>
+        <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', required: true,
+              options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
+              hint: 'Not found? Type the name and choose “Add new customer”.',
+              attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
+      <% } %>
+      <div class="jt-fields">
+        <div x-show="hasCustomer && vehicles.length" x-cloak>
+          <div class="jt-field">
+            <label class="form-label" for="f-vehicle_id">Their vehicle</label>
+            <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id">
+              <option value="">Not here yet, or not one of these</option>
+              <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
+            </select>
+            <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
+          </div>
+        </div>
+        <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Work to be done</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (fixed) { %>
+        <ul class="mb-0 ps-3">
+          <% job.lines.forEach((l) => { %><li style="white-space: pre-line"><%= fmt.qty(l.quantity) %> <%= l.unit %>: <%= l.description %></li><% }) %>
+        </ul>
+      <% } else { %>
+        <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+        <div class="jt-lines jt-lines-job">
+          <div class="jt-lines-head" aria-hidden="true"><span>Qty</span><span>Unit</span><span>Description</span><span></span></div>
+          <template x-for="(row, i) in rows" :key="row.key">
+            <div class="jt-lines-row">
+              <label class="jt-lines-label">Qty</label>
+              <input class="form-control text-end jt-num" type="text" inputmode="decimal" data-number="decimal" name="line_quantity" x-model="row.quantity" :aria-label="`Quantity, line ${i + 1}`">
+              <label class="jt-lines-label">Unit</label>
+              <input class="form-control" type="text" name="line_unit" x-model="row.unit" maxlength="20" list="line-units" :aria-label="`Unit, line ${i + 1}`">
+              <label class="jt-lines-label">Description</label>
+              <textarea class="form-control" name="line_description" x-model="row.description" rows="3" :aria-label="`Description, line ${i + 1}`"
+                        placeholder="Repair cracked tipper floor&#10;- Replace rear hinge&#10;- Repaint the patch"></textarea>
+              <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </template>
+        </div>
+        <datalist id="line-units"><option value="Unit"><option value="Pc"><option value="Set"><option value="Lot"><option value="Day"></datalist>
+        <div class="d-flex flex-wrap align-items-start gap-3">
+          <button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button>
+          <span class="form-text mt-0">Start a line with “- ” to print it as a bullet point.</span>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">For the workshop</h2></div>
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'supervisor_id', label: 'Supervisor', type: 'select', options: supervisors, value: values.supervisor_id, error: errors.supervisor_id, blank: 'Not decided yet' }) %>
+        <%- include('partials/field', { name: 'due_on', label: 'Promised by', type: 'date', value: values.due_on, error: errors.due_on, hint: 'Optional. The date the customer expects it.' }) %>
+      </div>
+      <%- include('partials/field', { name: 'instructions', label: 'Instructions', type: 'textarea', rows: 3, value: values.instructions, error: errors.instructions,
+            hint: 'Optional. Printed on the job card.', placeholder: 'e.g. Customer supplies the paint. Call before fitting the toolbox.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-wrench-adjustable"></i>You can print the job card once it is saved.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= job ? `/jobs/${job.id}` : '/jobs' %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= job ? 'Save changes' : 'Open the job' %></button>
+    </div>
+  </div>
+</form>
+
+<% if (!fixed) { %><%- include('customers/views/quick-add') %><% } %>

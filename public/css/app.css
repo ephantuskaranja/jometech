@@ -469,6 +469,12 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
   .jt-totals { min-width: 0; width: 100%; }
 }
 
+/* Job work rows (jobs/views/form.ejs): the proforma rows without prices */
+@media (min-width: 768px) {
+  .jt-lines-job .jt-lines-head, .jt-lines-job .jt-lines-row { grid-template-columns: 5rem 5.5rem minmax(0, 1fr) 2.5rem; }
+}
+.jt-lines-job .jt-lines-row textarea { min-height: 4.5rem; }
+
 /* ---------- Driver confirms (check-in/:id/sign) ---------- */
 .jt-sign { max-width: 46rem; }
 .jt-sign-head { margin-bottom: 1.25rem; }
