@@ -104,11 +104,12 @@ function initSearchableSelects(root = document) {
       options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-plus-lg"></i> Add new ${escape(el.dataset.tomCreate)} “${escape(data.input)}”</div>`;
     }
     // data-tom-free: a name that isn't in the list can be used as typed ("Use “Eunice”"),
-    // sent as "name:Eunice" for the server to keep as plain text.
+    // sent as "name:Eunice" for the server to keep as plain text. data-tom-free-note changes "(not a saved contact)".
     if (el.dataset.tomFree) {
-      options.create = (input) => ({ value: `name:${input.trim()}`, label: `${input.trim()} (not a saved contact)` });
+      const note = el.dataset.tomFreeNote ?? 'not a saved contact';
+      options.create = (input) => { const label = `${input.trim()} (${note})`; return { value: `name:${input.trim()}`, label, text: label }; };
       options.createOnBlur = true;
-      options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-person-plus"></i> Use “${escape(data.input)}” (not a saved contact)</div>`;
+      options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-person-plus"></i> Use “${escape(data.input)}” (${escape(note)})</div>`;
       options.render.no_results = () => '<div class="no-results">Not found. Keep typing the full name to use it.</div>';
     }
     if (url) {
@@ -386,6 +387,27 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // Job type form (job-types/views/form.ejs): a list of steps to add to, remove from and reorder.
+  Alpine.data('jobTypeForm', ({ rows = [] } = {}) => {
+    let next = 0;
+    const row = (name = '') => ({ key: next++, name });
+    return {
+      rows: rows.map(row),
+      addRow(after) {
+        this.rows.splice(after + 1, 0, row());
+        this.$nextTick(() => this.$root.querySelectorAll('.jt-step-row input')[after + 1]?.focus());
+      },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+      move(i, by) {
+        const [item] = this.rows.splice(i, 1);
+        this.rows.splice(i + by, 0, item);
+      },
+    };
+  });
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',
@@ -394,9 +416,16 @@ document.addEventListener('alpine:init', () => {
       const last = await getJson(`/api/visitors/last?phone=${encodeURIComponent(phone)}`).catch(() => null);
       if (!last) { this.returning = ''; return; }
       // Fill only empty boxes: never overwrite what the guard already typed.
-      for (const key of ['name', 'company', 'id_no', 'vehicle_reg', 'host']) {
+      for (const key of ['name', 'company', 'id_no', 'vehicle_reg']) {
         const el = this.$refs[key];
         if (el && !el.value && last[key]) el.value = last[key];
+      }
+      // Who they saw last time, unless the guard already picked someone other than the default "Reception".
+      const host = this.$refs.host?.tomselect;
+      if (host && last.host && host.getValue() === 'Reception') {
+        const known = Object.values(host.options).find((o) => o.text === last.host);
+        if (!known) host.addOption({ value: `name:${last.host}`, text: last.host, label: last.host });
+        host.setValue(known ? known.value : `name:${last.host}`, true);
       }
       if (!this.purpose && last.purpose) this.purpose = last.purpose;
       const when = new Date(last.arrived_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });

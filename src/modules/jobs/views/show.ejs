@@ -5,6 +5,9 @@
   const late = active && job.due_on && job.due_on < today;
   const promised = job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : null;
   const details = [job.make, job.model].filter(Boolean).join(' ');
+  const current = job.currentStep;
+  const nextStep = current ? job.steps[job.steps.findIndex((s) => s.id === current.id) + 1] : null;
+  const percent = job.steps.length ? Math.round((job.stepsFinished / job.steps.length) * 100) : 0;
 %>
 <section class="card mb-4">
   <div class="card-body jt-record">
@@ -29,6 +32,27 @@
 
 <div class="row g-4">
   <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <% if (job.steps.length) { %>
+      <section class="card">
+        <div class="card-header d-flex align-items-center gap-3">
+          <h2 class="h6 mb-0 me-auto">Production steps</h2>
+          <span class="small text-body-secondary text-nowrap"><%= job.stepsFinished %> of <%= job.steps.length %></span>
+        </div>
+        <div class="progress rounded-0" style="height: .375rem" role="progressbar" aria-label="Steps finished" aria-valuenow="<%= percent %>" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar bg-success" style="width: <%= percent %>%"></div></div>
+        <ol class="jt-job-steps list-group list-group-flush">
+          <% job.steps.forEach((s) => { const isCurrent = current?.id === s.id; %>
+            <li class="list-group-item is-<%= isCurrent ? 'current' : s.status %>">
+              <i class="bi bi-<%= isCurrent ? 'arrow-right-circle-fill' : { done: 'check-circle-fill', skipped: 'dash-circle', pending: 'circle' }[s.status] %>" aria-hidden="true"></i>
+              <span class="jt-job-step-name"><%= s.name %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %></span>
+              <% if (s.status !== 'pending') { %>
+                <span class="small text-body-tertiary text-end"><%= s.status === 'skipped' ? 'Skipped' : 'Done' %> <%= fmt.dateTime(s.finished_at) %><% if (s.finished_by_name) { %><span class="d-block"><%= s.finished_by_name %></span><% } %></span>
+              <% } %>
+            </li>
+          <% }) %>
+        </ol>
+      </section>
+    <% } %>
+
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Work to be done</h2></div>
       <div class="table-responsive">
@@ -59,7 +83,7 @@
 
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
-      <div class="card-body"><%- include('partials/history', { entries, labels: { customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { job_type: 'Job type', customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>
     </section>
   </div>
 
@@ -70,7 +94,7 @@
         <% if (job.status === 'open') { %>
           <p class="small mb-0">Print the job card for the workshop, then start the job when work begins.</p>
         <% } else if (job.status === 'in_progress') { %>
-          <p class="small mb-0">Started <%= fmt.dateTime(job.started_at) %>. Mark it completed when the work is done.</p>
+          <p class="small mb-0">Started <%= fmt.dateTime(job.started_at) %>.<%= current ? '' : ' Mark it completed when the work is done.' %></p>
         <% } else if (job.status === 'completed') { %>
           <p class="small mb-0">Completed <%= fmt.dateTime(job.completed_at) %>.</p>
         <% } else { %>
@@ -83,6 +107,25 @@
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-play-fill"></i>Start the job</button>
             </form>
+          <% } else if (current) { %>
+            <div class="d-grid gap-2" x-show="!step">
+              <form method="post" action="/jobs/<%= job.id %>/steps/<%= current.id %>/done">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn btn-success btn-lg w-100" type="submit"><i class="bi bi-check2"></i><%= current.name %> done → <%= nextStep?.name ?? 'Job completed' %></button>
+              </form>
+              <div class="d-flex flex-wrap gap-3 small">
+                <form method="post" action="/jobs/<%= job.id %>/steps/<%= current.id %>/skip">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Skip: doesn’t apply to this job</button>
+                </form>
+                <% if (job.stepsFinished) { %>
+                  <form method="post" action="/jobs/<%= job.id %>/steps/undo">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Undo the last step</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
           <% } else if (job.status === 'in_progress') { %>
             <form method="post" action="/jobs/<%= job.id %>/complete" x-show="!step">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -117,6 +160,7 @@
             <% if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %>
             <span class="d-block small font-monospace"><%= fmt.phone(job.customer_phone) %></span>
           </dd></div>
+          <div><dt>Job type</dt><dd><%= job.job_type_name ?? '—' %></dd></div>
           <div><dt>Vehicle</dt><dd>
             <% if (job.vehicle_id) { %>
               <% if (canSeeCustomers) { %><a href="/vehicles/<%= job.vehicle_id %>"><%= job.vehicle_label %></a><% } else { %><%= job.vehicle_label %><% } %>

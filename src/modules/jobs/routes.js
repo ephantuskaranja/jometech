@@ -10,6 +10,7 @@ import * as jobs from './service.js';
 import * as customers from '../customers/service.js';
 import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
+import { typeOptions } from '../job-types/service.js';
 
 // Jobs: start one from an accepted proforma or from scratch, move it along, print the job card.
 
@@ -20,6 +21,7 @@ const manage = canAny('jobs.manage');
 const fromProforma = canAny('jobs.manage', 'quotations.manage');
 
 const jobSchema = z.object({
+  job_type_id: optionalId(),
   customer_id: optionalId().refine((v) => v !== null, 'Choose the customer'),
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
@@ -49,7 +51,7 @@ function readLines(body) {
   return { rows, lines, error };
 }
 
-const blank = () => ({ customer_id: '', vehicle_id: '', vehicle_description: '', supervisor_id: '', due_on: '', instructions: '' });
+const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', supervisor_id: '', due_on: '', instructions: '' });
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '' });
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
@@ -70,9 +72,12 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
   const supervisors = await jobs.supervisorOptions(job?.site_id ?? req.site.id);
   // Someone already in charge stays on the list, even if their role has since changed.
   if (job?.supervisor_id && !supervisors.some((u) => u.value === job.supervisor_id)) supervisors.unshift({ value: job.supervisor_id, label: job.supervisor_name });
+  const jobTypes = await typeOptions();
+  // A job whose type has since been removed still shows that type.
+  if (job?.job_type_id && !jobTypes.some((t) => t.value === job.job_type_id)) jobTypes.push({ value: job.job_type_id, label: job.job_type_name });
   res.status(status).render('jobs/views/form', {
     title: job ? `Edit ${job.number}` : 'New job',
-    job, values, errors, supervisors,
+    job, values, errors, supervisors, jobTypes,
     rows: rows.length ? rows : [blankRow()],
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await vehicleOptions(customer.id) : [],
@@ -92,6 +97,7 @@ router.get('/jobs', view, async (req, res) => {
     counts: await jobs.countByTab(req.site.id),
     statuses: jobs.STATUSES, today: localDay(),
     waiting: canStart && tab === 'active' && !q ? await jobs.waitingProformas(siteIds) : [],
+    jobTypes: await typeOptions(),
     canManage: req.user.can('jobs.manage'),
     manySites: siteIds.length > 1,
   });
@@ -103,6 +109,7 @@ router.get('/jobs/new', manage, async (req, res) => {
   const values = blank();
   const me = (await jobs.supervisorOptions(req.site.id)).find((u) => u.value === req.user.id);
   if (me) values.supervisor_id = me.value;
+  values.job_type_id = (await typeOptions()).find((t) => t.is_default)?.value ?? '';
   const vehicle = req.query.vehicle_id ? await getVehicle(Number(req.query.vehicle_id)) : null;
   if (vehicle) Object.assign(values, { customer_id: vehicle.customer_id, vehicle_id: vehicle.id });
   else if (req.query.customer_id && (await customers.getCustomer(Number(req.query.customer_id)))) values.customer_id = Number(req.query.customer_id);
@@ -180,6 +187,27 @@ router.post('/jobs/:id/complete', manage, async (req, res) => {
   res.redirect(`/jobs/${job.id}`);
 });
 
+// The big button on the job page, and "this step doesn't apply" under it.
+async function finishStep(req, res, status) {
+  const job = await loadJob(req);
+  const result = await jobs.finishStep(job.id, Number(req.params.stepId), status, req);
+  if (!result) req.session.flash = { type: 'info', text: 'That step was already updated. Here is where the job is now.' };
+  else {
+    const what = `${result.name} ${status === 'done' ? 'done' : 'skipped'}.`;
+    req.session.flash = { type: 'success', text: result.next ? `${what} Next: ${result.next}.` : `${what} ${job.number} is completed.` };
+  }
+  res.redirect(`/jobs/${job.id}`);
+}
+router.post('/jobs/:id/steps/:stepId/done', manage, (req, res) => finishStep(req, res, 'done'));
+router.post('/jobs/:id/steps/:stepId/skip', manage, (req, res) => finishStep(req, res, 'skipped'));
+
+router.post('/jobs/:id/steps/undo', manage, async (req, res) => {
+  const job = await loadJob(req);
+  const name = await jobs.undoStep(job.id, req);
+  req.session.flash = { type: 'success', text: `Back to ${name}.` };
+  res.redirect(`/jobs/${job.id}`);
+});
+
 router.post('/jobs/:id/cancel', manage, async (req, res) => {
   const job = await loadJob(req);
   const reason = String(req.body.reason ?? '').trim();
@@ -211,7 +239,7 @@ router.get('/jobs/:id/print', view, async (req, res) => {
 // One click on an accepted proforma.
 router.post('/proformas/:id/job', fromProforma, async (req, res) => {
   needSite(req);
-  const job = await jobs.createFromProforma(Number(req.params.id), req);
+  const job = await jobs.createFromProforma(Number(req.params.id), Number(req.body.job_type_id) || null, req);
   req.session.flash = job.existed
     ? { type: 'info', text: `This proforma already has job ${job.number}.` }
     : { type: 'success', text: `Job ${job.number} opened. Add the supervisor and promised date, then print the job card.` };

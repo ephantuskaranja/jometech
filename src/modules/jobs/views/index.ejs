@@ -25,9 +25,12 @@
         <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
           <span class="font-monospace small"><%= p.number %></span>
           <span class="flex-grow-1" style="min-width: 12rem"><%= p.customer_name %><span class="jt-sub jt-clamp"><%= String(p.first_line ?? '').split('\n')[0] %></span></span>
-          <form method="post" action="/proformas/<%= p.id %>/job">
+          <form class="d-flex gap-2" method="post" action="/proformas/<%= p.id %>/job">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-wrench-adjustable"></i>Start job</button>
+            <select class="form-select form-select-sm w-auto" name="job_type_id" aria-label="Job type for proforma <%= p.number %>">
+              <% jobTypes.forEach((t) => { %><option value="<%= t.value %>"<%= t.is_default ? ' selected' : '' %>><%= t.label %></option><% }) %>
+            </select>
+            <button class="btn btn-outline-primary btn-sm text-nowrap" type="submit"><i class="bi bi-wrench-adjustable"></i>Start job</button>
           </form>
         </li>
       <% }) %>
@@ -61,7 +64,8 @@
           <% list.forEach((j) => { const st = statuses[j.status]; const late = j.due_on && j.due_on < today && ['open', 'in_progress'].includes(j.status); %>
             <tr>
               <td><a class="jt-row-link font-monospace text-nowrap" href="/jobs/<%= j.id %>"><%= j.number %></a>
-                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: j.status === 'in_progress' && j.current_step ? j.current_step : st.label, tone: st.tone }) %></span>
+                <% if (j.status === 'in_progress' && Number(j.steps_total)) { %><span class="jt-sub"><%= j.steps_finished %> of <%= j.steps_total %> steps done</span><% } %></td>
               <td><%= j.customer_name %><% if (j.supervisor_name) { %><span class="jt-sub"><%= j.supervisor_name %></span><% } %><% if (q && manySites) { %><span class="jt-sub"><%= j.site_name %></span><% } %></td>
               <td class="text-nowrap"><%= j.vehicle_label ?? j.vehicle_description ?? '—' %></td>
               <td><span class="jt-clamp"><%= String(j.first_line ?? '').split('\n')[0] %></span></td>

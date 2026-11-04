@@ -475,6 +475,21 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 }
 .jt-lines-job .jt-lines-row textarea { min-height: 4.5rem; }
 
+/* ---------- Production steps ---------- */
+/* Editing the list (job-types/views/form.ejs) */
+.jt-step-row { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) repeat(3, 2.375rem); gap: .25rem; align-items: center; }
+.jt-step-row .jt-icon-btn:disabled { opacity: .25; }
+/* On a job (jobs/views/show.ejs) */
+.jt-job-steps .list-group-item { display: flex; align-items: center; gap: .625rem; padding-block: .5rem; }
+.jt-job-step-name { flex: 1; min-width: 0; }
+.jt-job-steps .is-pending { color: var(--bs-secondary-color); }
+.jt-job-steps .is-pending .bi { color: var(--bs-tertiary-color); }
+.jt-job-steps .is-done .bi { color: var(--bs-success); }
+.jt-job-steps .is-skipped { color: var(--bs-tertiary-color); }
+.jt-job-steps .is-skipped .jt-job-step-name { text-decoration: line-through; }
+.jt-job-steps .is-current { font-weight: 600; background: var(--bs-primary-bg-subtle); }
+.jt-job-steps .is-current .bi { color: var(--bs-primary); }
+
 /* ---------- Driver confirms (check-in/:id/sign) ---------- */
 .jt-sign { max-width: 46rem; }
 .jt-sign-head { margin-bottom: 1.25rem; }

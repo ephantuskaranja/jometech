@@ -187,7 +187,8 @@ test('start, complete, reopen and cancel, in the right order', async () => {
   assert.equal((await post(supervisor, `/jobs/${id}/start`)).status, 409, 'already started');
   assert.equal((await post(technician, `/jobs/${id}/complete`)).status, 403, 'a technician can’t close a job');
 
-  await post(supervisor, `/jobs/${id}/complete`);
+  assert.equal((await post(supervisor, `/jobs/${id}/complete`)).status, 409, 'its steps aren’t finished');
+  for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
   assert.equal(await status(), 'completed');
   assert.equal((await post(supervisor, `/jobs/${id}`, { customer_id: other.id, ...work })).status, 409, 'a completed job is locked');
   await supervisor.get(`/jobs/${id}/edit`).expect(409);

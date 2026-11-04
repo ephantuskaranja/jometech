@@ -1,0 +1,23 @@
+<%- include('partials/page-header', {
+  crumb: ['System', 'Job types & steps'],
+  heading: 'Job types & steps',
+  sub: 'The production steps each new job starts with. Open a type to add, rename, remove or reorder its steps.',
+  actions: [{ label: 'New job type', href: '/admin/job-types/new', icon: 'plus-lg', primary: true }],
+}) %>
+
+<section class="card">
+  <div class="table-responsive">
+    <table class="table jt-table mb-0">
+      <thead><tr><th>Job type</th><th class="text-end">Steps</th></tr></thead>
+      <tbody>
+        <% list.forEach((t) => { %>
+          <tr>
+            <td><a class="jt-row-link" href="/admin/job-types/<%= t.id %>"><%= t.name %></a>
+              <% if (t.is_default) { %><%- include('partials/pill', { text: 'Default', tone: 'info' }) %><% } %></td>
+            <td class="text-end jt-num"><%= t.step_count %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>

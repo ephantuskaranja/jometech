@@ -67,7 +67,8 @@
         <td><span class="label">Proforma:</span> <span class="mono"><%= job.proforma_number ?? '' %></span></td>
       </tr>
       <tr>
-        <td colspan="2"><span class="label">Supervisor:</span> <%= job.supervisor_name ?? '' %></td>
+        <td><span class="label">Job type:</span> <%= job.job_type_name ?? '' %></td>
+        <td><span class="label">Supervisor:</span> <%= job.supervisor_name ?? '' %></td>
         <td colspan="2"><span class="label">Promised by:</span> <strong><%= job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : '' %></strong></td>
       </tr>
     </table>
@@ -94,16 +95,23 @@
       <div class="jc-instructions"><span class="label">Instructions:</span> <%= job.instructions %></div>
     <% } %>
 
+    <% if (job.steps.length) { %>
+      <h2>Production steps</h2>
+      <ol class="jc-steps">
+        <% job.steps.forEach((s) => { %><li class="is-<%= s.status %>"><span class="jc-box"><%= s.status === 'done' ? '✓' : (s.status === 'skipped' ? '–' : '') %></span><%= s.name %></li><% }) %>
+      </ol>
+    <% } %>
+
     <h2>Work log</h2>
     <table class="jc-fill">
       <thead><tr><th class="date">Date</th><th>Work done</th><th class="who">Done by</th><th class="hrs">Hours</th><th class="sign">Supervisor</th></tr></thead>
-      <tbody><% for (let i = 0; i < 6; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+      <tbody><% for (let i = 0; i < 5; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
     </table>
 
     <h2>Materials used</h2>
     <table class="jc-fill">
       <thead><tr><th class="date">Date</th><th>Item</th><th class="hrs">Qty</th><th class="who">Issued by</th><th class="sign">Received by</th></tr></thead>
-      <tbody><% for (let i = 0; i < 4; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+      <tbody><% for (let i = 0; i < 3; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
     </table>
 
     <div class="jc-signoff">

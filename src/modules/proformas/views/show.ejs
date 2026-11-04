@@ -110,8 +110,14 @@
           <% if (proforma.job) { %>
             <a class="btn btn-outline-primary" href="/jobs/<%= proforma.job.id %>"><i class="bi bi-wrench-adjustable"></i>Open job <%= proforma.job.number %></a>
           <% } else { %>
-            <form method="post" action="/proformas/<%= proforma.id %>/job">
+            <form class="d-grid gap-2" method="post" action="/proformas/<%= proforma.id %>/job">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <div>
+                <label class="form-label small mb-1" for="job-type">Job type</label>
+                <select class="form-select" id="job-type" name="job_type_id">
+                  <% jobTypes.forEach((t) => { %><option value="<%= t.value %>"<%= t.is_default ? ' selected' : '' %>><%= t.label %></option><% }) %>
+                </select>
+              </div>
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-wrench-adjustable"></i>Start the job</button>
             </form>
           <% } %>

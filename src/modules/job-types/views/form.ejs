@@ -1,0 +1,76 @@
+<%# One job type and its steps: edit the list, then save it all at once. %>
+<%- include('partials/page-header', {
+  crumb: ['System', { label: 'Job types & steps', href: '/admin/job-types' }, type ? type.name : 'New'],
+  heading: type ? type.name : 'New job type',
+  sub: 'Changes apply to new jobs only. Jobs already made keep the steps they started with.',
+  actions: type ? [{ label: 'Copy to a new type', href: `/admin/job-types/new?copy=${type.id}`, icon: 'files' }] : [],
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <form method="post" action="<%= type ? `/admin/job-types/${type.id}` : '/admin/job-types' %>" novalidate x-data="jobTypeForm(<%= JSON.stringify({ rows }) %>)">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <section class="card mb-4">
+        <div class="card-body d-grid gap-3">
+          <%- include('partials/field', { name: 'name', label: 'Job type', value: values.name, error: errors.name, required: true, placeholder: 'e.g. Trailer manufacture' }) %>
+          <% if (type?.is_default) { %>
+            <p class="small text-body-secondary mb-0"><i class="bi bi-star-fill"></i> This is the default: it is chosen for you when a new job starts. To change that, open another type and make it the default.</p>
+          <% } else { %>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="f-is_default" name="is_default" value="1"<%= values.is_default ? ' checked' : '' %>>
+              <label class="form-check-label" for="f-is_default">Make this the default for new jobs</label>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="card mb-4">
+        <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Steps, in order</h2><span class="small text-body-secondary" x-text="`${rows.filter((r) => r.name.trim()).length} steps`"></span></div>
+        <div class="card-body d-grid gap-2">
+          <% if (errors.steps) { %><div class="jt-error-text"><%= errors.steps %></div><% } %>
+          <template x-for="(row, i) in rows" :key="row.key">
+            <div class="jt-step-row">
+              <span class="jt-items-no" x-text="i + 1"></span>
+              <input class="form-control" type="text" name="step" x-model="row.name" maxlength="<%= maxStep %>" @keydown.enter.prevent="addRow(i)" :aria-label="`Step ${i + 1}`" placeholder="e.g. Welding">
+              <button type="button" class="btn jt-icon-btn" @click="move(i, -1)" :disabled="i === 0" :aria-label="`Move step ${i + 1} up`"><i class="bi bi-arrow-up"></i></button>
+              <button type="button" class="btn jt-icon-btn" @click="move(i, 1)" :disabled="i === rows.length - 1" :aria-label="`Move step ${i + 1} down`"><i class="bi bi-arrow-down"></i></button>
+              <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove step ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </template>
+          <div class="mt-2"><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow(rows.length - 1)"><i class="bi bi-plus-lg"></i>Add a step</button></div>
+          <div class="form-text">The job is marked completed when its last step is done.</div>
+        </div>
+      </section>
+
+      <div class="jt-savebar">
+        <span class="jt-savebar-note"><i class="bi bi-list-check"></i>Nothing changes until you save.</span>
+        <div class="jt-savebar-actions">
+          <a class="btn btn-outline-secondary" href="/admin/job-types">Cancel</a>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <% if (type) { %>
+    <div class="col-lg-4 d-grid gap-4 align-content-start">
+      <% if (!type.is_default) { %>
+        <section class="card">
+          <div class="card-header"><h2 class="h6 mb-0">Don’t need this type?</h2></div>
+          <div class="card-body d-grid gap-2">
+            <p class="small mb-0">It stops being offered for new jobs. Jobs already made keep their steps.</p>
+            <form method="post" action="/admin/job-types/<%= type.id %>/remove" x-data @submit="if (!confirm(<%= JSON.stringify(`Remove “${type.name}”?`) %>)) $event.preventDefault()">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i>Remove this job type</button>
+            </form>
+          </div>
+        </section>
+      <% } %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', default: 'Default', steps: 'Steps' } }) %></div>
+      </section>
+    </div>
+  <% } %>
+</div>

@@ -8,6 +8,7 @@ import { config } from '../../config.js';
 import * as proformas from './service.js';
 import * as customers from '../customers/service.js';
 import * as enquiries from '../enquiries/service.js';
+import { typeOptions } from '../job-types/service.js';
 
 // Proformas: write one (or copy another), send it, then accepted / declined / revised.
 
@@ -147,6 +148,7 @@ router.get('/proformas/:id', manage, async (req, res) => {
     statuses: proformas.STATUSES, declineReasons: proformas.DECLINE_REASONS,
     vat: proformas.vatIn(proforma.total), vatRate: config.vatRate,
     entries: await history('proforma', proforma.id),
+    jobTypes: proforma.status === 'accepted' && !proforma.job ? await typeOptions() : [],
   });
 });
 

@@ -44,6 +44,7 @@ export const nav = [
     label: 'System',
     items: [
       { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },
+      { label: 'Job types & steps', href: '/admin/job-types', icon: 'list-check', permission: 'system.settings', ready: true },
       { label: 'Settings & backups', href: '/admin/settings', icon: 'sliders', permission: ['system.settings', 'system.backup.manage'] },
     ],
   },

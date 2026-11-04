@@ -12,6 +12,9 @@ import { httpError } from '../../core/validate.js';
 // From an accepted proforma the customer, vehicle and lines are copied, without prices,
 // and stay fixed: later changes will be variations. A job with no proforma can be edited.
 // The vehicle may come later. Its check-in links by itself, and the job follows it between sites.
+//
+// Steps: a job copies the list of its job type (System → Job types & steps) and keeps that copy.
+// One step is current at a time. Finishing or skipping the last one completes the job.
 
 export const STATUSES = {
   open: { label: 'Open', tone: 'neutral' },
@@ -58,6 +61,22 @@ async function checkLinks(trx, input, { siteId, currentSupervisor = null }) {
   }
 }
 
+/** The job type chosen, or the default when none was. Null only if no job types exist. */
+async function resolveType(trx, id) {
+  const q = trx('job_types').where({ is_active: true });
+  const type = await (id ? q.where({ id }) : q.where({ is_default: true })).first('id');
+  if (id && !type) throw err(422, 'Choose a job type', 'job_type_id');
+  return type?.id ?? null;
+}
+
+/** The job's own copy of its type's steps. */
+async function copySteps(trx, jobId, typeId) {
+  await trx('job_steps').where({ job_id: jobId }).delete();
+  if (!typeId) return;
+  const steps = await trx('job_type_steps').where({ job_type_id: typeId }).orderBy('sort_order').pluck('name');
+  if (steps.length) await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name })));
+}
+
 async function writeLines(trx, jobId, lines) {
   await trx('job_lines').where({ job_id: jobId }).delete();
   if (lines.length) {
@@ -70,7 +89,9 @@ async function snapshot(trx, job, lines) {
   const customer = await trx('customers').where({ id: job.customer_id }).first('name');
   const vehicle = job.vehicle_id ? await trx('vehicles').where({ id: job.vehicle_id }).first('reg_no', 'chassis_no', 'temp_tag') : null;
   const supervisor = job.supervisor_id ? await trx('users').where({ id: job.supervisor_id }).first('name') : null;
+  const type = job.job_type_id ? await trx('job_types').where({ id: job.job_type_id }).first('name') : null;
   return {
+    job_type: type?.name ?? null,
     customer: customer?.name,
     vehicle: vehicle ? vehicleLabel(vehicle) : job.vehicle_description ?? null,
     supervisor: supervisor?.name ?? null,
@@ -86,12 +107,14 @@ export async function createJob(input, actor) {
     const checkin = await openCheckin(trx, input.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
     await checkLinks(trx, input, { siteId });
+    const typeId = await resolveType(trx, input.job_type_id);
     const number = await nextNumber(trx, 'job');
     const [id] = await trx('jobs').insert({
-      number, site_id: siteId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
+      number, site_id: siteId, job_type_id: typeId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
       checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, due_on: input.due_on, instructions: input.instructions, created_by: actor.user.id,
     });
     await writeLines(trx, id, input.lines);
+    await copySteps(trx, id, typeId);
     await audit(trx, actor, { entity: 'job', id, action: 'create', summary: 'No proforma' });
     return { id, number };
   });
@@ -101,7 +124,7 @@ export async function createJob(input, actor) {
  * One click on an accepted proforma. Asking twice (a double click, two people) gives the same job.
  * @returns {Promise<{ id: number, number: string, site_id: number, existed: boolean }>}
  */
-export async function createFromProforma(proformaId, actor) {
+export async function createFromProforma(proformaId, jobTypeId, actor) {
   return db.transaction(async (trx) => {
     const p = await trx('proformas').where({ id: proformaId }).forUpdate().first();
     if (!p) throw httpError(404, 'That proforma doesn’t exist.');
@@ -111,12 +134,14 @@ export async function createFromProforma(proformaId, actor) {
 
     const checkin = await openCheckin(trx, p.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
+    const typeId = await resolveType(trx, jobTypeId);
     const number = await nextNumber(trx, 'job');
     const [id] = await trx('jobs').insert({
-      number, site_id: siteId, proforma_id: p.id, customer_id: p.customer_id, vehicle_id: p.vehicle_id, vehicle_description: p.vehicle_description,
+      number, site_id: siteId, job_type_id: typeId, proforma_id: p.id, customer_id: p.customer_id, vehicle_id: p.vehicle_id, vehicle_description: p.vehicle_description,
       checkin_id: checkin?.id ?? null, created_by: actor.user.id,
     });
     await writeLines(trx, id, await trx('proforma_lines').where({ proforma_id: p.id }).orderBy('sort_order'));
+    await copySteps(trx, id, typeId);
     await audit(trx, actor, { entity: 'job', id, action: 'create', summary: `From proforma ${p.number}` });
     await audit(trx, actor, { entity: 'proforma', id: p.id, action: 'job_created', summary: `Job ${number}` });
     return { id, number, site_id: siteId, existed: false };
@@ -138,15 +163,26 @@ export async function updateJob(id, input, actor) {
     const siteId = checkin?.site_id ?? before.site_id;
     await checkLinks(trx, { ...input, customer_id: customerId }, { siteId, currentSupervisor: before.supervisor_id });
 
+    // The job type can change until a step has been ticked off; its steps change with it.
+    const typeChanged = Boolean(input.job_type_id) && input.job_type_id !== before.job_type_id;
+    if (typeChanged) {
+      await resolveType(trx, input.job_type_id);
+      if (await trx('job_steps').where({ job_id: id }).whereNot({ status: 'pending' }).first('id')) {
+        throw err(422, 'Steps have already been ticked off, so the job type can’t change now', 'job_type_id');
+      }
+    }
+
     const beforeLines = await trx('job_lines').where({ job_id: id }).orderBy('sort_order');
     const lines = fixed ? beforeLines : input.lines;
     const changes = {
       customer_id: customerId, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
       supervisor_id: input.supervisor_id, due_on: input.due_on, instructions: input.instructions, site_id: siteId,
       ...(vehicleChanged ? { checkin_id: checkin?.id ?? null } : {}),
+      ...(typeChanged ? { job_type_id: input.job_type_id } : {}),
     };
     await trx('jobs').where({ id }).update(changes);
     if (!fixed) await writeLines(trx, id, lines);
+    if (typeChanged) await copySteps(trx, id, input.job_type_id);
     await audit(trx, actor, {
       entity: 'job', id, action: 'update',
       before: await snapshot(trx, before, beforeLines),
@@ -174,8 +210,55 @@ export async function completeJob(id, actor) {
   await db.transaction(async (trx) => {
     const job = await lockJob(trx, id);
     if (job.status !== 'in_progress') throw httpError(409, `Only a job in progress can be completed. ${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
-    await trx('jobs').where({ id }).update({ status: 'completed', completed_at: trx.fn.now() });
-    await audit(trx, actor, { entity: 'job', id, action: 'job_completed' });
+    if (await pendingStep(trx, id)) throw httpError(409, `${job.number} still has steps to finish. Tick them off, or skip those that don’t apply.`);
+    await markCompleted(trx, id, actor);
+  });
+}
+
+const pendingStep = (trx, jobId) => trx('job_steps').where({ job_id: jobId, status: 'pending' }).orderBy('sort_order').first();
+const lastFinishedStep = (trx, jobId) => trx('job_steps').where({ job_id: jobId }).whereNot({ status: 'pending' }).orderBy('sort_order', 'desc').first();
+
+async function markCompleted(trx, id, actor) {
+  await trx('jobs').where({ id }).update({ status: 'completed', completed_at: trx.fn.now() });
+  await audit(trx, actor, { entity: 'job', id, action: 'job_completed' });
+}
+
+async function reopenStep(trx, step) {
+  await trx('job_steps').where({ id: step.id }).update({ status: 'pending', finished_at: null, finished_by: null });
+}
+
+/**
+ * The current step is done (or skipped, when it doesn't apply to this job).
+ * `stepId` is the step the person was looking at: a double click, or someone else having
+ * just moved the job on, changes nothing and returns null.
+ * @param {'done'|'skipped'} status
+ * @returns {Promise<{ name: string, next: string|null } | null>}
+ */
+export async function finishStep(jobId, stepId, status, actor) {
+  return db.transaction(async (trx) => {
+    const job = await lockJob(trx, jobId);
+    if (job.status === 'open') throw httpError(409, `Start ${job.number} first.`);
+    if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
+    const step = await pendingStep(trx, jobId);
+    if (step?.id !== stepId) return null;
+    await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(), finished_by: actor.user.id });
+    await audit(trx, actor, { entity: 'job', id: jobId, action: status === 'done' ? 'step_done' : 'step_skipped', summary: step.name });
+    const next = await pendingStep(trx, jobId);
+    if (!next) await markCompleted(trx, jobId, actor);
+    return { name: step.name, next: next?.name ?? null };
+  });
+}
+
+/** Ticked by mistake: the last finished step becomes the current one again. */
+export async function undoStep(jobId, actor) {
+  return db.transaction(async (trx) => {
+    const job = await lockJob(trx, jobId);
+    if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
+    const step = await lastFinishedStep(trx, jobId);
+    if (!step) throw httpError(409, 'No step has been ticked off yet.');
+    await reopenStep(trx, step);
+    await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_undone', summary: step.name });
+    return step.name;
   });
 }
 
@@ -193,6 +276,11 @@ export async function reopenJob(id, actor) {
   await db.transaction(async (trx) => {
     const job = await lockJob(trx, id);
     if (ACTIVE.includes(job.status)) throw httpError(409, `${job.number} is already open.`);
+    // Completed means every step was finished: the last one becomes current again, so there is something to do.
+    if (job.status === 'completed' && !(await pendingStep(trx, id))) {
+      const step = await lastFinishedStep(trx, id);
+      if (step) await reopenStep(trx, step);
+    }
     await trx('jobs').where({ id }).update({
       status: job.started_at ? 'in_progress' : 'open', completed_at: null, cancelled_at: null, cancelled_reason: null,
     });
@@ -229,14 +317,19 @@ export async function getJob(id) {
     .leftJoin('proformas as p', 'p.id', 'j.proforma_id')
     .leftJoin('users as sup', 'sup.id', 'j.supervisor_id')
     .leftJoin('users as cr', 'cr.id', 'j.created_by')
+    .leftJoin('job_types as jt', 'jt.id', 'j.job_type_id')
     .where('j.id', id)
     .first('j.*', 'c.name as customer_name', 'c.number as customer_number', 'c.phone as customer_phone', 's.name as site_name',
       'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 'v.type', 'v.colour',
       'ci.number as checkin_number', 'ci.status as checkin_status', 'ci.odometer_km', 'ci.odometer_not_working',
-      'p.number as proforma_number', 'sup.name as supervisor_name', 'cr.name as created_name');
+      'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name');
   if (!job) return null;
   job.vehicle_label = job.vehicle_id ? vehicleLabel(job) : null;
   job.lines = await db('job_lines').where({ job_id: id }).orderBy('sort_order');
+  job.steps = await db('job_steps as s').leftJoin('users as u', 'u.id', 's.finished_by')
+    .where('s.job_id', id).orderBy('s.sort_order').select('s.id', 's.name', 's.status', 's.finished_at', 'u.name as finished_by_name');
+  job.currentStep = job.status === 'in_progress' ? job.steps.find((s) => s.status === 'pending') ?? null : null;
+  job.stepsFinished = job.steps.filter((s) => s.status !== 'pending').length;
   return job;
 }
 
@@ -255,7 +348,10 @@ export async function listJobs({ siteId, searchSiteIds = [siteId], tab = 'active
     .limit(200)
     .select('j.id', 'j.number', 'j.status', 'j.due_on', 'j.vehicle_description', 'j.completed_at', 'j.created_at',
       'c.name as customer_name', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 's.name as site_name', 'sup.name as supervisor_name',
-      db('job_lines').where('job_id', db.ref('j.id')).orderBy('sort_order').limit(1).select('description').as('first_line'));
+      db('job_lines').where('job_id', db.ref('j.id')).orderBy('sort_order').limit(1).select('description').as('first_line'),
+      db('job_steps').where({ job_id: db.ref('j.id'), status: 'pending' }).orderBy('sort_order').limit(1).select('name').as('current_step'),
+      db('job_steps').where('job_id', db.ref('j.id')).whereNot('status', 'pending').count('*').as('steps_finished'),
+      db('job_steps').where('job_id', db.ref('j.id')).count('*').as('steps_total'));
   const term = q.trim();
   if (term) {
     const key = compact(term);
