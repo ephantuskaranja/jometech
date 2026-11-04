@@ -420,6 +420,89 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Purchase order form (purchasing/views/form.ejs): find an item by typing its name; plates ask for a size.
+  // The sums here are only for showing; the server works out what is saved.
+  Alpine.data('purchaseOrderForm', ({ rows = [], items = [] } = {}) => {
+    let next = 0;
+    const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
+    const row = (r = {}) => ({ key: next++, item_id: '', item_name: '', quantity: '', length: '', width: '', size_unit: 'ft', for: '', price: '', ...r });
+    return {
+      rows: rows.map(row), items,
+      itemOf(r) { return this.items.find((i) => String(i.id) === String(r.item_id)) ?? null; },
+      isArea(r) { return this.itemOf(r)?.priced_by === 'area'; },
+      unitOf(r) { return this.itemOf(r)?.unit ?? ''; },
+      lastPrice(r) { return this.itemOf(r)?.current_price ?? null; },
+      pick(r) {
+        const typed = r.item_name.trim().toLowerCase();
+        r.item_id = this.items.find((i) => i.name.toLowerCase() === typed)?.id ?? '';
+      },
+      area(r) {
+        const each = num(r.length) * num(r.width) / (r.size_unit === 'mm' ? 304.8 * 304.8 : 1);
+        return each * num(r.quantity);
+      },
+      amount(r) {
+        if (!r.item_id) return 0;
+        const billed = this.isArea(r) ? this.area(r) : num(r.quantity);
+        return Math.round(billed * num(r.price) * 100) / 100;
+      },
+      get total() { return this.rows.reduce((sum, r) => sum + this.amount(r), 0); },
+      money: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      useLast(r) { r.price = String(this.lastPrice(r)); },
+      addRow() { this.rows.push(row()); },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+      addItem(r) {
+        window.dispatchEvent(new CustomEvent('jt:quick-add-item', { detail: { name: r.item_name.trim(), done: (item) => {
+          this.items.push(item);
+          r.item_name = item.name;
+          r.item_id = item.id;
+        } } }));
+      },
+    };
+  });
+
+  // Quick add windows on the purchase order: post the fields, show any errors, hand back what was made.
+  const quickAdd = ({ url, fields, focus }) => () => ({
+    ...fields(), errors: {}, busy: false, done: null, modal: null,
+    open({ name, done }) {
+      Object.assign(this, fields(), { name, errors: {}, done });
+      this.modal ??= window.bootstrap.Modal.getOrCreateInstance(this.$el);
+      this.modal.show();
+      setTimeout(() => this.$el.querySelector(focus)?.focus(), 300);
+    },
+    async save() {
+      this.busy = true;
+      try {
+        const body = Object.fromEntries(Object.keys(fields()).map((k) => [k, this[k]]));
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-csrf-token': csrfToken() },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (!res.ok) { this.errors = json.errors ?? { name: 'Could not save. Try again.' }; return; }
+        const done = this.done;
+        this.done = null;
+        this.modal.hide();
+        done?.(json);
+      } catch {
+        this.errors = { name: 'No connection. Check the network and try again.' };
+      } finally {
+        this.busy = false;
+      }
+    },
+    cancelled() {
+      // Tom Select waits to be told; the item window has nothing to undo.
+      const done = this.done;
+      this.done = null;
+      if (done && url === '/api/suppliers') done();
+    },
+  });
+  Alpine.data('quickAddSupplier', quickAdd({ url: '/api/suppliers', focus: '#qas-phone', fields: () => ({ name: '', phone: '' }) }));
+  Alpine.data('quickAddItem', quickAdd({ url: '/api/items', focus: '#qai-category', fields: () => ({ name: '', category: '', priced_by: 'unit', unit: 'Pc', thickness_mm: '' }) }));
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

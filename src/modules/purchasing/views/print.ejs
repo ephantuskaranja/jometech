@@ -1,0 +1,94 @@
+<%#
+  The purchase order on letterhead: one A4 page (more if the list is long).
+  Same sections and order as docs/source/Purchase Order (Tononoka, no. 001).
+  Standalone (no app layout) so it prints cleanly; "Print" also saves as PDF.
+  Not approved yet: prints with DRAFT across it, so it can't be mistaken for an order.
+%>
+<%
+  const official = ['approved', 'sent'].includes(order.status);
+  const cancelled = order.status === 'cancelled';
+  const anyPrice = order.lines.some((l) => l.unit_price !== null);
+  const trim = (v) => fmt.money(v).replace(/\.00$/, '');
+  const rows = Math.max(0, 5 - order.lines.length);
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/purchase-orders/<%= order.id %>">&larr; Back to <%= order.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+  <% if (!official) { %><div class="toolbar draft-note"><%= cancelled ? 'This order is cancelled.' : 'Not approved yet: it prints with “DRAFT” across it.' %></div><% } %>
+
+  <main class="sheet proforma<%= official ? '' : ' is-draft' %>">
+    <header class="pf-head">
+      <div class="pf-company-name"><%= company.name %></div>
+      <div class="pf-head-row">
+        <img src="/img/brand/icon.svg" alt="" width="90" height="90">
+        <div class="pf-address">
+          <% company.address.forEach((line) => { %><div><%= line %></div><% }) %>
+          <div>Tel: <%= company.phone %></div>
+          <div>Email: <%= company.email %></div>
+          <div>PIN: <%= company.kraPin %></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="pf-date">Date: <%= fmt.date(`${order.order_date}T12:00:00Z`) %></div>
+
+    <div class="po-to">
+      <div><strong>Purchase order no: <%= order.number %></strong></div>
+      <div><%= order.supplier_name %></div>
+      <% if (order.supplier_address) { %><div><%= order.supplier_address %></div><% } %>
+      <% if (order.supplier_pin) { %><div>PIN: <%= order.supplier_pin %></div><% } %>
+    </div>
+
+    <p class="po-dear"><strong>Dear Sir/Madam,</strong></p>
+    <p>We would like you to supply us with the following materials as per the specifications, followed by the eTIMS receipt.<% if (order.expected_on) { %> We expect delivery by <strong><%= fmt.date(`${order.expected_on}T12:00:00Z`) %></strong>.<% } %></p>
+
+    <table class="po-lines">
+      <thead>
+        <tr><th colspan="6" class="po-caption">Description: materials</th></tr>
+        <tr><th class="no">S/No</th><th>Materials</th><th class="for">For</th><th class="qty">Qty</th><th class="money">@</th><th class="money">Amount</th></tr>
+      </thead>
+      <tbody>
+        <% order.lines.forEach((l, i) => { %>
+          <tr>
+            <td class="no"><%= i + 1 %></td>
+            <td><%= l.item_name %><% if (l.size_unit) { %>, <%= Number(l.length) %> × <%= Number(l.width) %> <%= l.size_unit %><% } %></td>
+            <td class="for"><%= l.job_number ?? l.for_text ?? '' %></td>
+            <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.priced_by === 'area' ? 'pcs' : l.item_unit %></td>
+            <td class="money"><% if (l.unit_price !== null) { %><%= trim(l.unit_price) %><% if (l.priced_by === 'area') { %><span class="muted small"> /sq ft</span><% } %><% } %></td>
+            <td class="money"><%= l.amount === null ? '' : trim(l.amount) %></td>
+          </tr>
+        <% }) %>
+        <% for (let i = 0; i < rows; i++) { %><tr class="po-blank"><td></td><td></td><td></td><td></td><td></td><td></td></tr><% } %>
+      </tbody>
+      <% if (anyPrice) { %>
+        <tfoot><tr><th colspan="5" class="money">Total excluding VAT</th><th class="money"><%= trim(order.total) %></th></tr></tfoot>
+      <% } %>
+    </table>
+
+    <% if (order.notes) { %><div class="pf-notes"><%= order.notes %></div><% } %>
+
+    <div class="pf-sign">
+      <div>Yours faithfully,</div>
+      <div>For &amp; on behalf of</div>
+      <div><%= company.name %></div>
+      <div class="pf-sign-line"></div>
+      <div><%= company.signatory %></div>
+    </div>
+  </main>
+</body>
+</html>

@@ -234,6 +234,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 12 | Basic jobs: from an accepted proforma in one click (customer, vehicle and lines copied, no prices) or with no proforma; the vehicle can be added later and its check-in links by itself; open → in progress → completed / cancelled, reopen; printable A4 job card. Tasks, materials, labour, QC and variations later | Done |
 | 13 | Production steps: job types with step lists an admin edits under System (add, rename, remove, reorder; starting lists from §27). A job copies its list and keeps it; one button moves it on ("Welding done → Assembly"), with skip and undo; the last step completes the job. Steps print on the job card | Done |
 | 14 | Item setup: items priced by unit or by area (sq ft), categories, prices excluding VAT, reorder level, switch off, plate calculator for any size in feet or mm | Done |
+| 15 | Suppliers and purchase orders: optional prices, plate sizes in feet or mm, a line can be for a job, one approval (draft → waiting → approved → sent), printed like the paper order. Numbers PO-2026-0001 | Done |
 
 ### Materials and costing decisions (agreed 2026-11-04)
 
@@ -249,7 +250,6 @@ Sample: `docs/source/Purchase Order/` (git-ignored, client data). Paper purchase
 
 | Next | What |
 |---|---|
-| 15 | Suppliers and purchase orders, printed like the paper one |
 | 16 | Goods received, stock and the weighted average, including transport |
 | 17 | Issuing materials to jobs, so each job shows its material cost |
 

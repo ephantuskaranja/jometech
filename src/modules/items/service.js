@@ -76,7 +76,7 @@ export async function setActive(id, active, actor) {
     if (!item) throw httpError(404, 'That item doesn’t exist.');
     if (Boolean(item.is_active) === active) return;
     await trx('items').where({ id }).update({ is_active: active });
-    await audit(trx, actor, { entity: 'item', id, action: active ? 'switched_on' : 'switched_off', summary: item.name });
+    await audit(trx, actor, { entity: 'item', id, action: active ? 'record_on' : 'record_off', summary: item.name });
   });
 }
 

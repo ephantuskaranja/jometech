@@ -1,0 +1,43 @@
+<%# Small window for adding an item without leaving the purchase order. %>
+<div class="modal fade" id="quick-add-item" tabindex="-1" aria-labelledby="qai-title" aria-hidden="true"
+     x-data="quickAddItem" @jt:quick-add-item.window="open($event.detail)" x-init="$el.addEventListener('hidden.bs.modal', () => cancelled())">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" @submit.prevent="save()" novalidate>
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="qai-title">New item</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-grid gap-3">
+        <div class="jt-choices" style="--jt-cols: 2">
+          <label class="jt-choice" for="qai-unit"><input class="form-check-input" type="radio" id="qai-unit" value="unit" x-model="priced_by"><span class="jt-choice-label">By unit</span></label>
+          <label class="jt-choice" for="qai-area"><input class="form-check-input" type="radio" id="qai-area" value="area" x-model="priced_by"><span class="jt-choice-label">By area (sq ft)</span></label>
+        </div>
+        <div class="jt-field">
+          <label class="form-label" for="qai-name">Name<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qai-name" x-model="name" :class="errors.name && 'is-invalid'" autocomplete="off" placeholder="e.g. Plate 4 mm or U-bolt 20 mm">
+          <div class="invalid-feedback" x-text="errors.name"></div>
+        </div>
+        <div class="jt-field">
+          <label class="form-label" for="qai-category">Category<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qai-category" x-model="category" :class="errors.category && 'is-invalid'" list="qai-categories" autocomplete="off" placeholder="Choose or type a new one">
+          <datalist id="qai-categories"><% categories.forEach((c) => { %><option value="<%= c.name %>"><% }) %></datalist>
+          <div class="invalid-feedback" x-text="errors.category"></div>
+        </div>
+        <div class="jt-field" x-show="priced_by === 'unit'">
+          <label class="form-label" for="qai-counted">Counted in<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qai-counted" x-model="unit" :class="errors.unit && 'is-invalid'" list="line-units" maxlength="20" autocomplete="off">
+          <div class="invalid-feedback" x-text="errors.unit"></div>
+        </div>
+        <div class="jt-field" x-show="priced_by === 'area'" x-cloak>
+          <label class="form-label" for="qai-thickness">Thickness (mm)<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" id="qai-thickness" inputmode="decimal" x-model="thickness_mm" :class="errors.thickness_mm && 'is-invalid'" placeholder="e.g. 4">
+          <div class="invalid-feedback" x-text="errors.thickness_mm"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary" :disabled="busy"><i class="bi bi-check2"></i>Add item</button>
+      </div>
+    </form>
+  </div>
+</div>

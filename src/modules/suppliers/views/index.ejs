@@ -1,0 +1,45 @@
+<%- include('partials/page-header', {
+  crumb: ['Stores', 'Suppliers'],
+  heading: 'Suppliers',
+  sub: 'Who Jome-Tech buys from.',
+  actions: canManage ? [{ label: 'New supplier', href: '/suppliers/new', icon: 'plus-lg', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/suppliers">
+    <input type="hidden" name="status" value="<%= status %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name, contact or what they supply" aria-label="Search suppliers">
+    </div>
+    <nav class="jt-seg" aria-label="Show">
+      <% [['active', 'Active'], ['inactive', 'Switched off'], ['all', 'All']].forEach(([key, label]) => { %>
+        <a href="?status=<%= key %><%= q ? `&q=${encodeURIComponent(q)}` : '' %>" class="<%= status === key ? 'active' : '' %>"<%- status === key ? ' aria-current="true"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'supplier' : 'suppliers' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q || status !== 'active'
+      ? { icon: 'search', heading: 'Nothing matches', text: 'Try part of the name, or what they supply.' }
+      : { icon: 'building', heading: 'No suppliers yet', text: 'Add them here, or while writing a purchase order.', action: canManage ? { label: 'New supplier', href: '/suppliers/new' } : undefined }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Supplier</th><th>Supplies</th><th>Contact</th></tr></thead>
+        <tbody>
+          <% list.forEach((s) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/suppliers/<%= s.id %>"><%= s.name %></a>
+                <% if (!s.is_active) { %><%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %><% } %>
+                <span class="jt-sub font-monospace"><%= s.number %></span></td>
+              <td><%= s.materials ?? '—' %></td>
+              <td><%= s.contact_person ?? '' %><% if (s.phone) { %><span class="jt-sub font-monospace"><%= fmt.phone(s.phone) %></span><% } %><% if (!s.contact_person && !s.phone) { %>—<% } %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

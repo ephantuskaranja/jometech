@@ -1,0 +1,75 @@
+<%# One supplier: their details and what has been ordered from them. %>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/suppliers">Suppliers</a><i class="bi bi-chevron-right"></i><span><%= supplier.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= supplier.name %><% if (!supplier.is_active) { %> <%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %><% } %></h1>
+        <div class="jt-meta">
+          <span class="font-monospace"><%= supplier.number %></span>
+          <% if (supplier.phone) { %><span><i class="bi bi-telephone"></i><span class="font-monospace"><%= fmt.phone(supplier.phone) %></span></span><% } %>
+        </div>
+      </div>
+      <% if (canManage) { %>
+        <div class="jt-page-actions">
+          <a class="btn btn-outline-secondary" href="/suppliers/<%= supplier.id %>/edit"><i class="bi bi-pencil"></i>Edit</a>
+          <% if (supplier.is_active) { %><a class="btn btn-primary" href="/purchase-orders/new?supplier_id=<%= supplier.id %>"><i class="bi bi-cart-plus"></i>New order</a><% } %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Purchase orders</h2><span class="small text-body-secondary"><%= orders.length %></span></div>
+      <% if (orders.length === 0) { %>
+        <div class="card-body text-body-secondary small">Nothing ordered yet.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% orders.forEach((o) => { const st = orderStatuses[o.status]; %>
+            <li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
+              <a class="font-monospace small" href="/purchase-orders/<%= o.id %>"><%= o.number %></a>
+              <span class="small text-body-secondary"><%= fmt.date(`${o.order_date}T12:00:00Z`) %></span>
+              <span class="ms-auto"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Contact person</dt><dd><%= supplier.contact_person ?? '—' %></dd></div>
+          <div><dt>Email</dt><dd><%= supplier.email ?? '—' %></dd></div>
+          <div><dt>KRA PIN</dt><dd class="font-monospace"><%= supplier.kra_pin ?? '—' %></dd></div>
+          <div><dt>Address</dt><dd><%= supplier.address ?? '—' %></dd></div>
+          <div><dt>Payment terms</dt><dd><%= supplier.payment_terms ?? '—' %></dd></div>
+          <div><dt>Supplies</dt><dd><%= supplier.materials ?? '—' %></dd></div>
+        </dl>
+        <% if (supplier.notes) { %><p class="mt-3 mb-0 text-body-secondary" style="white-space: pre-line"><%= supplier.notes %></p><% } %>
+      </div>
+    </section>
+
+    <% if (canManage) { %>
+      <section class="card">
+        <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+          <p class="small mb-0 me-auto"><%= supplier.is_active ? 'No longer used? Switch it off to hide it from new orders. Past orders are kept.' : 'This supplier is switched off.' %></p>
+          <form method="post" action="/suppliers/<%= supplier.id %>/<%= supplier.is_active ? 'switch-off' : 'switch-on' %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-secondary btn-sm" type="submit"><%= supplier.is_active ? 'Switch off' : 'Switch back on' %></button>
+          </form>
+        </div>
+      </section>
+    <% } %>
+  </div>
+  <div class="col-lg-5">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>

@@ -11,6 +11,7 @@ import * as customers from '../customers/service.js';
 import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
 import { typeOptions } from '../job-types/service.js';
+import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.js';
 
 // Jobs: start one from an accepted proforma or from scratch, move it along, print the job card.
 
@@ -142,6 +143,9 @@ router.get('/jobs/:id', view, async (req, res) => {
     canManage: req.user.can('jobs.manage'),
     canSeeCustomers: VIEW_CUSTOMERS.some((p) => req.user.can(p)),
     canSeeProforma: req.user.can('quotations.manage'),
+    // Purchase orders with a line for this job, for those who can open them.
+    orders: req.user.can('purchasing.manage') || req.user.can('purchasing.approve') ? await ordersForJob(job.id, req.user.sites.map((s) => s.id)) : [],
+    orderStatuses: ORDER_STATUSES,
   });
 });
 

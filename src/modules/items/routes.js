@@ -118,6 +118,19 @@ router.post('/items/:id', manage, async (req, res) => {
   }
 });
 
+// Added in place from a purchase order. Returns what the order form needs to pick it.
+router.post('/api/items', canAny('inventory.manage', 'purchasing.manage'), async (req, res) => {
+  const { data, errors } = validate(req.body ?? {});
+  if (Object.keys(errors).length) return res.status(422).json({ errors });
+  try {
+    const { id } = await items.createItem(data, req);
+    res.status(201).json({ id, name: data.name, priced_by: data.priced_by, unit: data.unit, current_price: data.current_price });
+  } catch (err) {
+    if (!err.field) throw err;
+    res.status(422).json({ errors: { [err.field]: err.message } });
+  }
+});
+
 async function setActive(req, res, active) {
   const item = await loadItem(req);
   await items.setActive(item.id, active, req);

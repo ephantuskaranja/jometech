@@ -1,0 +1,54 @@
+<%# Purchase orders. "Not sent yet" (the default) is everything still being prepared or approved. %>
+<%
+  const tabs = [['open', 'Not sent yet'], ['sent', 'Sent'], ['all', 'All']];
+  const empty = {
+    open: { icon: 'cart', heading: 'Nothing being prepared', text: 'New orders stay here until they go to the supplier.' },
+    sent: { icon: 'send', heading: 'Nothing sent yet', text: 'Orders move here once they have gone to the supplier.' },
+    all: { icon: 'cart', heading: 'No purchase orders yet', text: 'Start one when materials are needed.' },
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', 'Purchase orders'],
+  heading: 'Purchase orders',
+  sub: 'What has been ordered from suppliers.',
+  actions: canManage ? [{ label: 'New order', href: '/purchase-orders/new', icon: 'plus-lg', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/purchase-orders?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/purchase-orders">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Number, supplier or item" aria-label="Search purchase orders">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/purchase-orders?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'order' : 'orders' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the number, part of the supplier’s name, or an item.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Order</th><th>Supplier</th><th class="d-none d-md-table-cell">Date</th><th class="text-end">Lines</th><th class="text-end">Total excl. VAT (KES)</th></tr></thead>
+        <tbody>
+          <% list.forEach((o) => { const st = statuses[o.status]; %>
+            <tr>
+              <td><a class="jt-row-link font-monospace text-nowrap" href="/purchase-orders/<%= o.id %>"><%= o.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= o.supplier_name %></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.date(`${o.order_date}T12:00:00Z`) %></td>
+              <td class="text-end jt-num"><%= o.line_count %></td>
+              <td class="text-end jt-num"><%= o.total === null ? '—' : fmt.money(o.total) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

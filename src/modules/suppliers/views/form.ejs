@@ -1,0 +1,35 @@
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Suppliers', href: '/suppliers' }, supplier ? supplier.number : 'New'],
+  heading: supplier ? `Edit ${supplier.name}` : 'New supplier',
+  sub: 'Only the name is needed. The rest can be added later.',
+}) %>
+
+<form method="post" action="<%= supplier ? `/suppliers/${supplier.id}` : '/suppliers' %>" novalidate>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <section class="card mb-4">
+    <div class="card-body d-grid gap-3">
+      <div>
+        <%- include('partials/field', { name: 'name', label: 'Name', value: values.name, error: errors.name, required: true, placeholder: 'e.g. Tononoka Rolling Mills' }) %>
+        <% if (existingId) { %><div class="form-text"><a href="/suppliers/<%= existingId %>">Open that supplier</a></div><% } %>
+      </div>
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'contact_person', label: 'Contact person', value: values.contact_person, error: errors.contact_person }) %>
+        <%- include('partials/field', { name: 'phone', label: 'Phone', type: 'tel', value: values.phone, error: errors.phone, placeholder: '0712 345 678' }) %>
+        <%- include('partials/field', { name: 'email', label: 'Email', type: 'email', value: values.email, error: errors.email }) %>
+        <%- include('partials/field', { name: 'kra_pin', label: 'KRA PIN', value: values.kra_pin, error: errors.kra_pin, placeholder: 'P052233213I' }) %>
+        <%- include('partials/field', { name: 'address', label: 'Address', value: values.address, error: errors.address }) %>
+        <%- include('partials/field', { name: 'payment_terms', label: 'Payment terms', value: values.payment_terms, error: errors.payment_terms, placeholder: 'e.g. 30 days' }) %>
+      </div>
+      <%- include('partials/field', { name: 'materials', label: 'What they supply', value: values.materials, error: errors.materials, placeholder: 'e.g. Plates, angle iron' }) %>
+      <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, value: values.notes, error: errors.notes }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-building"></i>Used on purchase orders.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= supplier ? `/suppliers/${supplier.id}` : '/suppliers' %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= supplier ? 'Save changes' : 'Add supplier' %></button>
+    </div>
+  </div>
+</form>

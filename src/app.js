@@ -27,6 +27,8 @@ import { router as proformaRoutes } from './modules/proformas/routes.js';
 import { router as jobRoutes } from './modules/jobs/routes.js';
 import { router as jobTypeRoutes } from './modules/job-types/routes.js';
 import { router as itemRoutes } from './modules/items/routes.js';
+import { router as supplierRoutes } from './modules/suppliers/routes.js';
+import { router as purchasingRoutes } from './modules/purchasing/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -126,6 +128,8 @@ export function createApp() {
   app.use(jobRoutes);
   app.use(jobTypeRoutes);
   app.use(itemRoutes);
+  app.use(supplierRoutes);
+  app.use(purchasingRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

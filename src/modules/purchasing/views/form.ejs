@@ -1,0 +1,79 @@
+<%# Write a purchase order or change a draft. Plates ask for their size; prices are optional. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Purchase orders', href: '/purchase-orders' }, order ? order.number : 'New'],
+  heading: order ? `Edit ${order.number}` : 'New purchase order',
+  sub: 'Prices are optional and exclude VAT. They can be filled in when the goods arrive.',
+}) %>
+
+<form method="post" action="<%= order ? `/purchase-orders/${order.id}` : '/purchase-orders' %>" novalidate
+      x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-body d-grid gap-3">
+      <%- include('partials/field', { name: 'supplier_id', label: 'Supplier', type: 'select', url: '/api/suppliers', required: true,
+            options: supplierOption, value: values.supplier_id, error: errors.supplier_id, blank: 'Type the supplier’s name',
+            hint: 'Not found? Type the name and choose “Add new supplier”.', attrs: 'data-tom-create="supplier"' }) %>
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'order_date', label: 'Date', type: 'date', value: values.order_date, error: errors.order_date, required: true }) %>
+        <%- include('partials/field', { name: 'expected_on', label: 'Expected delivery', type: 'date', value: values.expected_on, error: errors.expected_on, hint: 'Optional.' }) %>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Materials</h2>
+      <span class="small text-body-secondary" x-show="total > 0" x-cloak x-text="`KES ${money(total)} excl. VAT`"></span></div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <datalist id="po-items"><template x-for="i in items" :key="i.id"><option :value="i.name"></option></template></datalist>
+      <datalist id="po-for"><option value="Trailer"><% jobs.forEach((j) => { %><option value="<%= j.number %> <%= j.customer_name %>"><% }) %></datalist>
+      <datalist id="line-units"><option value="Pc"><option value="Set"><option value="Pair"><option value="Length"><option value="m"><option value="kg"><option value="Litre"><option value="Box"></datalist>
+
+      <template x-for="(row, i) in rows" :key="row.key">
+        <div class="jt-po-line">
+          <div class="jt-po-item">
+            <label class="form-label" :for="`po-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
+            <input class="form-control" :id="`po-item-${row.key}`" name="line_item_name" list="po-items" autocomplete="off" x-model="row.item_name" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+            <input type="hidden" name="line_item_id" :value="row.item_id">
+            <% if (canAddItems) { %>
+              <div class="form-text" x-show="row.item_name.trim() && !row.item_id">Not on the list. <a href="#" @click.prevent="addItem(row)">Add “<span x-text="row.item_name"></span>” as a new item</a></div>
+            <% } %>
+          </div>
+          <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          <div class="jt-po-fields">
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-l-${row.key}`">Length</label><input class="form-control text-end jt-num" :id="`po-l-${row.key}`" name="line_length" inputmode="decimal" data-number="decimal" x-model="row.length"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-w-${row.key}`">Width</label><input class="form-control text-end jt-num" :id="`po-w-${row.key}`" name="line_width" inputmode="decimal" data-number="decimal" x-model="row.width"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-u-${row.key}`">In</label><select class="form-select" :id="`po-u-${row.key}`" name="line_size_unit" x-model="row.size_unit"><option value="ft">feet</option><option value="mm">mm</option></select></div>
+            <div><label class="form-label" :for="`po-q-${row.key}`" x-text="isArea(row) ? 'Pieces' : `Qty${unitOf(row) ? ` (${unitOf(row)})` : ''}`"></label><input class="form-control text-end jt-num" :id="`po-q-${row.key}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
+            <div class="jt-po-for"><label class="form-label" :for="`po-f-${row.key}`">For</label><input class="form-control" :id="`po-f-${row.key}`" name="line_for" list="po-for" maxlength="60" autocomplete="off" x-model="row.for" placeholder="Job or e.g. Trailer"></div>
+            <div><label class="form-label" :for="`po-p-${row.key}`" x-text="isArea(row) ? 'Price per sq ft' : 'Price'"></label><input class="form-control text-end jt-num" :id="`po-p-${row.key}`" name="line_price" inputmode="decimal" data-number="decimal" x-model="row.price"></div>
+          </div>
+          <div class="jt-po-sums small text-body-secondary">
+            <span x-show="isArea(row) && area(row)" x-text="`${money(area(row))} sq ft`"></span>
+            <a href="#" x-show="lastPrice(row) !== null && !row.price" @click.prevent="useLast(row)" x-text="`Use last price: ${money(lastPrice(row))}`"></a>
+            <span class="ms-auto fw-semibold text-body" x-show="amount(row)" x-text="`KES ${money(amount(row))}`"></span>
+          </div>
+        </div>
+      </template>
+      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button></div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <%- include('partials/field', { name: 'notes', label: 'Notes on the order', type: 'textarea', rows: 2, value: values.notes, error: errors.notes, hint: 'Optional. Printed under the materials.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-cart"></i>Saved as a draft: nothing goes to the supplier yet.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= order ? `/purchase-orders/${order.id}` : '/purchase-orders' %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= order ? 'Save changes' : 'Save draft' %></button>
+    </div>
+  </div>
+</form>
+
+<%- include('purchasing/views/quick-add-supplier') %>
+<% if (canAddItems) { %><%- include('purchasing/views/quick-add-item', { categories }) %><% } %>

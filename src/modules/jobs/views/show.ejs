@@ -152,6 +152,20 @@
       </div>
     </section>
 
+    <% if (orders.length) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Purchase orders</h2></div>
+        <ul class="list-group list-group-flush">
+          <% orders.forEach((o) => { const os = orderStatuses[o.status]; %>
+            <li class="list-group-item d-flex align-items-center gap-2">
+              <a class="font-monospace small" href="/purchase-orders/<%= o.id %>"><%= o.number %></a>
+              <span class="ms-auto"><%- include('partials/pill', { text: os.label, tone: os.tone }) %></span>
+            </li>
+          <% }) %>
+        </ul>
+      </section>
+    <% } %>
+
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
       <div class="card-body">
