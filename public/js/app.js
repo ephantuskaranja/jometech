@@ -519,6 +519,34 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // Issuing materials (issues/views/form.ejs): find what is in stock here by typing.
+  // The sums here are only for showing; the server works out what is saved.
+  Alpine.data('issueForm', ({ rows = [], stock = [] } = {}) => {
+    let next = 0;
+    const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
+    const row = (r = {}) => ({ key: next++, balance_id: '', label: '', quantity: '', ...r });
+    return {
+      rows: rows.map(row), stock,
+      stockOf(r) { return this.stock.find((s) => String(s.id) === String(r.balance_id)) ?? null; },
+      pick(r) {
+        const typed = r.label.trim().toLowerCase();
+        r.balance_id = this.stock.find((s) => s.label.toLowerCase() === typed)?.id ?? '';
+      },
+      tooMany(r) { const s = this.stockOf(r); return Boolean(s) && num(r.quantity) > s.available; },
+      cost(r) {
+        const s = this.stockOf(r);
+        return s ? Math.round(num(r.quantity) * (s.area ?? 1) * s.avg_cost * 100) / 100 : 0;
+      },
+      get total() { return this.rows.reduce((sum, r) => sum + this.cost(r), 0); },
+      money: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      addRow() { this.rows.push(row()); },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+    };
+  });
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

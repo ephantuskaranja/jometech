@@ -61,7 +61,7 @@
             <tbody>
               <% stock.movements.forEach((m) => { %>
                 <tr>
-                  <td><%= m.type === 'receive' ? 'Received' : 'Reversed' %><% if (m.receipt_id) { %> <a class="font-monospace small" href="/goods-received/<%= m.receipt_id %>"><%= m.receipt_number %></a><% } %>
+                  <td><%= { receive: 'Received', reverse: 'Reversed', issue: 'Issued', return: 'Returned', opening: 'Opening stock' }[m.type] %><% if (m.receipt_id) { %> <a class="font-monospace small" href="/goods-received/<%= m.receipt_id %>"><%= m.receipt_number %></a><% } %><% if (m.issue_id) { %> <a class="font-monospace small" href="/stores/issue/<%= m.issue_id %>"><%= m.issue_number %></a><% } %><% if (m.job_number) { %> <span class="font-monospace small"><%= m.job_number %></span><% } %>
                     <span class="jt-sub"><%= fmt.dateTime(m.created_at) %><%= m.by_name ? `, ${m.by_name}` : '' %></span></td>
                   <td><%= m.site_name %></td>
                   <td class="text-end jt-num text-nowrap"><%= amount(m.stock_qty) %> <%= item.unit %></td>

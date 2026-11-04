@@ -1,0 +1,83 @@
+<%# What was already on the racks before the system started: quantity and cost, by site. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, 'Opening stock'],
+  heading: 'Opening stock',
+  sub: `What is already on the racks at ${site.name}, with what it cost per unit, excluding VAT. It joins the weighted average like a delivery.`,
+}) %>
+
+<form method="post" action="/inventory/opening" novalidate class="mb-4" x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Add to stock</h2><span class="small text-body-secondary" x-show="total > 0" x-cloak x-text="`KES ${money(total)}`"></span></div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <datalist id="po-items"><template x-for="i in items" :key="i.id"><option :value="i.name"></option></template></datalist>
+      <datalist id="line-units"><option value="Pc"><option value="Set"><option value="Pair"><option value="Length"><option value="m"><option value="kg"><option value="Litre"><option value="Box"></datalist>
+      <template x-for="(row, i) in rows" :key="row.key">
+        <div class="jt-po-line">
+          <div>
+            <label class="form-label" :for="`op-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
+            <input class="form-control" :id="`op-item-${row.key}`" name="line_item_name" list="po-items" autocomplete="off" x-model="row.item_name" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+            <input type="hidden" name="line_item_id" :value="row.item_id">
+            <div class="form-text" x-show="row.item_name.trim() && !row.item_id">Not on the list. <a href="#" @click.prevent="addItem(row)">Add “<span x-text="row.item_name"></span>” as a new item</a></div>
+          </div>
+          <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          <div class="jt-po-fields">
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`op-l-${row.key}`">Length</label><input class="form-control text-end jt-num" :id="`op-l-${row.key}`" name="line_length" inputmode="decimal" data-number="decimal" x-model="row.length"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`op-w-${row.key}`">Width</label><input class="form-control text-end jt-num" :id="`op-w-${row.key}`" name="line_width" inputmode="decimal" data-number="decimal" x-model="row.width"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`op-u-${row.key}`">In</label><select class="form-select" :id="`op-u-${row.key}`" name="line_size_unit" x-model="row.size_unit"><option value="ft">feet</option><option value="mm">mm</option></select></div>
+            <div><label class="form-label" :for="`op-q-${row.key}`" x-text="isArea(row) ? 'Pieces' : `Qty${unitOf(row) ? ` (${unitOf(row)})` : ''}`"></label><input class="form-control text-end jt-num" :id="`op-q-${row.key}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
+            <div><label class="form-label" :for="`op-p-${row.key}`" x-text="isArea(row) ? 'Cost per sq ft' : 'Cost per unit'"></label><input class="form-control text-end jt-num" :id="`op-p-${row.key}`" name="line_price" inputmode="decimal" data-number="decimal" x-model="row.price"></div>
+          </div>
+          <div class="jt-po-sums small text-body-secondary">
+            <span x-show="isArea(row) && area(row)" x-text="`${money(area(row))} sq ft`"></span>
+            <a href="#" x-show="lastPrice(row) !== null && !row.price" @click.prevent="useLast(row)" x-text="`Use last price: ${money(lastPrice(row))}`"></a>
+            <span class="ms-auto fw-semibold text-body" x-show="amount(row)" x-text="`KES ${money(amount(row))}`"></span>
+          </div>
+        </div>
+      </template>
+      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button></div>
+    </div>
+  </section>
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-stack"></i>Saving adds this to stock at <%= site.name %>.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="/inventory">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Add to stock</button>
+    </div>
+  </div>
+</form>
+
+<%- include('purchasing/views/quick-add-item', { categories }) %>
+
+<section class="card">
+  <div class="card-header"><h2 class="h6 mb-0">Entered so far</h2></div>
+  <% if (!entries.length) { %>
+    <div class="card-body small text-body-secondary">Nothing yet.</div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Item</th><th>Site</th><th class="text-end">Quantity</th><th class="text-end">Value (KES)</th><th></th></tr></thead>
+        <tbody>
+          <% entries.forEach((m) => { %>
+            <tr>
+              <td><a href="/items/<%= m.item_id %>"><%= m.item_name %></a><span class="jt-sub"><%= m.size_key %></span><span class="jt-sub"><%= fmt.dateTime(m.created_at) %><%= m.by_name ? `, ${m.by_name}` : '' %></span></td>
+              <td><%= m.site_name %></td>
+              <td class="text-end jt-num text-nowrap"><%= fmt.qty(m.stock_qty) %> <%= m.unit %></td>
+              <td class="text-end jt-num"><%= fmt.money(m.value) %></td>
+              <td class="text-end">
+                <% if (m.undone) { %><%- include('partials/pill', { text: 'Undone', tone: 'neutral' }) %>
+                <% } else { %>
+                  <form method="post" action="/inventory/opening/<%= m.id %>/undo">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Undo</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

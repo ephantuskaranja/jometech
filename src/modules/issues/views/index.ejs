@@ -1,0 +1,59 @@
+<%# Materials that have left the store for jobs, and where to start a new issue. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', 'Issue materials'],
+  heading: 'Issue materials',
+  sub: 'What has left the store for jobs. Each job is charged the average cost on the day.',
+}) %>
+
+<% if (user.can('stores.issue')) { %>
+  <section class="card mb-4">
+    <div class="card-body">
+      <% if (jobs.length) { %>
+        <form class="d-flex flex-wrap gap-2 align-items-end" method="get" action="/stores/issue/start">
+          <div class="flex-grow-1" style="min-width: 16rem">
+            <label class="form-label" for="issue-job">Which job is it for?</label>
+            <select class="form-select" id="issue-job" name="job_id" required>
+              <option value="">Choose a job</option>
+              <% jobs.forEach((j) => { %><option value="<%= j.id %>"><%= j.number %> · <%= j.customer_name %><%= j.reg_no ? ` · ${j.reg_no}` : '' %></option><% }) %>
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-box-seam"></i>Issue materials</button>
+        </form>
+      <% } else { %>
+        <p class="small text-body-secondary mb-0">There are no open jobs at your sites. Materials are issued to a job, so open one first.</p>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/stores/issue">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Issue, job, customer or who took it" aria-label="Search issues">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/stores/issue">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> found</span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the job number or the customer.' } : { icon: 'box-seam', heading: 'Nothing issued yet', text: 'Choose a job above when materials leave the store.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Issue</th><th>Job</th><th>Taken by</th><th class="d-none d-md-table-cell">Date</th><th class="text-end">Cost (KES)</th></tr></thead>
+        <tbody>
+          <% list.forEach((m) => { %>
+            <tr>
+              <td><a class="jt-row-link font-monospace text-nowrap" href="/stores/issue/<%= m.id %>"><%= m.number %></a></td>
+              <td><span class="font-monospace small text-nowrap"><%= m.job_number %></span><span class="jt-sub"><%= m.customer_name %></span></td>
+              <td><%= m.received_by ?? '—' %></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.date(`${m.issued_on}T12:00:00Z`) %></td>
+              <td class="text-end jt-num"><%= fmt.money(m.net_value) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

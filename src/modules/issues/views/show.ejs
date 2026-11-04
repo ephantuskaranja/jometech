@@ -1,0 +1,86 @@
+<%# One issue: what left the store for a job, what it cost, and what has come back. %>
+<%
+  const net = issue.lines.reduce((sum, l) => sum + Number(l.value) - Number(l.returned_value), 0);
+  const unit = (l) => (l.priced_by === 'area' ? 'pcs' : l.item_unit);
+  const canComeBack = issue.lines.some((l) => Number(l.returned_qty) < Number(l.quantity));
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/stores/issue">Issue materials</a><i class="bi bi-chevron-right"></i><span><%= issue.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= issue.number %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-wrench-adjustable"></i><a class="font-monospace" href="/jobs/<%= issue.job_id %>"><%= issue.job_number %></a></span>
+          <span><i class="bi bi-person"></i><%= issue.customer_name %></span>
+          <span><i class="bi bi-calendar"></i><%= fmt.date(`${issue.issued_on}T12:00:00Z`) %></span>
+          <span><i class="bi bi-geo-alt"></i><%= issue.site_name %></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-header"><h2 class="h6 mb-0">Materials</h2></div>
+  <div class="table-responsive">
+    <table class="table jt-table mb-0">
+      <thead><tr><th>Item</th><th class="text-end">Issued</th><th class="text-end">Returned</th><th class="text-end">Cost per unit</th><th class="text-end">Charged to job (KES)</th></tr></thead>
+      <tbody>
+        <% issue.lines.forEach((l) => { %>
+          <tr>
+            <td><%= l.item_name %><% if (l.size_unit) { %><span class="jt-sub"><%= Number(l.length) %> × <%= Number(l.width) %> <%= l.size_unit %></span><% } %></td>
+            <td class="text-end text-nowrap"><%= fmt.qty(l.quantity) %> <%= unit(l) %><% if (l.priced_by === 'area') { %><span class="jt-sub"><%= fmt.money(l.stock_qty) %> sq ft</span><% } %></td>
+            <td class="text-end jt-num"><%= Number(l.returned_qty) > 0 ? fmt.qty(l.returned_qty) : '—' %></td>
+            <td class="text-end jt-num text-nowrap"><%= fmt.money(l.unit_cost) %><span class="jt-sub">per <%= l.item_unit %></span></td>
+            <td class="text-end jt-num"><%= fmt.money(Number(l.value) - Number(l.returned_value)) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+      <tfoot><tr><th colspan="4" class="text-end">Charged to <%= issue.job_number %>, excl. VAT</th><th class="text-end jt-num">KES <%= fmt.money(net) %></th></tr></tfoot>
+    </table>
+  </div>
+  <% if (issue.notes) { %><div class="card-body border-top small" style="white-space: pre-line"><%= issue.notes %></div><% } %>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Taken by</dt><dd><%= issue.received_by ?? '—' %></dd></div>
+          <div><dt>Issued by</dt><dd><%= issue.created_name ?? '—' %></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <% if (canReturn && canComeBack) { %>
+      <section class="card" x-data="{ open: <%= returnError ? 'true' : 'false' %> }">
+        <div class="card-header"><h2 class="h6 mb-0">Not used?</h2></div>
+        <div class="card-body d-grid gap-3">
+          <p class="small mb-0">Unused materials go back into stock at the cost they left at, and come off the job. Also use this if something was issued by mistake.</p>
+          <button type="button" class="btn btn-outline-secondary btn-sm" x-show="!open" @click="open = true"><i class="bi bi-arrow-return-left"></i>Return to store</button>
+          <form method="post" action="/stores/issue/<%= issue.id %>/return" class="d-grid gap-2" x-show="open" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% if (returnError) { %><div class="jt-error-text"><%= returnError %></div><% } %>
+            <% issue.lines.forEach((l) => { const left = Number(l.quantity) - Number(l.returned_qty); if (left <= 0) return; %>
+              <div class="jt-field">
+                <label class="form-label small" for="ret-<%= l.id %>"><%= l.item_name %><%= l.size_unit ? `, ${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '' %> (up to <%= left %> <%= unit(l) %>)</label>
+                <input type="hidden" name="line_id" value="<%= l.id %>">
+                <input class="form-control text-end jt-num" id="ret-<%= l.id %>" name="line_quantity" inputmode="decimal" data-number="decimal">
+              </div>
+            <% }) %>
+            <div class="d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Return to store</button><button class="btn btn-link btn-sm" type="button" @click="open = false">Cancel</button></div>
+          </form>
+        </div>
+      </section>
+    <% } %>
+  </div>
+</div>

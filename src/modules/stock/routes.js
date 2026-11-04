@@ -5,7 +5,9 @@ import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalAmount, optionalText } from '../../core/validate.js';
 import * as stock from './service.js';
-import { getOrder } from '../purchasing/service.js';
+import { getOrder, itemOptions } from '../purchasing/service.js';
+import { listCategories } from '../items/service.js';
+import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
 
 // Goods received against a purchase order, and the stock page.
 
@@ -163,6 +165,82 @@ router.post('/goods-received/:id/reverse', receive, async (req, res) => {
   res.redirect(`/goods-received/${receipt.id}`);
 });
 
+// ---------- opening stock: what was already on the racks ----------
+
+const manageStock = canAny('inventory.manage');
+
+/** Rows use the same fields as a purchase order's; line_price is the cost per unit. */
+async function readOpening(body) {
+  const list = (key) => [].concat(body[key] ?? []).map((v) => String(v ?? '').trim());
+  const [ids, names, quantities, lengths, widths, units, prices] = ['line_item_id', 'line_item_name', 'line_quantity', 'line_length', 'line_width', 'line_size_unit', 'line_price'].map(list);
+  const rows = names.map((item_name, i) => ({
+    item_id: ids[i] ?? '', item_name, quantity: quantities[i] ?? '', length: lengths[i] ?? '', width: widths[i] ?? '', size_unit: units[i] || 'ft', for: '', price: prices[i] ?? '',
+  }));
+  const items = await itemOptions();
+  const lines = [];
+  let error = null;
+  rows.forEach((row, i) => {
+    if (!row.item_name && !row.item_id && !row.quantity) return;
+    const n = `Line ${i + 1}`;
+    const item = items.find((it) => it.id === Number(row.item_id));
+    const qty = number(row.quantity);
+    const cost = number(row.price);
+    if (!item) { error ??= `${n}: choose an item from the list, or add it`; return; }
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 9_999_999 || !decimals(qty, 3)) { error ??= `${n}: check the quantity`; return; }
+    if (row.price === '' || !Number.isFinite(cost) || cost <= 0 || cost > 999_999_999 || !decimals(cost, 2)) { error ??= `${n}: enter the cost per unit, excluding VAT`; return; }
+    const line = { item_id: item.id, quantity: qty, unit_cost: cost, length: null, width: null, size_unit: null, area_sq_ft: null };
+    if (item.priced_by === 'area') {
+      const [length, width] = [number(row.length), number(row.width)];
+      const fine = (v) => Number.isFinite(v) && v > 0 && v <= 100_000 && decimals(v, 2);
+      if (!fine(length) || !fine(width) || !SHEET_UNITS.includes(row.size_unit)) { error ??= `${n}: enter the plate’s length and width`; return; }
+      if (!Number.isInteger(qty)) { error ??= `${n}: plates are counted in whole pieces`; return; }
+      Object.assign(line, { length, width, size_unit: row.size_unit, area_sq_ft: Math.round(sheetSize({ length, width, unit: row.size_unit }).sqFt * 10_000) / 10_000 });
+    }
+    lines.push(line);
+  });
+  if (!error && !lines.length) error = 'Add at least one item';
+  return { rows, lines, error };
+}
+
+const blankOpeningRow = () => ({ item_id: '', item_name: '', quantity: '', length: '', width: '', size_unit: 'ft', for: '', price: '' });
+
+async function renderOpening(req, res, { status = 200, rows = [], errors = {} } = {}) {
+  res.status(status).render('stock/views/opening', {
+    title: 'Opening stock', errors,
+    rows: rows.length ? rows : [blankOpeningRow()],
+    items: await itemOptions(),
+    categories: await listCategories(),
+    entries: await stock.openingEntries(req.user.sites.map((s) => s.id)),
+  });
+}
+
+function needSite(req) {
+  if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
+}
+
+router.get('/inventory/opening', manageStock, async (req, res) => {
+  needSite(req);
+  await renderOpening(req, res);
+});
+
+router.post('/inventory/opening', manageStock, async (req, res) => {
+  needSite(req);
+  const { rows, lines, error } = await readOpening(req.body);
+  if (error) return renderOpening(req, res, { status: 422, rows, errors: { lines: error } });
+  await stock.addOpeningStock(lines, req);
+  req.session.flash = { type: 'success', text: `Added to stock at ${req.site.name}.` };
+  res.redirect('/inventory/opening');
+});
+
+router.post('/inventory/opening/:id/undo', manageStock, async (req, res) => {
+  const m = await stock.getMovement(Number(req.params.id));
+  if (!m) throw httpError(404, 'That entry doesn’t exist.');
+  if (!worksAt(req, m.site_id)) throw httpError(403, 'That entry is at a site that isn’t one of yours.');
+  await stock.undoOpening(m.id, req);
+  req.session.flash = { type: 'success', text: 'Entry undone: it is out of stock again.' };
+  res.redirect('/inventory/opening');
+});
+
 router.get('/inventory', seeStock, async (req, res) => {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
   const q = String(req.query.q ?? '').slice(0, 60);
@@ -171,5 +249,6 @@ router.get('/inventory', seeStock, async (req, res) => {
     title: 'Inventory', q, lowOnly,
     list: await stock.stockList({ siteId: req.site.id, q, lowOnly }),
     totals: await stock.stockTotals(),
+    canManage: req.user.can('inventory.manage'),
   });
 });

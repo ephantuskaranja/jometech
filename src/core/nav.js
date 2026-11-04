@@ -29,7 +29,7 @@ export const nav = [
     label: 'Stores',
     items: [
       { label: 'Items', href: '/items', icon: 'box', permission: ['inventory.manage', 'stores.issue', 'purchasing.manage', 'purchasing.approve'], ready: true },
-      { label: 'Issue materials', href: '/stores/issue', icon: 'box-seam', permission: 'stores.issue' },
+      { label: 'Issue materials', href: '/stores/issue', icon: 'box-seam', permission: ['stores.issue', 'inventory.manage'], ready: true },
       { label: 'Inventory', href: '/inventory', icon: 'stack', permission: ['inventory.manage', 'stores.issue', 'purchasing.manage', 'purchasing.approve'], ready: true },
       { label: 'Purchase orders', href: '/purchase-orders', icon: 'cart', permission: ['purchasing.manage', 'purchasing.approve'], ready: true },
       { label: 'Goods received', href: '/goods-received', icon: 'box-arrow-in-down', permission: ['purchasing.manage', 'purchasing.approve', 'inventory.manage'], ready: true },

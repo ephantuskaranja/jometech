@@ -40,7 +40,7 @@ async function statusFromLines(trx, orderId) {
   return all ? 'received' : received ? 'partly_received' : 'sent';
 }
 
-async function changeBalance(trx, { siteId, itemId, line, by }) {
+export async function changeBalance(trx, { siteId, itemId, line, by }) {
   const key = sizeKey(line);
   const where = { site_id: siteId, item_id: itemId, size_key: key };
   const balance = await trx('stock_balances').where(where).forUpdate().first();
@@ -175,6 +175,62 @@ export async function closeOrder(orderId, reason, actor) {
   });
 }
 
+// ---------- opening stock ----------
+
+/**
+ * What is already on the racks. It joins the weighted average like a delivery, with no transport.
+ * @param {{ item_id: number, quantity: number, length: number|null, width: number|null, size_unit: string|null, area_sq_ft: number|null, unit_cost: number }[]} lines
+ */
+export async function addOpeningStock(lines, actor) {
+  await db.transaction(async (trx) => {
+    for (const line of [...lines].sort((a, b) => a.item_id - b.item_id)) {
+      const item = await trx('items').where({ id: line.item_id }).forUpdate().first();
+      const stockQty = round3(line.area_sq_ft === null ? line.quantity : line.quantity * line.area_sq_ft);
+      const value = round4(stockQty * line.unit_cost);
+      const qty = round3(Number(item.on_hand_qty) + stockQty);
+      const stockValue = round4(Number(item.stock_value) + value);
+      await trx('items').where({ id: item.id }).update({
+        on_hand_qty: qty, stock_value: stockValue, avg_cost: round4(stockValue / qty), ...(item.current_price === null ? { current_price: line.unit_cost } : {}),
+      });
+      const key = await changeBalance(trx, { siteId: actor.site.id, itemId: item.id, line, by: line.quantity });
+      await trx('stock_movements').insert({
+        type: 'opening', site_id: actor.site.id, item_id: item.id, size_key: key, quantity: line.quantity, stock_qty: stockQty, value, created_by: actor.user.id,
+      });
+      await audit(trx, actor, { entity: 'item', id: item.id, action: 'opening_stock', summary: `${stockQty} ${item.unit} at KES ${line.unit_cost}` });
+    }
+  });
+}
+
+/** Typed wrongly: takes the entry back out, as long as it is all still in stock. */
+export async function undoOpening(movementId, actor) {
+  await db.transaction(async (trx) => {
+    const m = await trx('stock_movements').where({ id: movementId, type: 'opening' }).forUpdate().first();
+    if (!m) throw httpError(404, 'That entry doesn’t exist.');
+    if (await trx('stock_movements').where({ reverses_id: m.id }).first('id')) throw httpError(409, 'That entry has already been undone.');
+    const item = await trx('items').where({ id: m.item_id }).forUpdate().first();
+    const balance = await trx('stock_balances').where({ site_id: m.site_id, item_id: m.item_id, size_key: m.size_key }).forUpdate().first();
+    if (!balance || Number(balance.quantity) < Number(m.quantity)) throw httpError(409, `${item.name}: some of this has already left the store, so it can’t be undone.`);
+    const qty = Math.max(0, round3(Number(item.on_hand_qty) - Number(m.stock_qty)));
+    const stockValue = qty > 0 ? Math.max(0, round4(Number(item.stock_value) - Number(m.value))) : 0;
+    await trx('items').where({ id: item.id }).update({ on_hand_qty: qty, stock_value: stockValue, avg_cost: qty > 0 ? round4(stockValue / qty) : item.avg_cost });
+    await trx('stock_balances').where({ id: balance.id }).update({ quantity: round3(Number(balance.quantity) - Number(m.quantity)) });
+    await trx('stock_movements').insert({
+      type: 'reverse', site_id: m.site_id, item_id: m.item_id, size_key: m.size_key, quantity: -Number(m.quantity), stock_qty: -Number(m.stock_qty), value: -Number(m.value), reverses_id: m.id, created_by: actor.user.id,
+    });
+    await audit(trx, actor, { entity: 'item', id: item.id, action: 'opening_undone', summary: `${Number(m.stock_qty)} ${item.unit}` });
+  });
+}
+
+export const getMovement = (id) => db('stock_movements').where({ id }).first();
+
+export async function openingEntries(siteIds) {
+  const rows = await db('stock_movements as m').join('items as i', 'i.id', 'm.item_id').join('sites as s', 's.id', 'm.site_id').leftJoin('users as u', 'u.id', 'm.created_by')
+    .where('m.type', 'opening').whereIn('m.site_id', siteIds).orderBy('m.id', 'desc').limit(200)
+    .select('m.id', 'm.item_id', 'm.size_key', 'm.stock_qty', 'm.value', 'm.created_at', 'i.name as item_name', 'i.unit', 's.name as site_name', 'u.name as by_name',
+      db('stock_movements as r').whereRaw('r.reverses_id = m.id').count('*').as('undone'));
+  return rows.map((r) => ({ ...r, undone: Number(r.undone) > 0 }));
+}
+
 // ---------- reading ----------
 
 export async function getReceipt(id) {
@@ -246,7 +302,8 @@ export async function stockOfItem(itemId) {
     balances: await db('stock_balances as b').join('sites as s', 's.id', 'b.site_id').where('b.item_id', itemId).where('b.quantity', '>', 0)
       .orderBy('s.name').orderBy('b.area_sq_ft', 'desc').select('b.*', 's.name as site_name'),
     movements: await db('stock_movements as m').join('sites as s', 's.id', 'm.site_id').leftJoin('goods_receipts as g', 'g.id', 'm.receipt_id').leftJoin('users as u', 'u.id', 'm.created_by')
+      .leftJoin('material_issues as iss', 'iss.id', 'm.issue_id').leftJoin('jobs as j', 'j.id', 'm.job_id')
       .where('m.item_id', itemId).orderBy('m.id', 'desc').limit(20)
-      .select('m.*', 's.name as site_name', 'g.number as receipt_number', 'u.name as by_name'),
+      .select('m.*', 's.name as site_name', 'g.number as receipt_number', 'u.name as by_name', 'iss.number as issue_number', 'j.number as job_number'),
   };
 }

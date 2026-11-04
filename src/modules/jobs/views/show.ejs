@@ -81,6 +81,35 @@
       <% } %>
     </section>
 
+    <% if (materials.lines.length || canIssue) { %>
+      <section class="card">
+        <div class="card-header d-flex align-items-center gap-3">
+          <h2 class="h6 mb-0 me-auto">Materials</h2>
+          <% if (canSeeCost && materials.lines.length) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(materials.total) %></span><% } %>
+          <% if (canIssue) { %><a class="btn btn-outline-secondary btn-sm text-nowrap" href="/jobs/<%= job.id %>/issue"><i class="bi bi-box-seam"></i>Issue materials</a><% } %>
+        </div>
+        <% if (!materials.lines.length) { %>
+          <div class="card-body small text-body-secondary">Nothing issued to this job yet.</div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table jt-table mb-0">
+              <thead><tr><th>Item</th><th>Issue</th><th class="text-end">Used</th><% if (canSeeCost) { %><th class="text-end">Cost (KES)</th><% } %></tr></thead>
+              <tbody>
+                <% materials.lines.forEach((l) => { const used = Number(l.quantity) - Number(l.returned_qty); %>
+                  <tr>
+                    <td><%= l.item_name %><% if (l.size_unit) { %><span class="jt-sub"><%= Number(l.length) %> × <%= Number(l.width) %> <%= l.size_unit %></span><% } %></td>
+                    <td class="text-nowrap"><% if (canOpenIssues) { %><a class="font-monospace small" href="/stores/issue/<%= l.issue_id %>"><%= l.issue_number %></a><% } else { %><span class="font-monospace small"><%= l.issue_number %></span><% } %><span class="jt-sub"><%= fmt.date(`${l.issued_on}T12:00:00Z`) %></span></td>
+                    <td class="text-end text-nowrap"><%= fmt.qty(used) %> <%= l.priced_by === 'area' ? 'pcs' : l.item_unit %><% if (Number(l.returned_qty) > 0) { %><span class="jt-sub"><%= fmt.qty(l.returned_qty) %> returned</span><% } %></td>
+                    <% if (canSeeCost) { %><td class="text-end jt-num"><%= fmt.money(Number(l.value) - Number(l.returned_value)) %></td><% } %>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </section>
+    <% } %>
+
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
       <div class="card-body"><%- include('partials/history', { entries, labels: { job_type: 'Job type', customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>

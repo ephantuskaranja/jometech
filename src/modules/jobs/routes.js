@@ -12,6 +12,7 @@ import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
 import { typeOptions } from '../job-types/service.js';
 import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.js';
+import { materialsForJob } from '../issues/service.js';
 
 // Jobs: start one from an accepted proforma or from scratch, move it along, print the job card.
 
@@ -146,6 +147,11 @@ router.get('/jobs/:id', view, async (req, res) => {
     // Purchase orders with a line for this job, for those who can open them.
     orders: req.user.can('purchasing.manage') || req.user.can('purchasing.approve') ? await ordersForJob(job.id, req.user.sites.map((s) => s.id)) : [],
     orderStatuses: ORDER_STATUSES,
+    materials: await materialsForJob(job.id),
+    canIssue: req.user.can('stores.issue') && ['open', 'in_progress'].includes(job.status),
+    // What materials cost: for those who run the stores and managers, not the workshop floor.
+    canSeeCost: req.user.can('stores.issue') || req.user.can('inventory.manage'),
+    canOpenIssues: req.user.can('stores.issue') || req.user.can('inventory.manage'),
   });
 });
 

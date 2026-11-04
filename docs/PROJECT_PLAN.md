@@ -236,6 +236,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 14 | Item setup: items priced by unit or by area (sq ft), categories, prices excluding VAT, reorder level, switch off, plate calculator for any size in feet or mm | Done |
 | 15 | Suppliers and purchase orders: optional prices, plate sizes in feet or mm, a line can be for a job, one approval (draft → waiting → approved → sent), printed like the paper order. Numbers PO-2026-0001 | Done |
 | 16 | Goods received against an order: real prices, part deliveries, rejected goods, transport shared by value. Stock by site and by sheet size, weighted average, permanent movement record, reverse a delivery, low stock | Done |
+| 17 | Issuing materials to jobs at the day's average cost, whole sheets only; returns at the cost they left at; each job shows its materials, with cost only for stores and managers; opening stock, with undo | Done |
 
 ### Materials and costing decisions (agreed 2026-11-04)
 
@@ -251,7 +252,8 @@ Sample: `docs/source/Purchase Order/` (git-ignored, client data). Paper purchase
 
 | Next | What |
 |---|---|
-| 17 | Issuing materials to jobs, so each job shows its material cost |
+| 18 | **Site management.** Admins add a site and update its name and details from the app, for example when Jome-Tech opens a new site, with no developer needed. Switch off a site, never delete it, since records point to it. Check the seed doesn't overwrite admin changes on deploy |
+| 19 | **Period summary for admins.** Pick a day or any date range; it opens on today. Shows stock issued and to which jobs, items running low, jobs that changed status (started, moved a step, completed, cancelled), jobs completed, jobs overdue. Also fits here: goods received and their value, orders waiting for approval, price rises of 10% or more, vehicles in and out, proformas sent and accepted, new enquiries. Filter by site, and print or export |
 
 ### Step 7 decisions (updated 2026-10-31)
 

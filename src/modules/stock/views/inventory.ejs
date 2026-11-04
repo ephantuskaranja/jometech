@@ -4,6 +4,7 @@
   crumb: ['Stores', 'Inventory'],
   heading: 'Inventory',
   sub: `Stock at ${site.name}. Plates show their sheets by size. Costs exclude VAT and include transport.`,
+  actions: canManage ? [{ label: 'Opening stock', href: '/inventory/opening', icon: 'stack' }] : [],
 }) %>
 
 <section class="card">
