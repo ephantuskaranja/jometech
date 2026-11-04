@@ -490,6 +490,10 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-job-steps .is-current { font-weight: 600; background: var(--bs-primary-bg-subtle); }
 .jt-job-steps .is-current .bi { color: var(--bs-primary); }
 
+/* Plate calculator (items/views/show.ejs) */
+.jt-sheet-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+@media (max-width: 575.98px) { .jt-sheet-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* ---------- Driver confirms (check-in/:id/sign) ---------- */
 .jt-sign { max-width: 46rem; }
 .jt-sign-head { margin-bottom: 1.25rem; }

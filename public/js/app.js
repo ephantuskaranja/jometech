@@ -407,6 +407,19 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // Item page (items/views/show.ejs): what a plate of any size comes to. The server does the sums.
+  Alpine.data('sheetCalc', ({ url }) => ({
+    length: '', width: '', unit: 'ft', pieces: '1', result: null, timer: null,
+    fixed: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    work() {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(async () => {
+        const params = new URLSearchParams({ length: this.length, width: this.width, unit: this.unit, pieces: this.pieces });
+        this.result = await getJson(`${url}?${params}`).catch(() => null);
+      }, 200);
+    },
+  }));
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

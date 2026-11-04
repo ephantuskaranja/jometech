@@ -233,6 +233,25 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 11 | Proformas, kept simple: numbers from 490, lines with VAT-inclusive prices, draft → sent → accepted / declined, revisions (490-R1), copy another proforma, A4 print like the paper one. Templates, discounts and variations later | Done |
 | 12 | Basic jobs: from an accepted proforma in one click (customer, vehicle and lines copied, no prices) or with no proforma; the vehicle can be added later and its check-in links by itself; open → in progress → completed / cancelled, reopen; printable A4 job card. Tasks, materials, labour, QC and variations later | Done |
 | 13 | Production steps: job types with step lists an admin edits under System (add, rename, remove, reorder; starting lists from §27). A job copies its list and keeps it; one button moves it on ("Welding done → Assembly"), with skip and undo; the last step completes the job. Steps print on the job card | Done |
+| 14 | Item setup: items priced by unit or by area (sq ft), categories, prices excluding VAT, reorder level, switch off, plate calculator for any size in feet or mm | Done |
+
+### Materials and costing decisions (agreed 2026-11-04)
+
+Sample: `docs/source/Purchase Order/` (git-ignored, client data). Paper purchase orders have no prices and give plate sizes in feet or mm.
+
+- **Items:** priced by unit (Pc, Set, Length, m, kg …) or by area (sq ft). A plate item is its type and thickness ("Plate 4 mm"), not its size, so 8 ft × 4 ft and 2440 × 1220 mm share one rate. The size is entered on each order line.
+- **Plates are charged per sq ft.** This is presumed: confirm it against a Tononoka invoice.
+- **Stock cost:** weighted average, one per item across both sites. A job keeps the cost from the day materials were issued. New proformas use the latest purchase price.
+- **VAT:** Jome-Tech claims it back, so stock costs exclude VAT.
+- **Transport:** entered on the goods received note and spread across its items.
+- **Offcuts:** ignored for now, to be added later.
+- **Purchase orders:** the price is optional, as on paper; goods received needs it, from the supplier's eTIMS receipt.
+
+| Next | What |
+|---|---|
+| 15 | Suppliers and purchase orders, printed like the paper one |
+| 16 | Goods received, stock and the weighted average, including transport |
+| 17 | Issuing materials to jobs, so each job shows its material cost |
 
 ### Step 7 decisions (updated 2026-10-31)
 

@@ -1,0 +1,76 @@
+<%# One item: its price, and for plates what any size of sheet comes to. %>
+<% const area = item.priced_by === 'area'; %>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/items">Items</a><i class="bi bi-chevron-right"></i><span><%= item.code %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= item.name %><% if (!item.is_active) { %> <%- include('partials/pill', { text: 'Switched off', tone: 'neutral' }) %><% } %></h1>
+        <div class="jt-meta">
+          <span class="font-monospace"><%= item.code %></span>
+          <span><i class="bi bi-tag"></i><%= item.category %></span>
+          <span><i class="bi bi-cash"></i><% if (item.current_price === null) { %>No price yet<% } else { %>KES <%= fmt.money(item.current_price) %> per <%= item.unit %>, excl. VAT<% } %></span>
+        </div>
+      </div>
+      <% if (canManage) { %><div class="jt-page-actions"><a class="btn btn-outline-secondary" href="/items/<%= item.id %>/edit"><i class="bi bi-pencil"></i>Edit</a></div><% } %>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <% if (area) { %>
+      <section class="card" x-data="sheetCalc(<%= JSON.stringify({ url: `/api/items/${item.id}/sheet` }) %>)">
+        <div class="card-header"><h2 class="h6 mb-0">What does a sheet come to?</h2></div>
+        <div class="card-body d-grid gap-3">
+          <div class="jt-sheet-row">
+            <div class="jt-field"><label class="form-label" for="sheet-length">Length</label><input class="form-control text-end jt-num" id="sheet-length" inputmode="decimal" data-number="decimal" x-model="length" @input="work()"></div>
+            <div class="jt-field"><label class="form-label" for="sheet-width">Width</label><input class="form-control text-end jt-num" id="sheet-width" inputmode="decimal" data-number="decimal" x-model="width" @input="work()"></div>
+            <div class="jt-field"><label class="form-label" for="sheet-unit">In</label><select class="form-select" id="sheet-unit" x-model="unit" @change="work()"><option value="ft">feet</option><option value="mm">mm</option></select></div>
+            <div class="jt-field"><label class="form-label" for="sheet-pieces">Pieces</label><input class="form-control text-end jt-num" id="sheet-pieces" inputmode="numeric" data-number="whole" x-model="pieces" @input="work()"></div>
+          </div>
+          <dl class="jt-kv mb-0" x-show="result" x-cloak>
+            <div><dt>Area</dt><dd class="jt-num" x-text="result && `${fixed(result.total_sq_ft)} sq ft`"></dd></div>
+            <div><dt>Weight, about</dt><dd class="jt-num" x-text="result && `${Math.round(result.total_kg).toLocaleString('en-KE')} kg`"></dd></div>
+            <div><dt>Cost excl. VAT</dt><dd class="jt-num fw-semibold" x-text="result && (result.cost === null ? 'Set a price first' : `KES ${fixed(result.cost)}`)"></dd></div>
+          </dl>
+          <p class="small text-body-secondary mb-0" x-show="!result">Enter a size, e.g. 12 × 4 feet or 2600 × 1220 mm.</p>
+        </div>
+      </section>
+    <% } %>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Category</dt><dd><%= item.category %></dd></div>
+          <div><dt>Priced</dt><dd><%= area ? 'By area, per sq ft' : `By unit, per ${item.unit}` %></dd></div>
+          <% if (area) { %><div><dt>Thickness</dt><dd><%= fmt.qty(item.thickness_mm) %> mm</dd></div><% } %>
+          <div><dt>Price excl. VAT</dt><dd><%= item.current_price === null ? '—' : `KES ${fmt.money(item.current_price)}` %></dd></div>
+          <div><dt>Reorder at</dt><dd><%= item.reorder_level === null ? '—' : `${fmt.qty(item.reorder_level)} ${item.unit}` %></dd></div>
+          <div><dt>Added</dt><dd><%= fmt.date(item.created_at) %><% if (item.created_name) { %><span class="d-block small text-body-secondary">By <%= item.created_name %></span><% } %></dd></div>
+        </dl>
+        <% if (item.notes) { %><p class="mt-3 mb-0 text-body-secondary" style="white-space: pre-line"><%= item.notes %></p><% } %>
+      </div>
+    </section>
+
+    <% if (canManage) { %>
+      <section class="card">
+        <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+          <p class="small mb-0 me-auto"><%= item.is_active ? 'No longer used? Switch it off to hide it from the list. Its history is kept.' : 'This item is switched off.' %></p>
+          <form method="post" action="/items/<%= item.id %>/<%= item.is_active ? 'switch-off' : 'switch-on' %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-secondary btn-sm" type="submit"><%= item.is_active ? 'Switch off' : 'Switch back on' %></button>
+          </form>
+        </div>
+      </section>
+    <% } %>
+  </div>
+
+  <div class="col-lg-5">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', category: 'Category', priced_by: 'Priced by', unit: 'Unit', thickness_mm: 'Thickness (mm)', current_price: 'Price excl. VAT', reorder_level: 'Reorder at', notes: 'Notes' } }) %></div>
+    </section>
+  </div>
+</div>

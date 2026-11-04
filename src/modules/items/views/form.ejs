@@ -1,0 +1,61 @@
+<%# Add or change an item. Plates are priced per sq ft and named by thickness, not by size. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Items', href: '/items' }, item ? item.code : 'New'],
+  heading: item ? `Edit ${item.name}` : 'New item',
+  sub: 'Only the name and category are needed. The price can wait until the first delivery.',
+}) %>
+
+<form method="post" action="<%= item ? `/items/${item.id}` : '/items' %>" novalidate x-data="{ pricedBy: <%= JSON.stringify(values.priced_by === 'area' ? 'area' : 'unit') %> }">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-body d-grid gap-3">
+      <fieldset class="jt-field">
+        <legend class="form-label">How is it priced?</legend>
+        <div class="jt-choices" style="--jt-cols: 2">
+          <label class="jt-choice" for="by-unit"><input class="form-check-input" type="radio" id="by-unit" name="priced_by" value="unit" x-model="pricedBy"><span class="jt-choice-label">By unit<small class="d-block text-body-secondary fw-normal">U-bolts, springs, tyres, rims, kg, metres</small></span></label>
+          <label class="jt-choice" for="by-area"><input class="form-check-input" type="radio" id="by-area" name="priced_by" value="area" x-model="pricedBy"><span class="jt-choice-label">By area (sq ft)<small class="d-block text-body-secondary fw-normal">Plates: one rate for any size</small></span></label>
+        </div>
+      </fieldset>
+
+      <div class="jt-fields">
+        <div>
+          <%- include('partials/field', { name: 'name', label: 'Name', value: values.name, error: errors.name, required: true, placeholder: 'e.g. Plate 4 mm or U-bolt 20 mm' }) %>
+          <% if (existingId) { %><div class="form-text"><a href="/items/<%= existingId %>">Open that item</a></div><% } %>
+          <div class="form-text" x-show="pricedBy === 'area'" x-cloak>Name it by type and thickness, not size. The size is entered on each order.</div>
+        </div>
+        <div>
+          <%- include('partials/field', { name: 'category', label: 'Category', value: values.category, error: errors.category, required: true, placeholder: 'Choose or type a new one', attrs: 'list="item-categories" autocomplete="off"' }) %>
+          <datalist id="item-categories"><% categories.forEach((c) => { %><option value="<%= c.name %>"><% }) %></datalist>
+        </div>
+      </div>
+
+      <div class="jt-fields">
+        <div x-show="pricedBy === 'unit'">
+          <%- include('partials/field', { name: 'unit', label: 'Counted in', value: values.unit, error: errors.unit, required: true, placeholder: 'e.g. Pc', attrs: 'list="item-units" autocomplete="off" maxlength="20"' }) %>
+          <datalist id="item-units"><option value="Pc"><option value="Set"><option value="Pair"><option value="Length"><option value="m"><option value="kg"><option value="Litre"><option value="Box"></datalist>
+        </div>
+        <div x-show="pricedBy === 'area'" x-cloak>
+          <%- include('partials/field', { name: 'thickness_mm', label: 'Thickness (mm)', type: 'number', decimals: true, value: values.thickness_mm, error: errors.thickness_mm, required: true, placeholder: 'e.g. 4' }) %>
+        </div>
+        <div>
+          <%- include('partials/field', { name: 'current_price', label: 'Price excluding VAT', type: 'money', value: values.current_price, error: errors.current_price, hint: 'Optional. You can add it later.' }) %>
+          <div class="form-text" x-text="pricedBy === 'area' ? 'Per sq ft.' : 'Per one of the unit above.'"></div>
+        </div>
+      </div>
+
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'reorder_level', label: 'Reorder when stock falls to', type: 'number', decimals: true, value: values.reorder_level, error: errors.reorder_level, hint: 'Optional. The alert starts once stock is tracked.' }) %>
+        <%- include('partials/field', { name: 'notes', label: 'Notes', value: values.notes, error: errors.notes, hint: 'Optional, e.g. the usual supplier.' }) %>
+      </div>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-box-seam"></i>Prices exclude VAT.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= item ? `/items/${item.id}` : '/items' %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= item ? 'Save changes' : 'Add item' %></button>
+    </div>
+  </div>
+</form>
