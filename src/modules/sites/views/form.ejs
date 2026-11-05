@@ -1,0 +1,61 @@
+<%# Add a site or change its details. When it can't be switched off, this says exactly why. %>
+<%- include('partials/page-header', {
+  crumb: ['System', { label: 'Sites', href: '/admin/sites' }, site ? site.name : 'New'],
+  heading: site ? site.name : 'New site',
+  sub: site ? 'A new name shows everywhere straight away, including on past records.' : 'Only the name is needed.',
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <form method="post" action="<%= site ? `/admin/sites/${site.id}` : '/admin/sites' %>" novalidate>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <section class="card mb-4">
+        <div class="card-body d-grid gap-3">
+          <div>
+            <%- include('partials/field', { name: 'name', label: 'Name', value: values.name, error: errors.name, required: true, placeholder: 'e.g. Mombasa Road yard' }) %>
+            <% if (existingId) { %><div class="form-text"><a href="/admin/sites/<%= existingId %>">Open that site</a></div><% } %>
+          </div>
+          <%- include('partials/field', { name: 'address', label: 'Address', value: values.address, error: errors.address }) %>
+          <%- include('partials/field', { name: 'phone', label: 'Phone', type: 'tel', value: values.phone, error: errors.phone, placeholder: '0712 345 678' }) %>
+        </div>
+      </section>
+      <div class="jt-savebar">
+        <span class="jt-savebar-note"><i class="bi bi-geo-alt"></i><%= site ? 'Nothing changes until you save.' : 'It can be used as soon as you save.' %></span>
+        <div class="jt-savebar-actions">
+          <a class="btn btn-outline-secondary" href="/admin/sites">Cancel</a>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= site ? 'Save changes' : 'Add site' %></button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <% if (site) { %>
+    <div class="col-lg-5 d-grid gap-4 align-content-start">
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0"><%= site.is_active ? 'Not used any more?' : 'Switched off' %></h2></div>
+        <div class="card-body d-grid gap-3">
+          <% if (!site.is_active) { %>
+            <p class="small mb-0">Nobody can choose this site, and its records can’t be opened until it is switched back on. Nothing has been deleted.</p>
+            <form method="post" action="/admin/sites/<%= site.id %>/switch-on">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-outline-primary btn-sm" type="submit">Switch back on</button>
+            </form>
+          <% } else if (reasons.length) { %>
+            <p class="small mb-0">It can’t be switched off yet:</p>
+            <ul class="small mb-0 ps-3"><% reasons.forEach((r) => { %><li><%= r %></li><% }) %></ul>
+          <% } else { %>
+            <p class="small mb-0">Nobody will be able to choose it, and its records can’t be opened until it is switched back on. Nothing is deleted.</p>
+            <form method="post" action="/admin/sites/<%= site.id %>/switch-off" x-data @submit="if (!confirm(<%= JSON.stringify(`Switch off ${site.name}?`) %>)) $event.preventDefault()">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-outline-danger btn-sm" type="submit">Switch off</button>
+            </form>
+          <% } %>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', address: 'Address', phone: 'Phone' } }) %></div>
+      </section>
+    </div>
+  <% } %>
+</div>
