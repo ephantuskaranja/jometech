@@ -276,10 +276,13 @@ test('photos need a login to see, and check-in rights to add', async () => {
 
 // ---------- check out and the receiving note ----------
 
-// Checking out is the release: the person collecting signs (no jobs on these visits, so nothing to check).
+// Checking out: the release (the person collecting signs; no jobs on these visits, so nothing to check),
+// then clearing it at the gate, which supervisors can do too.
 async function checkOut(id) {
   const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
-  return supervisor.post(`/check-in/${id}/release`).type('form').send({ _csrf: csrf, collector_name: 'Brian Otieno', signature: PNG });
+  const res = await supervisor.post(`/check-in/${id}/release`).type('form').send({ _csrf: csrf, collector_name: 'Brian Otieno', signature: PNG });
+  if (res.status !== 302) return res;
+  return supervisor.post(`/check-in/${id}/clear`).type('form').send({ _csrf: csrf });
 }
 
 test('checking out moves the vehicle to “Checked out” and locks the check-in', async () => {
@@ -292,7 +295,7 @@ test('checking out moves the vehicle to “Checked out” and locks the check-in
 
   const page = (await supervisor.get(`/check-in/${id}`)).text;
   assert.match(page, /Checked out /);
-  assert.match(page, /checked it out/);
+  assert.match(page, /cleared it out at the gate/);
   assert.doesNotMatch((await supervisor.get('/check-in')).text, /KZY 309C/);
   assert.match((await supervisor.get('/check-in?show=out')).text, /KZY 309C/);
 

@@ -13,6 +13,7 @@ export const nav = [
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress', 'jobs.manage'], ready: true },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage' },
       { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
+      { label: 'Vehicles leaving', href: '/gate/vehicles', icon: 'box-arrow-right', permission: 'checkin.gate', ready: true },
     ],
   },
   {

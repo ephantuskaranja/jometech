@@ -104,7 +104,7 @@ router.get('/check-in', view, async (req, res) => {
   res.render('checkins/views/index', {
     title: 'Check-in',
     tab,
-    list: tab === 'moves' ? [] : await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'in_workshop'),
+    list: tab === 'moves' ? [] : await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'on_site'),
     moves: tab === 'moves' ? await movements.listMovements(req.site.id) : [],
     arriving: tab === 'in' ? await movements.arriving(req.site.id) : [],
     hasOtherSites: (await movements.otherSites(req.site.id)).length > 0,
@@ -178,7 +178,8 @@ router.get('/check-in/:id', view, async (req, res) => {
     canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,
     // Release: the checklist while it is here, the release (who collected it) once it has left.
     releaseList: checkin.status === 'in_workshop' ? await release.checklist(checkin.id) : null,
-    releaseRecord: checkin.status === 'checked_out' ? await release.releaseOf(checkin.id) : null,
+    releaseRecord: ['released', 'checked_out'].includes(checkin.status) ? await release.releaseOf(checkin.id) : null,
+    canClear: checkin.status === 'released' && req.user.can('checkin.gate') && req.site?.id === checkin.site_id,
     canAllow: req.user.can('invoices.manage'),
     daysIn: checkins.daysIn(checkin.checked_in_at, checkin.checked_out_at ?? new Date()),
     photos: photosFor(checkin, manages && checkin.status === 'in_workshop'),
@@ -242,7 +243,7 @@ router.post('/check-in/:id/release', manage, async (req, res) => {
   if (Object.keys(allErrors).length) return renderRelease(res, checkin, { status: 422, values: { ...req.body, signature: '' }, errors: allErrors });
 
   const { number } = await release.releaseVehicle(checkin.id, { ...data, signature: png }, req);
-  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} released to ${data.collector_name}. Release note ${number} is ready to print.` };
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} released to ${data.collector_name}. Release note ${number} is ready to print. The gate clears it out as it leaves.` };
   res.redirect(`/check-in/${checkin.id}`);
 });
 
@@ -263,6 +264,21 @@ router.post('/check-in/:id/withdraw-release', allow, async (req, res) => {
   await release.withdrawRelease(checkin.id, req);
   req.session.flash = { type: 'warning', text: `Permission to release ${vehicleLabel(checkin)} withdrawn.` };
   res.redirect(`/check-in/${checkin.id}`);
+});
+
+// ---------- the gate: released vehicles leave ----------
+
+const gate = canAny('checkin.gate');
+
+router.get('/gate/vehicles', gate, async (req, res) => {
+  if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
+  res.render('checkins/views/gate', { title: 'Vehicles leaving', list: await release.waitingAtGate(req.site.id), vehicleLabel });
+});
+
+router.post('/check-in/:id/clear', gate, async (req, res) => {
+  const c = await release.clearAtGate(Number(req.params.id), req);
+  req.session.flash = { type: 'success', text: `${vehicleLabel(c)} cleared out. Checked out ${fmt.dateTime(new Date())}.` };
+  res.redirect(req.body.back === 'checkin' ? `/check-in/${c.id}` : '/gate/vehicles');
 });
 
 // The release note: an A4 page to print or save as PDF. Money only as "paid" or "on credit": the gate and driver see it.

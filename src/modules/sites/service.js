@@ -63,7 +63,7 @@ export async function blockers(siteId, q = db) {
   const out = [];
   const add = (n, text) => { if (n) out.push(text(n)); };
   if (!(await count(q('sites').where({ is_active: true }).whereNot({ id: siteId })))) out.push('It is the only active site.');
-  add(await count(q('checkins').where({ site_id: siteId, status: 'in_workshop' })), (n) => `${plural(n, 'vehicle')} still in the workshop.`);
+  add(await count(q('checkins').where({ site_id: siteId }).whereIn('status', ['in_workshop', 'released'])), (n) => `${plural(n, 'vehicle')} still in the workshop.`);
   add(await count(q('vehicle_movements').where({ status: 'in_transit' }).where((w) => w.where('from_site_id', siteId).orWhere('to_site_id', siteId))), (n) => `${plural(n, 'vehicle')} on the way to or from here.`);
   add(await count(q('jobs').where({ site_id: siteId }).whereIn('status', ['open', 'in_progress'])), (n) => `${plural(n, 'active job')}.`);
   add(await count(q('stock_balances').where({ site_id: siteId }).where('quantity', '>', 0)), (n) => `Stock of ${plural(n, 'item or sheet size', 'items or sheet sizes')} still here.`);

@@ -7,7 +7,7 @@ import * as invoices from '../src/modules/invoices/service.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
-let supervisor, manager, managerId, hq, customer, owing, paidUp;
+let supervisor, manager, gate, managerId, hq, customer, owing, paidUp;
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 /** A vehicle in the workshop with one job on this visit. */
@@ -31,6 +31,7 @@ async function invoiced(job, total, paid) {
 before(async () => {
   supervisor = await loginAs(app, await makeUser(97, ['supervisor']));
   manager = await loginAs(app, await makeUser(98, ['manager']));
+  gate = await loginAs(app, await makeUser(89, ['gate']));
   managerId = (await db('users').where({ phone: '+254700000098' }).first('id')).id;
   hq = await db('sites').where({ code: 'HQ' }).first();
   [customer] = await db('customers').insert({ number: 'CUS-T851', name: 'Test Release Haulage', phone: '+254700000851', category: 'company' });
@@ -86,7 +87,8 @@ test('allowed: the collector signs and the vehicle leaves; the note says “on c
   assert.equal(res.status, 302, res.text);
 
   const c = await db('checkins').where({ id: owing.checkin }).first();
-  assert.equal(c.status, 'checked_out');
+  assert.equal(c.status, 'released', 'still inside until the gate clears it');
+  assert.equal(c.checked_out_at, null);
   const r = await db('vehicle_releases').where({ checkin_id: owing.checkin }).first();
   assert.match(r.number, /^RN-\d{4}-\d{4}$/);
   assert.equal(r.collector_phone, '+254700000852');
@@ -105,13 +107,52 @@ test('allowed: the collector signs and the vehicle leaves; the note says “on c
   assert.match(note, /approval of Test manager/);
   assert.match(note, new RegExp(`/check-in/${owing.checkin}/release-signature.png`));
   await supervisor.get(`/check-in/${owing.checkin}/release-signature.png`).expect(200);
-  assert.match((await supervisor.get(`/check-in/${owing.checkin}`)).text, /Collected by <strong>Peter Kamau/);
+  const page = (await supervisor.get(`/check-in/${owing.checkin}`)).text;
+  assert.match(page, /Collected by <strong>Peter Kamau/);
+  assert.match(page, /Released: waiting at the gate/);
+  assert.match(note, /Cleared at the gate by:<\/span> \n/, 'blank until the gate clears it');
+});
+
+test('the gate sees released vehicles, clears them out, and is named on the release note', async () => {
+  const sales = await loginAs(app, await makeUser(90, ['sales']));
+  await sales.get('/gate/vehicles').expect(403);
+  let res = await gate.get('/gate/vehicles');
+  if (res.status === 302) { // a guard chooses the site at login
+    const page = await gate.get('/choose-site');
+    await gate.post('/choose-site').type('form').send({ _csrf: csrfFrom(page.text), site_id: hq.id });
+    res = await gate.get('/gate/vehicles');
+  }
+  assert.equal(res.status, 200);
+  assert.match(res.text, /KEB 851C/);
+  assert.match(res.text, /Peter Kamau/);
+  assert.match(res.text, /RN-\d{4}-\d{4}/);
+  assert.match(res.text, /href="\/gate\/vehicles"/, 'in the guard’s menu');
+
+  const csrf = csrfFrom(res.text);
+  res = await gate.post(`/check-in/${owing.checkin}/clear`).type('form').send({ _csrf: csrf });
+  assert.equal(res.headers.location, '/gate/vehicles');
+  const c = await db('checkins').where({ id: owing.checkin }).first();
+  assert.equal(c.status, 'checked_out');
+  assert.ok(c.checked_out_at);
+  assert.equal(c.checked_out_by, (await db('users').where({ phone: '+254700000089' }).first('id')).id);
+  await gate.get('/gate/vehicles'); // shows (and clears) the "KEB 851C cleared out" message
+  assert.doesNotMatch((await gate.get('/gate/vehicles')).text, /KEB 851C/);
+  assert.equal((await gate.post(`/check-in/${owing.checkin}/clear`).type('form').send({ _csrf: csrf })).status, 409, 'once only');
+  assert.equal((await gate.post(`/check-in/${paidUp.checkin}/clear`).type('form').send({ _csrf: csrf })).status, 409, 'not released yet');
+
+  const note = (await supervisor.get(`/check-in/${owing.checkin}/release-note`)).text;
+  assert.match(note, /Cleared at the gate by:<\/span> Test gate/);
+  assert.match((await supervisor.get(`/check-in/${owing.checkin}`)).text, /Cleared at the gate by Test gate/);
 });
 
 test('all green: released without anyone’s approval, the note says “paid in full”', async () => {
   const page = (await supervisor.get(`/check-in/${paidUp.checkin}`)).text;
   assert.match(page, />Ready</);
   assert.equal((await release(supervisor, paidUp.checkin)).status, 302);
+  // A supervisor can clear it out too, when no guard is on duty.
+  assert.match((await supervisor.get(`/check-in/${paidUp.checkin}`)).text, /Cleared out at the gate/);
+  assert.equal((await post(supervisor, `/check-in/${paidUp.checkin}/clear`, { back: 'checkin' })).headers.location, `/check-in/${paidUp.checkin}`);
+  assert.equal((await db('checkins').where({ id: paidUp.checkin }).first()).status, 'checked_out');
   const r = await db('vehicle_releases').where({ checkin_id: paidUp.checkin }).first();
   assert.equal(Boolean(r.on_approval), false);
   const note = (await supervisor.get(`/check-in/${paidUp.checkin}/release-note`)).text;

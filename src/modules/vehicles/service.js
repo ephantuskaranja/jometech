@@ -76,7 +76,7 @@ export async function listVehicles({ q = '', type = '', place = 'all', siteId = 
   const query = db('vehicles')
     .join('customers', 'customers.id', 'vehicles.customer_id')
     .leftJoin('customer_contacts', 'customer_contacts.id', 'vehicles.contact_id')
-    .leftJoin('checkins as open', (j) => j.on('open.vehicle_id', 'vehicles.id').andOnVal('open.status', 'in_workshop'))
+    .leftJoin('checkins as open', (j) => j.on('open.vehicle_id', 'vehicles.id').andOnIn('open.status', ['in_workshop', 'released']))
     .leftJoin('sites as open_site', 'open_site.id', 'open.site_id')
     .leftJoin(visits.as('hist'), 'hist.vehicle_id', 'vehicles.id')
     .limit(200)
@@ -107,7 +107,7 @@ export async function listVehicles({ q = '', type = '', place = 'all', siteId = 
 /** How many vehicles are in each tab, for the badges. */
 export async function countByPlace() {
   const [row] = await db('vehicles')
-    .leftJoin(db('checkins').where({ status: 'in_workshop' }).distinct('vehicle_id').as('open'), 'open.vehicle_id', 'vehicles.id')
+    .leftJoin(db('checkins').whereIn('status', ['in_workshop', 'released']).distinct('vehicle_id').as('open'), 'open.vehicle_id', 'vehicles.id')
     .leftJoin(db('checkins').whereNot({ status: 'cancelled' }).distinct('vehicle_id').as('seen'), 'seen.vehicle_id', 'vehicles.id')
     .select(
       db.raw('SUM(open.vehicle_id IS NOT NULL) as `in`'),

@@ -97,8 +97,9 @@ export async function releaseVehicle(checkinId, input, actor) {
         number, checkin_id: checkinId, collector_name: input.collector_name, collector_phone: input.collector_phone, collector_id_no: input.collector_id_no,
         signature_path: rel, checklist: JSON.stringify(list.items), on_approval: !list.ok, released_by: actor.user.id,
       });
-      await trx('checkins').where({ id: checkinId }).update({ status: 'checked_out', checked_out_at: trx.fn.now(), checked_out_by: actor.user.id });
-      await audit(trx, actor, { entity: 'checkin', id: checkinId, action: 'checked_out',
+      // Still inside: it is checked out when the gate clears it (clearAtGate).
+      await trx('checkins').where({ id: checkinId }).update({ status: 'released' });
+      await audit(trx, actor, { entity: 'checkin', id: checkinId, action: 'released',
         summary: `Released ${vehicleLabel(c)} to ${input.collector_name} (${number}${list.ok ? '' : ', with a manager’s approval'})` });
       return { number };
     });
@@ -106,6 +107,35 @@ export async function releaseVehicle(checkinId, input, actor) {
     await removeFile(rel); // not saved: don't leave the image behind
     throw err;
   }
+}
+
+/** The guard (or a supervisor or manager) lets the released vehicle out: now it is checked out. */
+export async function clearAtGate(checkinId, actor) {
+  return db.transaction(async (trx) => {
+    const c = await trx('checkins').join('vehicles', 'vehicles.id', 'checkins.vehicle_id').where('checkins.id', checkinId).forUpdate()
+      .first('checkins.id', 'checkins.number', 'checkins.status', 'checkins.site_id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag');
+    if (!c) throw httpError(404, 'That check-in doesn’t exist.');
+    if (c.status === 'checked_out') throw httpError(409, `${vehicleLabel(c)} has already been cleared out.`);
+    if (c.status !== 'released') throw httpError(409, `${vehicleLabel(c)} hasn’t been released by the workshop yet.`);
+    if (actor.site?.id !== c.site_id) throw httpError(403, `${vehicleLabel(c)} is at another site.`);
+    await trx('checkins').where({ id: checkinId }).update({ status: 'checked_out', checked_out_at: trx.fn.now(), checked_out_by: actor.user.id });
+    const r = await trx('vehicle_releases').where({ checkin_id: checkinId }).first('number', 'collector_name');
+    await audit(trx, actor, { entity: 'checkin', id: checkinId, action: 'gate_cleared', summary: `${vehicleLabel(c)} left with ${r?.collector_name ?? 'the collector'} (${r?.number ?? c.number})` });
+    return c;
+  });
+}
+
+/** Released vehicles at a site, waiting to be cleared at the gate (the guard's list), oldest first. */
+export function waitingAtGate(siteId) {
+  return db('checkins as c')
+    .join('vehicles as v', 'v.id', 'c.vehicle_id')
+    .join('customers as cu', 'cu.id', 'c.customer_id')
+    .join('vehicle_releases as r', 'r.checkin_id', 'c.id')
+    .leftJoin('users as u', 'u.id', 'r.released_by')
+    .where({ 'c.status': 'released', 'c.site_id': siteId })
+    .orderBy('r.created_at')
+    .select('c.id', 'c.number', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 'v.colour', 'cu.name as customer_name',
+      'r.number as release_number', 'r.collector_name', 'r.collector_phone', 'r.collector_id_no', 'r.created_at as released_at', 'u.name as released_by_name');
 }
 
 /** The checklist's jobs with their work lines, for the release note. */

@@ -102,6 +102,13 @@
         </div>
       </div>
       <div class="muted small signed-at">Signed on the device <%= fmt.dateTime(record.created_at) %></div>
+      <div class="sig-row">
+        <div class="sig-name">
+          <span class="label">Cleared at the gate by:</span> <%= checkin.status === 'checked_out' ? checkin.checked_out_by_name ?? blank : '' %>
+          <% if (checkin.status === 'checked_out') { %><div class="muted small"><%= fmt.dateTime(checkin.checked_out_at) %></div><% } %>
+        </div>
+        <div class="sig-box"><span class="label">Sign</span><span class="sig-line"></span></div>
+      </div>
     </div>
 
     <footer class="muted small">

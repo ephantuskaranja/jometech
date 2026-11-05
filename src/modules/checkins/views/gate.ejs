@@ -1,0 +1,42 @@
+<%#
+  The gate: vehicles the workshop has released, waiting to drive out. The guard compares the vehicle and
+  the person with what is shown here, then taps "Cleared out": only then is the vehicle checked out.
+%>
+<%- include('partials/page-header', {
+  crumb: ['Workshop', 'Vehicles leaving'],
+  heading: 'Vehicles leaving',
+  sub: `Released by the workshop at ${site.name}. Check the vehicle and the person collecting it, then clear it out.`,
+}) %>
+
+<% if (!list.length) { %>
+  <section class="card">
+    <%- include('partials/empty', { icon: 'box-arrow-right', heading: 'No vehicle waiting to leave', text: 'Vehicles appear here once the workshop releases them to the person collecting.' }) %>
+  </section>
+<% } else { %>
+  <div class="d-grid gap-3">
+    <% list.forEach((v) => { const describe = [v.make, v.model, v.colour].filter(Boolean).join(' · '); %>
+      <section class="card">
+        <div class="card-body d-grid gap-3">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <% if (v.reg_no) { %><%- include('partials/plate', { reg: v.reg_no, size: 'lg' }) %><% } else { %><strong class="font-monospace fs-5"><%= vehicleLabel(v) %></strong><% } %>
+            <div>
+              <div class="fw-semibold"><%= describe || 'Vehicle' %></div>
+              <div class="small text-body-secondary"><%= v.customer_name %></div>
+            </div>
+          </div>
+          <dl class="jt-kv mb-0">
+            <div><dt>Collected by</dt><dd><strong><%= v.collector_name %></strong>
+              <span class="d-block small"><%= [v.collector_phone && fmt.phone(v.collector_phone), v.collector_id_no && `ID ${v.collector_id_no}`].filter(Boolean).join(' · ') || 'No phone or ID given' %></span></dd></div>
+            <% if (v.chassis_no) { %><div><dt>Chassis</dt><dd class="font-monospace"><%= v.chassis_no %></dd></div><% } %>
+            <div><dt>Release note</dt><dd class="font-monospace"><%= v.release_number %></dd></div>
+            <div><dt>Released</dt><dd><%= fmt.dateTime(v.released_at) %><span class="d-block small text-body-secondary">by <%= v.released_by_name ?? 'a removed user' %></span></dd></div>
+          </dl>
+          <form method="post" action="/check-in/<%= v.id %>/clear">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-box-arrow-right"></i>Cleared out</button>
+          </form>
+        </div>
+      </section>
+    <% }) %>
+  </div>
+<% } %>

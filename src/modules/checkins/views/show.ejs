@@ -78,17 +78,29 @@
   </div>
 
   <div class="col-lg-5 d-grid gap-4 align-content-start">
-    <% if (checkin.status === 'checked_out') { %>
+    <% if (['released', 'checked_out'].includes(checkin.status)) { const out = checkin.status === 'checked_out'; %>
       <section class="card">
         <div class="card-body d-flex gap-3 align-items-start">
-          <i class="bi bi-box-arrow-right fs-4 text-success"></i>
-          <div>
-            <div class="fw-semibold">Checked out <%= fmt.dateTime(checkin.checked_out_at) %></div>
-            <div class="small text-body-secondary">By <%= checkin.checked_out_by_name ?? 'a removed user' %>, after <%= daysIn.toLowerCase() === 'today' ? 'less than a day' : daysIn %> in the workshop.</div>
+          <i class="bi bi-<%= out ? 'box-arrow-right text-success' : 'hourglass-split text-warning' %> fs-4"></i>
+          <div class="flex-grow-1">
+            <% if (out) { %>
+              <div class="fw-semibold">Checked out <%= fmt.dateTime(checkin.checked_out_at) %></div>
+              <div class="small text-body-secondary"><%= releaseRecord ? 'Cleared at the gate by' : 'By' %> <%= checkin.checked_out_by_name ?? 'a removed user' %>, after <%= daysIn.toLowerCase() === 'today' ? 'less than a day' : daysIn %> in the workshop.</div>
+            <% } else { %>
+              <div class="fw-semibold">Released: waiting at the gate</div>
+              <div class="small text-body-secondary">Released <%= fmt.dateTime(releaseRecord.created_at) %> by <%= releaseRecord.released_by_name ?? 'a removed user' %>. It is checked out when the gate clears it.</div>
+            <% } %>
             <% if (releaseRecord) { %>
               <div class="small mt-2">Collected by <strong><%= releaseRecord.collector_name %></strong><%= releaseRecord.collector_phone ? `, ${fmt.phone(releaseRecord.collector_phone)}` : '' %>.
                 <%= releaseRecord.on_approval ? `Released with ${checkin.release_allowed_by_name ?? 'a manager'}’s approval: ${checkin.release_allowed_reason ?? ''}` : '' %></div>
               <a class="btn btn-outline-primary btn-sm mt-2" href="/check-in/<%= checkin.id %>/release-note"><i class="bi bi-printer"></i>Release note <%= releaseRecord.number %></a>
+            <% } %>
+            <% if (canClear) { %>
+              <form method="post" action="/check-in/<%= checkin.id %>/clear" class="mt-3">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="back" value="checkin">
+                <button class="btn btn-primary w-100" type="submit"><i class="bi bi-box-arrow-right"></i>Cleared out at the gate</button>
+              </form>
             <% } %>
           </div>
         </div>
@@ -209,7 +221,7 @@
         <% } else if (checkin.not_signed_reason) { %>
           <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span><%= checkin.not_signed_reason %></span></div>
         <% } else if (checkin.status !== 'in_workshop') { %>
-          <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span>Checked out before the driver confirmed.</span></div>
+          <div class="d-flex gap-2 align-items-start small"><%- include('partials/pill', { text: 'Not signed', tone: 'warn' }) %><span>Released before the driver confirmed.</span></div>
         <% } else { %>
           <p class="small text-body-secondary mb-3"><i class="bi bi-hourglass-split"></i> Waiting for the person who delivered the vehicle to check the details and sign.</p>
           <% if (canConfirm) { %><a class="btn btn-primary w-100" href="/check-in/<%= checkin.id %>/sign"><i class="bi bi-pen"></i>Driver signs now</a><% } %>

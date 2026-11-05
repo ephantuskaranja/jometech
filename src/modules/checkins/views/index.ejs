@@ -82,7 +82,8 @@
                 <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %></td>
               <td><span class="font-monospace small"><%= c.number %></span>
                 <% if (tab === 'in' && c.moving_to) { %><span class="d-block mt-1"><%- include('partials/pill', { text: `On the way to ${c.moving_to}`, tone: 'info' }) %></span><% } %>
-                <% if (tab === 'in' && !c.driver_signed_at && !c.not_signed_reason) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Driver to sign', tone: 'warn' }) %></span><% } %></td>
+                <% if (tab === 'in' && c.status === 'released') { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Waiting at the gate', tone: 'warn' }) %></span><% } %>
+                <% if (tab === 'in' && c.status === 'in_workshop' && !c.driver_signed_at && !c.not_signed_reason) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Driver to sign', tone: 'warn' }) %></span><% } %></td>
               <td><%= c.customer_name %></td>
               <td class="d-none d-lg-table-cell text-body-secondary"><%= c.contact_name ?? '—' %></td>
               <td class="text-nowrap"><%= fmt.dateTime(c.checked_in_at) %></td>

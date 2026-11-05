@@ -20,9 +20,13 @@ export const fuelLabel = (q) => FUEL_LEVELS.find((f) => f.value === q)?.label ??
 
 export const STATUSES = {
   in_workshop: { label: 'In the workshop', tone: 'info' },
+  released: { label: 'Waiting at the gate', tone: 'warn' },
   checked_out: { label: 'Checked out', tone: 'ok' },
   cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
+
+/** Still physically on site: in the workshop, or released and waiting to be cleared at the gate. */
+export const ON_SITE = ['in_workshop', 'released'];
 
 const err = (status, message, field) => Object.assign(httpError(status, message), { field });
 
@@ -253,7 +257,7 @@ export async function getCheckin(id) {
  * A site's check-ins for the workshop list: those still in the workshop (oldest
  * arrival last), or the 100 most recently checked out.
  */
-export async function listCheckins(siteId, status = 'in_workshop') {
+export async function listCheckins(siteId, status = 'on_site') {
   const out = status === 'checked_out';
   return db('checkins')
     .join('vehicles', 'vehicles.id', 'checkins.vehicle_id')
@@ -262,10 +266,11 @@ export async function listCheckins(siteId, status = 'in_workshop') {
     // A vehicle on its way to another site stays on this list until it is received there.
     .leftJoin('vehicle_movements as move', (j) => j.on('move.checkin_id', 'checkins.id').andOnVal('move.status', 'in_transit'))
     .leftJoin('sites as move_to', 'move_to.id', 'move.to_site_id')
-    .where({ 'checkins.status': status, 'checkins.site_id': siteId })
+    .where({ 'checkins.site_id': siteId })
+    .modify((q) => (out ? q.where('checkins.status', 'checked_out') : q.whereIn('checkins.status', ON_SITE)))
     .orderBy(out ? 'checkins.checked_out_at' : 'checkins.checked_in_at', 'desc')
     .limit(out ? 100 : 200)
-    .select('checkins.id', 'checkins.number', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
+    .select('checkins.id', 'checkins.number', 'checkins.status', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
       'move_to.name as moving_to',
       'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name',
       // Not a saved contact: the name typed at check-in, else the one given when signing.
@@ -285,7 +290,7 @@ export function visitsOf(vehicleId) {
 }
 
 export async function countInWorkshop(siteId) {
-  const [{ count }] = await db('checkins').where({ status: 'in_workshop', site_id: siteId }).count({ count: '*' });
+  const [{ count }] = await db('checkins').whereIn('status', ON_SITE).where({ site_id: siteId }).count({ count: '*' });
   return Number(count);
 }
 
