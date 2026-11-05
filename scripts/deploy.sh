@@ -10,8 +10,26 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_USER="${APP_USER:-jometech}"
 cd "$APP_DIR"
 BRANCH="${DEPLOY_BRANCH:-master}"
+
+# Run as root by mistake: give every file back to the app user, then carry on as that user.
+if [ "$(id -u)" -eq 0 ]; then
+  echo "==> Running as root: giving $APP_DIR back to $APP_USER and continuing as $APP_USER"
+  chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+  exec sudo -u "$APP_USER" -H DEPLOY_BRANCH="$BRANCH" "$APP_DIR/scripts/deploy.sh"
+fi
+
+# Files left owned by root (e.g. "npm install" run as root) make npm ci fail: fix them first.
+# Needs the chown line in /etc/sudoers.d/jometech (docs/DEPLOY.md, step 8).
+if [ -n "$(find "$APP_DIR" ! -user "$APP_USER" -print -quit)" ]; then
+  echo "==> Some files aren't owned by $APP_USER: fixing"
+  sudo -n /usr/bin/chown -R "$APP_USER:$APP_USER" "$APP_DIR" || {
+    echo "!! Can't fix them. On the server run: sudo chown -R $APP_USER:$APP_USER $APP_DIR" >&2
+    exit 1
+  }
+fi
 
 # DB_* settings from .env
 set -a; . ./.env; set +a

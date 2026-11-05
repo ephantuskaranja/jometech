@@ -124,9 +124,10 @@ sudo cp /var/www/apps/jometech/deploy/jometech.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now jometech
 curl http://127.0.0.1:3000/health        # {"ok":true,"db":"up"}
-# Let the deploy script restart the app, and nothing else:
-echo 'jometech ALL=(root) NOPASSWD: /usr/bin/systemctl restart jometech' | sudo tee /etc/sudoers.d/jometech
+# Let the deploy script restart the app and take back files root left behind, and nothing else:
+echo 'jometech ALL=(root) NOPASSWD: /usr/bin/systemctl restart jometech, /usr/bin/chown -R jometech\:jometech /var/www/apps/jometech' | sudo tee /etc/sudoers.d/jometech
 sudo chmod 440 /etc/sudoers.d/jometech
+sudo visudo -c
 ```
 
 ### 9. HTTPS
@@ -189,7 +190,8 @@ Push to `master` (or GitHub → Actions → **Test and deploy** → Run workflow
 - **Deploy:** `git push`. Watch the **Actions** tab; the deploy step prints each stage.
 - **Logs:** `journalctl -u jometech -f`
 - **Restart by hand:** `sudo systemctl restart jometech`
-- **Deploy by hand** (e.g. GitHub is down): `sudo -iu jometech /var/www/apps/jometech/scripts/deploy.sh`
+- **Deploy by hand** (e.g. GitHub is down): `sudo -iu jometech /var/www/apps/jometech/scripts/deploy.sh`. Run as root by mistake, it gives the files back to `jometech` and carries on as `jometech`.
+- **Run git and npm on the server as `jometech`** (`sudo -u jometech git …`), never as plain root: root-owned files make `npm ci` fail. The deploy script fixes them, but only with the chown line from step 8 in sudoers.
 - **Never edit files in `/var/www/apps/jometech` on the server.** The deploy pulls with `--ff-only` and stops if the server copy differs. Change code on your PC and push.
 
 ## When something goes wrong
