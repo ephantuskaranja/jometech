@@ -8,6 +8,7 @@ import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-forma
 import { check, httpError, optionalId, optionalPhone, optionalReading, optionalText } from '../../core/validate.js';
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
+import * as release from './release.js';
 import * as movements from '../movements/service.js';
 import { forCheckin, STATUSES as JOB_STATUSES } from '../jobs/service.js';
 import { fmt } from '../../core/format.js';
@@ -175,6 +176,10 @@ router.get('/check-in/:id', view, async (req, res) => {
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
     canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,
+    // Release: the checklist while it is here, the release (who collected it) once it has left.
+    releaseList: checkin.status === 'in_workshop' ? await release.checklist(checkin.id) : null,
+    releaseRecord: checkin.status === 'checked_out' ? await release.releaseOf(checkin.id) : null,
+    canAllow: req.user.can('invoices.manage'),
     daysIn: checkins.daysIn(checkin.checked_in_at, checkin.checked_out_at ?? new Date()),
     photos: photosFor(checkin, manages && checkin.status === 'in_workshop'),
     // Moving between sites
@@ -188,12 +193,98 @@ router.get('/check-in/:id', view, async (req, res) => {
   });
 });
 
-router.post('/check-in/:id/check-out', manage, async (req, res) => {
+// ---------- release: the vehicle leaves ----------
+
+const allow = canAny('invoices.manage'); // managers and admins: they see what is owed
+
+const releaseSchema = z.object({
+  collector_name: z.string().trim().min(2, 'Type the full name').max(100, 'Use 100 characters or fewer'),
+  collector_phone: optionalPhone(),
+  collector_id_no: optionalText(20),
+  signature: z.string().min(1, 'Sign in the box above').max(400_000, 'The signature is too large. Clear it and sign again.'),
+});
+
+async function loadForRelease(req) {
   const checkin = await loadCheckin(req);
-  if (!worksAt(req, checkin.site_id)) throw httpError(403, `Only staff at ${checkin.site_name} can check this vehicle out.`);
-  await checkins.checkOut(checkin.id, req);
-  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} checked out (${checkin.number}).` };
+  if (!worksAt(req, checkin.site_id)) throw httpError(403, `Only staff at ${checkin.site_name} can release this vehicle.`);
+  return checkin;
+}
+
+async function renderRelease(res, checkin, { status = 200, values, errors = {} }) {
+  res.status(status).render('checkins/views/release', {
+    title: `Release ${vehicleLabel(checkin)}`, checkin, values, errors, vehicleLabel, typeLabel,
+    list: await release.checklist(checkin.id), jobs: await forCheckin(checkin.id),
+  });
+}
+
+router.get('/check-in/:id/release', manage, async (req, res) => {
+  const checkin = await loadForRelease(req);
+  const blocked = await release.blockedBecause(checkin);
+  if (blocked) {
+    req.session.flash = { type: 'warning', text: blocked };
+    return res.redirect(`/check-in/${checkin.id}`);
+  }
+  // Most often whoever brought it in collects it.
+  const phone = checkin.driver_phone ?? checkin.contact_phone ?? checkin.brought_by_phone;
+  await renderRelease(res, checkin, { values: {
+    collector_name: checkin.driver_name ?? checkin.contact_name ?? checkin.brought_by_name ?? '', collector_phone: phone ? fmt.phone(phone) : '', collector_id_no: '',
+  } });
+});
+
+router.post('/check-in/:id/release', manage, async (req, res) => {
+  const checkin = await loadForRelease(req);
+  const blocked = await release.blockedBecause(checkin);
+  if (blocked) throw httpError(409, blocked);
+  const { data, errors } = check(releaseSchema, req.body);
+  const allErrors = { ...errors };
+  const png = data ? signaturePng(data.signature) : null;
+  if (data && !png) allErrors.signature = 'The signature didn’t come through. Clear it and sign again.';
+  if (Object.keys(allErrors).length) return renderRelease(res, checkin, { status: 422, values: { ...req.body, signature: '' }, errors: allErrors });
+
+  const { number } = await release.releaseVehicle(checkin.id, { ...data, signature: png }, req);
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} released to ${data.collector_name}. Release note ${number} is ready to print.` };
   res.redirect(`/check-in/${checkin.id}`);
+});
+
+router.post('/check-in/:id/allow-release', allow, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  const reason = String(req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'warning', text: 'Say why it can be released (3 to 255 characters), e.g. “On credit: bank paying by 30 Nov”.' };
+    return res.redirect(`/check-in/${checkin.id}`);
+  }
+  await release.allowRelease(checkin.id, reason, req);
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} can now be released.` };
+  res.redirect(`/check-in/${checkin.id}`);
+});
+
+router.post('/check-in/:id/withdraw-release', allow, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  await release.withdrawRelease(checkin.id, req);
+  req.session.flash = { type: 'warning', text: `Permission to release ${vehicleLabel(checkin)} withdrawn.` };
+  res.redirect(`/check-in/${checkin.id}`);
+});
+
+// The release note: an A4 page to print or save as PDF. Money only as "paid" or "on credit": the gate and driver see it.
+router.get('/check-in/:id/release-note', view, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  const record = await release.releaseOf(checkin.id);
+  if (!record) throw httpError(404, `${checkin.number} hasn’t been released yet.`);
+  const list = await release.checklist(checkin.id);
+  res.render('checkins/views/release-note', {
+    layout: false,
+    title: `Release note ${record.number} - ${vehicleLabel(checkin)}`,
+    checkin, record, vehicleLabel, typeLabel, company: config.company,
+    jobs: await release.withWork(list.jobs),
+  });
+});
+
+router.get('/check-in/:id/release-signature.png', view, async (req, res) => {
+  const checkin = await loadCheckin(req);
+  const record = await release.releaseOf(checkin.id);
+  if (!record) throw httpError(404, 'No release for this check-in.');
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.sendFile(storagePath(record.signature_path));
 });
 
 // The paper Truck Receiving Document, filled in: an A4 page to print or save as PDF.

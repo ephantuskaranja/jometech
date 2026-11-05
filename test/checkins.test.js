@@ -276,9 +276,10 @@ test('photos need a login to see, and check-in rights to add', async () => {
 
 // ---------- check out and the receiving note ----------
 
+// Checking out is the release: the person collecting signs (no jobs on these visits, so nothing to check).
 async function checkOut(id) {
   const csrf = csrfFrom((await supervisor.get(`/check-in/${id}`)).text);
-  return supervisor.post(`/check-in/${id}/check-out`).type('form').send({ _csrf: csrf });
+  return supervisor.post(`/check-in/${id}/release`).type('form').send({ _csrf: csrf, collector_name: 'Brian Otieno', signature: PNG });
 }
 
 test('checking out moves the vehicle to “Checked out” and locks the check-in', async () => {
@@ -310,7 +311,7 @@ test('checking out moves the vehicle to “Checked out” and locks the check-in
 test('sales staff can’t check a vehicle out', async () => {
   const c = await db('checkins').where({ status: 'in_workshop' }).orderBy('id', 'desc').first('id');
   const csrf = csrfFrom((await sales.get('/customers')).text);
-  const res = await sales.post(`/check-in/${c.id}/check-out`).type('form').send({ _csrf: csrf });
+  const res = await sales.post(`/check-in/${c.id}/release`).type('form').send({ _csrf: csrf, collector_name: 'Brian Otieno', signature: PNG });
   assert.equal(res.status, 403);
 });
 

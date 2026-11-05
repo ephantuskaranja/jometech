@@ -77,6 +77,11 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .pf-sign { margin-top: 16px; line-height: 2.1; }
 .pf-sign-line { width: 60mm; height: 14mm; border-bottom: 1px dotted #111827; }
 
+/* ---------- Vehicle release note (checkins/views/release-note.ejs) ---------- */
+.rn-job { width: 34mm; white-space: nowrap; }
+.rn-status { width: 58mm; }
+.rn-items { min-height: 0; }
+
 /* ---------- Final invoice (invoices/views/print.ejs): the proforma's layout, plus what has been paid ---------- */
 .proforma.is-cancelled::after { content: "CANCELLED"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 90pt Archivo, Arial, sans-serif; color: rgb(180 35 24 / .14); transform: rotate(-30deg); pointer-events: none; }
 .pf-lines .vehicle { margin-top: 10px; text-transform: uppercase; }

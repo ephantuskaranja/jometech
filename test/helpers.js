@@ -54,6 +54,7 @@ export async function cleanup() {
   // A file another process still holds open (Windows: EBUSY) only warns; failing here would leave the database open and the run hanging.
   const files = [
     ...await db('checkins').whereIn('id', checkinIds).whereNotNull('driver_signature_path').pluck('driver_signature_path'),
+    ...await db('vehicle_releases').whereIn('checkin_id', checkinIds).pluck('signature_path'),
     ...(await db('checkin_photos').whereIn('checkin_id', checkinIds).select('path', 'thumb_path')).flatMap((p) => [p.path, p.thumb_path]),
   ];
   for (const file of files) await removeFile(file).catch((err) => console.warn(`Test file left behind: ${err.message}`));

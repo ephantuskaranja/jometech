@@ -235,13 +235,14 @@ export async function getCheckin(id) {
     .leftJoin('customer_contacts as contact', 'contact.id', 'checkins.contact_id')
     .leftJoin('customers as contact_company', 'contact_company.id', 'contact.customer_id')
     .leftJoin('users as releaser', 'releaser.id', 'checkins.checked_out_by')
+    .leftJoin('users as allower', 'allower.id', 'checkins.release_allowed_by')
     .where('checkins.id', id)
     .first('checkins.*',
-      'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.type', 'vehicles.make', 'vehicles.model',
+      'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.engine_no', 'vehicles.temp_tag', 'vehicles.type', 'vehicles.make', 'vehicles.model',
       'customers.name as customer_name', 'customers.number as customer_number', 'customers.phone as customer_phone',
       'contact.name as contact_name', 'contact.role as contact_role', 'contact.phone as contact_phone',
       'contact_company.id as contact_company_id', 'contact_company.name as contact_company',
-      'receiver.name as received_by_name', 'sites.name as site_name', 'releaser.name as checked_out_by_name');
+      'receiver.name as received_by_name', 'sites.name as site_name', 'releaser.name as checked_out_by_name', 'allower.name as release_allowed_by_name');
   if (!checkin) return null;
   checkin.items = await db('checkin_items').where({ checkin_id: id }).orderBy('sort_order').select('description', 'quantity');
   checkin.photos = await db('checkin_photos').where({ checkin_id: id }).orderBy('id').pluck('id');
@@ -294,20 +295,7 @@ export function daysIn(from, to = new Date()) {
   return days < 1 ? 'Today' : `${days} day${days === 1 ? '' : 's'}`;
 }
 
-/** The vehicle has left the workshop. After this the check-in can't be signed or given photos. */
-export async function checkOut(id, actor) {
-  await db.transaction(async (trx) => {
-    const checkin = await trx('checkins').join('vehicles', 'vehicles.id', 'checkins.vehicle_id').where('checkins.id', id).forUpdate()
-      .first('checkins.id', 'checkins.number', 'checkins.status', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag');
-    if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
-    if (checkin.status !== 'in_workshop') throw httpError(409, `${checkin.number} is no longer in the workshop.`);
-    if (await trx('vehicle_movements').where({ checkin_id: id, status: 'in_transit' }).first('id')) {
-      throw httpError(409, `${vehicleLabel(checkin)} is on its way to another site. That site receives it first.`);
-    }
-    await trx('checkins').where({ id }).update({ status: 'checked_out', checked_out_at: trx.fn.now(), checked_out_by: actor.user.id });
-    await audit(trx, actor, { entity: 'checkin', id, action: 'checked_out', summary: `Checked out ${vehicleLabel(checkin)} (${checkin.number})` });
-  });
-}
+// Check-out is the vehicle's release: see release.js.
 
 export async function itemPresets() {
   return db('checkin_item_presets').where({ is_active: true }).orderBy('sort_order').pluck('name');

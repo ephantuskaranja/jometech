@@ -1,0 +1,83 @@
+<%#
+  Release: the person collecting the vehicle checks the summary and signs with a finger, like at check-in.
+  Only reached when the checklist is green or a manager allowed the release (routes.js checks again on saving).
+%>
+<%
+  const describe = [checkin.make, checkin.model].filter(Boolean).join(' ') || typeLabel(checkin.type);
+  const visitJobs = jobs.filter((j) => j.status !== 'cancelled');
+%>
+<div class="jt-sign">
+  <div class="jt-sign-head">
+    <div class="jt-crumb">Workshop <i class="bi bi-chevron-right"></i><a href="/check-in">Check-in</a><i class="bi bi-chevron-right"></i><a href="/check-in/<%= checkin.id %>"><%= checkin.number %></a><i class="bi bi-chevron-right"></i><span>Release</span></div>
+    <h1>Collect the vehicle</h1>
+    <p class="jt-page-sub">Please check the vehicle and the details below. If they are right, type your name and sign in the box.</p>
+  </div>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+        <% if (checkin.reg_no) { %><%- include('partials/plate', { reg: checkin.reg_no, size: 'lg' }) %><% } else { %><strong class="font-monospace fs-5"><%= vehicleLabel(checkin) %></strong><% } %>
+        <span class="fs-5"><%= describe %></span>
+        <span class="ms-auto font-monospace text-body-secondary"><%= checkin.number %></span>
+      </div>
+      <dl class="jt-kv">
+        <div><dt>Owner</dt><dd><%= checkin.customer_name %></dd></div>
+        <div><dt>Arrived</dt><dd><%= fmt.dateTime(checkin.checked_in_at) %></dd></div>
+        <% if (checkin.chassis_no) { %><div><dt>Chassis number</dt><dd class="font-monospace"><%= checkin.chassis_no %></dd></div><% } %>
+        <div><dt>Work done</dt><dd><%= visitJobs.length ? visitJobs.map((j) => j.number).join(', ') : 'No jobs on this visit' %></dd></div>
+      </dl>
+    </div>
+    <% if (checkin.items.length) { %>
+      <div class="border-top">
+        <table class="table jt-table mb-0">
+          <thead><tr><th style="width: 3rem">#</th><th>Items it came with, to be handed back</th><th class="text-end">Qty</th></tr></thead>
+          <tbody>
+            <% checkin.items.forEach((item, i) => { %>
+              <tr><td class="text-body-tertiary"><%= i + 1 %></td><td><%= item.description %></td><td class="text-end jt-num fw-semibold"><%= item.quantity %></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+  <% if (!list.ok) { %>
+    <div class="jt-info-box mb-4"><i class="bi bi-shield-check"></i><span>Released with <%= checkin.release_allowed_by_name ?? 'a manager' %>’s approval: <%= checkin.release_allowed_reason %></span></div>
+  <% } %>
+  <% if (!checkin.driver_signed_at && !checkin.not_signed_reason) { %>
+    <div class="jt-warn-box mb-4"><i class="bi bi-exclamation-triangle"></i><span>Nobody signed for this vehicle when it arrived. Once it is released, that can’t be done any more.</span></div>
+  <% } %>
+
+  <form method="post" action="/check-in/<%= checkin.id %>/release" novalidate class="card mb-4" x-data="signaturePad" @submit="submit($event)">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="signature" x-ref="output">
+    <div class="card-body d-grid gap-3">
+      <p class="jt-sign-statement mb-0">
+        I have collected this vehicle<%= checkin.items.length ? ' and the items listed above' : '' %> from <%= checkin.site_name %>.
+      </p>
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'collector_name', label: 'Your full name', value: values.collector_name, error: errors.collector_name, required: true, autocomplete: 'off', class: 'jt-full' }) %>
+        <%- include('partials/field', { name: 'collector_phone', label: 'Your phone number', type: 'tel', value: values.collector_phone, error: errors.collector_phone, placeholder: '0712 345 678' }) %>
+        <%- include('partials/field', { name: 'collector_id_no', label: 'ID number', value: values.collector_id_no, error: errors.collector_id_no, inputmode: 'numeric', hint: 'Optional' }) %>
+      </div>
+
+      <div class="jt-field">
+        <div class="d-flex align-items-end">
+          <span class="form-label mb-2" id="sign-label">Sign here<span class="jt-req" aria-hidden="true">*</span></span>
+          <button type="button" class="btn btn-link btn-sm ms-auto mb-1" @click="clear()" :disabled="empty"><i class="bi bi-eraser"></i>Clear</button>
+        </div>
+        <div class="jt-sign-pad<%= errors.signature ? ' is-invalid' : '' %>" :class="{ 'is-invalid': missing }">
+          <canvas x-ref="canvas" role="img" aria-labelledby="sign-label"
+                  @pointerdown="start($event)" @pointermove="move($event)" @pointerup="end()" @pointercancel="end()" @pointerleave="end()"></canvas>
+          <span class="jt-sign-hint" x-show="empty" aria-hidden="true"><i class="bi bi-pen"></i>Sign with your finger</span>
+          <span class="jt-sign-line" aria-hidden="true"></span>
+        </div>
+        <div class="jt-error-text" x-show="missing" x-cloak>Sign in the box above</div>
+        <% if (errors.signature) { %><div class="jt-error-text" x-show="!missing"><%= errors.signature %></div><% } %>
+      </div>
+
+      <button class="btn btn-primary btn-lg w-100" type="submit" :disabled="busy"><i class="bi bi-check2-circle"></i>Sign and release</button>
+      <a class="btn btn-link" href="/check-in/<%= checkin.id %>">Not now: back to <%= checkin.number %></a>
+    </div>
+  </form>
+</div>

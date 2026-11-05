@@ -1,0 +1,113 @@
+<%#
+  Vehicle Release Note: one A4 page, in the style of the Truck Receiving Document (print.ejs).
+  Money only as a status ("Paid in full", "Released on credit"): the driver and the gate see this page.
+  Payment status is as of printing, so a reprint after the balance is paid says so.
+%>
+<%
+  const blank = '—';
+  const status = (j) => {
+    if (!j.invoice) return j.status === 'completed' ? 'Not invoiced' : 'Work not finished';
+    return j.invoice.balance > 0 ? `Invoice ${j.invoice.number} · Released on credit` : `Invoice ${j.invoice.number} · Paid in full`;
+  };
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/check-in/<%= checkin.id %>">&larr; Back to <%= checkin.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+
+  <main class="sheet">
+    <header class="letterhead">
+      <img src="/img/brand/icon.svg" alt="" width="64" height="64">
+      <div class="company">
+        <div class="company-name"><%= company.name %></div>
+        <div><%= company.address.join(' · ') %></div>
+        <div>Tel: <%= company.phone %> · <%= company.email %></div>
+      </div>
+    </header>
+
+    <div class="title-row">
+      <h1>Vehicle Release Note</h1>
+      <div class="doc-meta">
+        <div><span>No:</span> <strong><%= record.number %></strong></div>
+        <div><span>Released:</span> <%= fmt.dateTime(record.created_at) %></div>
+      </div>
+    </div>
+
+    <table class="grid">
+      <tr>
+        <td colspan="2"><span class="label">Client name:</span> <%= checkin.customer_name %> <span class="muted">(<%= checkin.customer_number %>)</span></td>
+        <td colspan="2"><span class="label">Received:</span> <%= fmt.dateTime(checkin.checked_in_at) %> <span class="muted">(<%= checkin.number %>)</span></td>
+      </tr>
+      <tr>
+        <td><span class="label">Make:</span> <%= checkin.make ?? blank %></td>
+        <td><span class="label">Model:</span> <%= checkin.model ?? blank %></td>
+        <td colspan="2"><span class="label">Chassis no:</span> <span class="mono"><%= checkin.chassis_no ?? blank %></span></td>
+      </tr>
+      <tr>
+        <td><span class="label"><%= checkin.reg_no || !checkin.temp_tag ? 'Reg no:' : 'Tag no:' %></span> <span class="mono"><%= checkin.reg_no ?? checkin.temp_tag ?? blank %></span></td>
+        <td><span class="label">Type:</span> <%= typeLabel(checkin.type) %></td>
+        <td colspan="2"><span class="label">Engine no:</span> <span class="mono"><%= checkin.engine_no ?? blank %></span></td>
+      </tr>
+    </table>
+
+    <table class="items">
+      <thead><tr><th class="rn-job">Job</th><th>Work done</th><th class="rn-status">Invoice</th></tr></thead>
+      <tbody>
+        <% jobs.forEach((j) => { %>
+          <tr>
+            <td class="rn-job mono"><%= j.number %></td>
+            <td><% j.lines.forEach((l) => { %><div><%= fmt.qty(l.quantity) %> <%= l.unit %> · <%= String(l.description).split('\n')[0] %></div><% }) %></td>
+            <td class="rn-status"><%= status(j) %></td>
+          </tr>
+        <% }) %>
+        <% if (!jobs.length) { %><tr><td colspan="3" class="muted">No work was done on this visit.</td></tr><% } %>
+      </tbody>
+    </table>
+
+    <% if (checkin.items.length) { %>
+      <h2>Items handed back</h2>
+      <div class="remarks rn-items"><%= checkin.items.map((i) => `${i.description} (${i.quantity})`).join(' · ') %></div>
+    <% } %>
+    <% if (record.on_approval) { %><p class="small">Released with the approval of <%= checkin.release_allowed_by_name ?? 'the management' %>.</p><% } %>
+
+    <div class="signatures">
+      <div class="sig-row">
+        <div class="sig-name"><span class="label">Released by:</span> <%= record.released_by_name ?? blank %></div>
+        <div class="sig-box"><span class="label">Sign</span><span class="sig-line"></span></div>
+      </div>
+      <div class="sig-row">
+        <div class="sig-name">
+          <span class="label">Collected by:</span> <%= record.collector_name %>
+          <% if (record.collector_phone || record.collector_id_no) { %>
+            <div class="muted small"><%= [record.collector_phone && fmt.phone(record.collector_phone), record.collector_id_no && `ID ${record.collector_id_no}`].filter(Boolean).join(' · ') %></div>
+          <% } %>
+        </div>
+        <div class="sig-box">
+          <span class="label">Sign</span>
+          <span class="sig-line has-sig"><img src="/check-in/<%= checkin.id %>/release-signature.png" alt="Signature of <%= record.collector_name %>"></span>
+        </div>
+      </div>
+      <div class="muted small signed-at">Signed on the device <%= fmt.dateTime(record.created_at) %></div>
+    </div>
+
+    <footer class="muted small">
+      <span><%= checkin.site_name %></span>
+      <span>Printed <%= fmt.dateTime(new Date()) %></span>
+    </footer>
+  </main>
+</body>
+</html>

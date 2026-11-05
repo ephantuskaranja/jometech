@@ -1,0 +1,56 @@
+<%#
+  Before the vehicle can go: the visit's jobs completed, invoiced and paid, or a manager's go-ahead.
+  Locals: checkin, list (release.checklist), canAllow (managers and admins), showMoney (amounts owed; same people).
+%>
+<% const allowed = Boolean(checkin.release_allowed_at); %>
+<section class="card" x-data="{ allowing: false }">
+  <div class="card-header d-flex align-items-center gap-2">
+    <h2 class="h6 mb-0 me-auto">Release checklist</h2>
+    <% if (list.ok) { %><%- include('partials/pill', { text: 'Ready', tone: 'ok' }) %>
+    <% } else if (allowed) { %><%- include('partials/pill', { text: 'Allowed', tone: 'info' }) %>
+    <% } else { %><%- include('partials/pill', { text: 'Not ready', tone: 'warn' }) %><% } %>
+  </div>
+  <% if (!list.jobs.length) { %>
+    <div class="card-body small text-body-secondary">No jobs on this visit, so there is nothing to finish, invoice or pay.</div>
+  <% } else { %>
+    <ul class="list-group list-group-flush">
+      <% list.items.forEach((item) => { %>
+        <li class="list-group-item d-flex gap-2 align-items-start">
+          <i class="bi bi-<%= item.ok ? 'check-circle-fill text-success' : 'x-circle-fill text-danger' %>" aria-hidden="true"></i>
+          <div>
+            <div class="fw-semibold"><%= item.label %><span class="visually-hidden"><%= item.ok ? ': done' : ': not yet' %></span></div>
+            <% const amounts = item.key === 'paid' && showMoney && list.jobs.some((j) => j.invoice && j.invoice.balance > 0); %>
+            <% if (!amounts) { %><div class="small text-body-secondary"><%= item.detail %></div><% } %>
+            <% if (amounts) { list.jobs.filter((j) => j.invoice && j.invoice.balance > 0).forEach((j) => { %>
+              <div class="small">Invoice <a href="/invoices/<%= j.invoice.id %>"><%= j.invoice.number %></a>: KES <%= fmt.money(j.invoice.balance) %> owing</div>
+            <% }) } %>
+          </div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+  <% if (!list.ok) { %>
+    <div class="card-body border-top d-grid gap-2">
+      <% if (allowed) { %>
+        <div class="small"><i class="bi bi-shield-check"></i> <strong><%= checkin.release_allowed_by_name ?? 'A manager' %></strong> allowed the release <%= fmt.dateTime(checkin.release_allowed_at) %>: <%= checkin.release_allowed_reason %></div>
+        <% if (canAllow) { %>
+          <form method="post" action="/check-in/<%= checkin.id %>/withdraw-release">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Withdraw the permission</button>
+          </form>
+        <% } %>
+      <% } else if (canAllow) { %>
+        <p class="small mb-0">It can’t leave until everything is green, unless you allow it, e.g. on credit.</p>
+        <button type="button" class="btn btn-outline-primary" x-show="!allowing" @click="allowing = true"><i class="bi bi-shield-check"></i>Allow release</button>
+        <form method="post" action="/check-in/<%= checkin.id %>/allow-release" class="d-grid gap-2" x-show="allowing" x-cloak>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <%- include('partials/field', { name: 'reason', id: 'allow-reason', label: 'Why can it go?', placeholder: 'e.g. On credit: Co-op Bank paying by 30 Nov', required: true,
+                hint: 'Shown to the staff releasing it. The release note says “Released on credit”, without amounts.' }) %>
+          <div class="d-flex gap-2"><button class="btn btn-primary" type="submit">Allow release</button><button class="btn btn-link" type="button" @click="allowing = false">Cancel</button></div>
+        </form>
+      <% } else { %>
+        <p class="small mb-0"><i class="bi bi-lock"></i> It can’t leave yet. A manager can allow the release, e.g. on credit.</p>
+      <% } %>
+    </div>
+  <% } %>
+</section>

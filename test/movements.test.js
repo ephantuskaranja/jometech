@@ -63,7 +63,7 @@ test('HQ sends a vehicle; it shows as on the way, and Site B sees it arriving', 
 
   // Not yet: HQ can't receive it, nobody can check it out, it can't be sent twice
   assert.equal((await post(hq, `/movements/${move.id}/receive`)).status, 403);
-  assert.equal((await post(hq, `/check-in/${id}/check-out`)).status, 409);
+  assert.equal((await post(hq, `/check-in/${id}/release`)).status, 409);
   await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno' });
   assert.equal((await db('vehicle_movements').where({ checkin_id: id })).length, 1);
 });

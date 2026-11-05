@@ -85,6 +85,11 @@
           <div>
             <div class="fw-semibold">Checked out <%= fmt.dateTime(checkin.checked_out_at) %></div>
             <div class="small text-body-secondary">By <%= checkin.checked_out_by_name ?? 'a removed user' %>, after <%= daysIn.toLowerCase() === 'today' ? 'less than a day' : daysIn %> in the workshop.</div>
+            <% if (releaseRecord) { %>
+              <div class="small mt-2">Collected by <strong><%= releaseRecord.collector_name %></strong><%= releaseRecord.collector_phone ? `, ${fmt.phone(releaseRecord.collector_phone)}` : '' %>.
+                <%= releaseRecord.on_approval ? `Released with ${checkin.release_allowed_by_name ?? 'a manager'}’s approval: ${checkin.release_allowed_reason ?? ''}` : '' %></div>
+              <a class="btn btn-outline-primary btn-sm mt-2" href="/check-in/<%= checkin.id %>/release-note"><i class="bi bi-printer"></i>Release note <%= releaseRecord.number %></a>
+            <% } %>
           </div>
         </div>
       </section>
@@ -134,7 +139,11 @@
             </div>
             <div class="d-flex gap-2" x-show="!open">
               <% if (sendTo.length) { %><button type="button" class="btn btn-outline-secondary" @click="open = 'send'"><i class="bi bi-arrow-left-right"></i>Send to another site</button><% } %>
-              <button type="button" class="btn btn-outline-primary" @click="open = 'out'"><i class="bi bi-box-arrow-right"></i>Check out</button>
+              <% if (releaseList.ok || checkin.release_allowed_at) { %>
+                <a class="btn btn-outline-primary" href="/check-in/<%= checkin.id %>/release"><i class="bi bi-box-arrow-right"></i>Release vehicle</a>
+              <% } else { %>
+                <button type="button" class="btn btn-outline-primary" disabled title="The release checklist isn’t complete"><i class="bi bi-box-arrow-right"></i>Release vehicle</button>
+              <% } %>
             </div>
           </div>
           <% if (sendTo.length) { %>
@@ -161,25 +170,11 @@
               </form>
             </div>
           <% } %>
-          <div x-show="open === 'out'" x-cloak>
-            <form method="post" action="/check-in/<%= checkin.id %>/check-out" class="d-grid gap-3 mt-3">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <% if (!checkin.driver_signed_at && !checkin.not_signed_reason) { %>
-                <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>The driver hasn’t confirmed this check-in. After check-out it can’t be signed.</span></div>
-              <% } %>
-              <% const unfinished = jobs.filter((j) => ['open', 'in_progress'].includes(j.status)); %>
-              <% if (unfinished.length) { %>
-                <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>Not finished yet: <%= unfinished.map((j) => j.number).join(', ') %>.</span></div>
-              <% } %>
-              <p class="small mb-0">This records that the vehicle has left the workshop. The check-in, its signature and photos can’t be changed after this.</p>
-              <div class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Yes, check it out</button>
-                <button class="btn btn-link" type="button" @click="open = ''">Cancel</button>
-              </div>
-            </form>
-          </div>
         </div>
       </section>
+    <% } %>
+    <% if (releaseList) { %>
+      <%- include('release-checklist', { list: releaseList, canAllow, showMoney: canAllow }) %>
     <% } %>
     <% if (jobs.length || canStartJob) { %>
       <section class="card">
