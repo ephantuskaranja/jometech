@@ -16,7 +16,7 @@
       <i class="bi bi-search" aria-hidden="true"></i>
       <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name or code, e.g. plate 4" aria-label="Search items">
     </div>
-    <select class="form-select w-auto" name="category" aria-label="Category" onchange="this.form.requestSubmit()">
+    <select class="form-select w-auto" name="category" aria-label="Category" x-data @change="$el.form.requestSubmit()">
       <option value="">All categories</option>
       <% categories.forEach((c) => { %><option value="<%= c.id %>"<%= categoryId === c.id ? ' selected' : '' %>><%= c.name %></option><% }) %>
     </select>
