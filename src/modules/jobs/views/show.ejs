@@ -181,6 +181,28 @@
       </div>
     </section>
 
+    <% if (money) { const inv = money.invoice; %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Invoice</h2></div>
+        <div class="card-body d-grid gap-2">
+          <% if (inv) { %>
+            <div class="d-flex align-items-center gap-2">
+              <a href="/invoices/<%= inv.id %>"><%= inv.number ? `Invoice ${inv.number}` : 'Draft invoice' %></a>
+              <span class="ms-auto jt-num small">KES <%= fmt.money(inv.total) %></span>
+            </div>
+            <% if (inv.status === 'issued') { %><div class="small text-body-secondary"><%= money.balance > 0 ? `KES ${fmt.money(money.balance)} still to pay` : 'Fully paid' %></div><% } %>
+          <% } else if (job.status !== 'cancelled') { %>
+            <p class="small mb-0"><%= job.proforma_id ? `Made from proforma ${job.proforma_number}: its lines and prices are copied in.` : 'No proforma: you enter the prices.' %></p>
+            <a class="btn btn-outline-primary" href="/jobs/<%= job.id %>/invoice"><i class="bi bi-receipt"></i>Make the invoice</a>
+          <% } else { %>
+            <p class="small text-body-secondary mb-0">Cancelled jobs aren’t invoiced.</p>
+          <% } %>
+        </div>
+      </section>
+      <%- include('invoices/views/payments', { payments: money.payments, jobId: job.id, back: `/jobs/${job.id}`, methods: paymentMethods, today,
+            financierName: inv?.financier_name ?? null, canRecord: job.status !== 'cancelled' }) %>
+    <% } %>
+
     <% if (orders.length) { %>
       <section class="card">
         <div class="card-header"><h2 class="h6 mb-0">Purchase orders</h2></div>

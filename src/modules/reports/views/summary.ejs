@@ -1,7 +1,7 @@
 <%
   const money = (v) => `KES ${fmt.money(v)}`;
   const day = (d) => fmt.date(`${d}T12:00:00Z`);
-  const { jobs, stores, front } = s;
+  const { jobs, stores, front, money: cash } = s;
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
   const vehicleCell = (r) => !r.vehicle ? '<span class="text-body-tertiary">—</span>' : r.plate ? `<span class="font-monospace small text-nowrap">${esc(r.vehicle)}</span>` : esc(r.vehicle);
 %>
@@ -54,6 +54,8 @@
     { icon: 'stack', label: 'Low stock now', value: stores.lowStock.length, foot: 'items, all sites' },
     { icon: 'hourglass-split', label: 'Orders waiting now', value: stores.ordersWaiting.length, foot: 'for approval' },
     { icon: 'file-earmark-text', label: 'Proformas accepted', value: front.proformas.accepted.length, foot: `of ${front.proformas.sent.length} sent` },
+    { icon: 'receipt', label: 'Invoiced', value: fmt.money(cash.issuedValue), foot: (([n]) => `KES incl. VAT, ${n} invoice${n === 1 ? '' : 's'}`)([cash.issued.filter((i) => i.status === 'issued').length]) },
+    { icon: 'cash-coin', label: 'Payments received', value: fmt.money(cash.receivedValue), foot: `KES, ${cash.received.length} payment${cash.received.length === 1 ? '' : 's'}` },
   ].forEach((k) => { %>
     <div class="col-6 col-md-4 col-xl-3">
       <div class="card jt-kpi h-100">
@@ -297,6 +299,48 @@
       <tbody>
         <% enq.byWorkType.forEach((e) => { %>
           <tr><td><%= e.work_type %></td><td class="text-end jt-num"><%= e.n %></td></tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<h2 class="h5 mt-4 mb-3">Money</h2>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Invoices issued', cash.issued.length, `${money(cash.issuedValue)} · incl. VAT`) %>
+  <% if (!cash.issued.length) { %><%- none('No invoices issued in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>When</th><th>Invoice</th><th class="d-none d-md-table-cell">Job</th><th>Customer</th><th class="text-end">Total (KES)</th></tr></thead>
+      <tbody>
+        <% cash.issued.forEach((r) => { %>
+          <tr>
+            <td class="text-nowrap small"><%= p.from === p.to ? fmt.time(r.issued_at) : fmt.dateTime(r.issued_at) %></td>
+            <td><a class="font-monospace text-nowrap" href="/invoices/<%= r.id %>"><%= r.number %></a><% if (r.status === 'cancelled') { %> <%- include('partials/pill', { text: 'Cancelled', tone: 'bad' }) %><% } %></td>
+            <td class="d-none d-md-table-cell font-monospace small"><%= r.job_number %></td>
+            <td><%= r.customer_name %></td>
+            <td class="text-end jt-num<%= r.status === 'cancelled' ? ' text-decoration-line-through text-body-tertiary' : '' %>"><%= fmt.money(r.total) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Payments received', cash.received.length, money(cash.receivedValue)) %>
+  <% if (!cash.received.length) { %><%- none('No payments received in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Date</th><th>Job</th><th>Customer</th><th class="d-none d-md-table-cell">How</th><th class="text-end">Amount (KES)</th></tr></thead>
+      <tbody>
+        <% cash.received.forEach((r) => { %>
+          <tr>
+            <td class="text-nowrap small"><%= fmt.date(`${r.paid_on}T12:00:00Z`) %></td>
+            <td><a class="font-monospace text-nowrap" href="/jobs/<%= r.job_id %>"><%= r.job_number %></a></td>
+            <td><%= r.customer_name %><% if (r.payer === 'financier') { %><span class="jt-sub">Paid by the bank</span><% } %></td>
+            <td class="d-none d-md-table-cell small"><%= methods[r.method] %><%= r.reference ? ` · ${r.reference}` : '' %></td>
+            <td class="text-end jt-num"><%= fmt.money(r.amount) %></td>
+          </tr>
         <% }) %>
       </tbody>
     </table></div>

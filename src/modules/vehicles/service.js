@@ -14,7 +14,7 @@ export const VEHICLE_TYPES = [
 ];
 export const typeLabel = (value) => VEHICLE_TYPES.find((t) => t.value === value)?.label ?? value;
 
-const COLUMNS = ['reg_no', 'chassis_no', 'temp_tag', 'customer_id', 'contact_id', 'type', 'make', 'model', 'year', 'body_type', 'colour', 'notes'];
+const COLUMNS = ['reg_no', 'chassis_no', 'temp_tag', 'customer_id', 'contact_id', 'type', 'make', 'model', 'year', 'body_type', 'engine_no', 'colour', 'notes'];
 const pick = (input) => Object.fromEntries(COLUMNS.filter((k) => k in input).map((k) => [k, input[k] ?? null]));
 
 /** What the history shows for a vehicle: names, not ids. */
@@ -23,7 +23,7 @@ async function snapshot(trx, v) {
   const contact = v.contact_id ? await trx('customer_contacts').where({ id: v.contact_id }).first('name') : null;
   return {
     reg_no: v.reg_no, chassis_no: v.chassis_no, temp_tag: v.temp_tag ?? null, customer: customer?.name ?? null, contact: contact?.name ?? null,
-    type: typeLabel(v.type), make: v.make, model: v.model, year: v.year, body_type: v.body_type, colour: v.colour, notes: v.notes,
+    type: typeLabel(v.type), make: v.make, model: v.model, year: v.year, body_type: v.body_type, engine_no: v.engine_no ?? null, colour: v.colour, notes: v.notes,
   };
 }
 

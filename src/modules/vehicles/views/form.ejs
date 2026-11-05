@@ -1,7 +1,7 @@
 <%# Add and edit vehicle or trailer. Required: reg or chassis number, customer, type. %>
 <%
   const editing = Boolean(vehicle);
-  const hasMore = Boolean(values.make || values.model || values.year || values.body_type || values.colour || values.notes || errors.year);
+  const hasMore = Boolean(values.make || values.model || values.year || values.body_type || values.engine_no || values.colour || values.notes || errors.year);
   const backUrl = editing ? `/vehicles/${vehicle.id}` : (customer ? `/customers/${customer.id}?tab=vehicles` : '/vehicles');
 %>
 <%- include('partials/page-header', {
@@ -69,6 +69,7 @@
         <%- include('partials/field', { name: 'make', label: 'Make', value: values.make, error: errors.make, placeholder: 'e.g. Isuzu' }) %>
         <%- include('partials/field', { name: 'model', label: 'Model', value: values.model, error: errors.model, placeholder: 'e.g. FRR 90' }) %>
         <%- include('partials/field', { name: 'year', label: 'Year', type: 'number', grouping: false, inputmode: 'numeric', value: values.year, error: errors.year, placeholder: 'e.g. 2019' }) %>
+        <%- include('partials/field', { name: 'engine_no', label: 'Engine number', value: values.engine_no, error: errors.engine_no, autocomplete: 'off', placeholder: 'e.g. 1HU172', hint: 'Printed on the invoice.', attrs: 'style="text-transform: uppercase"' }) %>
         <%- include('partials/field', { name: 'colour', label: 'Colour', value: values.colour, error: errors.colour }) %>
         <%- include('partials/field', { name: 'body_type', label: 'Body', value: values.body_type, error: errors.body_type, class: 'jt-full', placeholder: 'e.g. Dropside 14 ft, bare chassis, skeletal 40 ft' }) %>
         <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', value: values.notes, error: errors.notes, class: 'jt-full', rows: 2 }) %>

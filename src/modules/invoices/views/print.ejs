@@ -1,0 +1,108 @@
+<%#
+  The paper invoice, filled in: one A4 page (more if the lines are long).
+  Standalone (no app layout) so it prints cleanly; "Print" also saves as PDF.
+  Titled plain "Invoice" (the user's choice), otherwise the same sections and order as docs/source/Invoices
+  (Final Invoice 104): the vehicle's chassis, engine and
+  reg numbers under the first line, then what the client paid and what the bank (if any) still has to pay.
+%>
+<%
+  const bullet = /^\s*[-•*]\s+/;
+  const draft = invoice.status === 'draft';
+  const cancelled = invoice.status === 'cancelled';
+  const day = invoice.invoice_date ? fmt.date(`${invoice.invoice_date}T12:00:00Z`) : fmt.date(new Date());
+  const amount = (n) => fmt.money(n).replace(/\.00$/, '');
+  const paidOrNil = (n) => (n > 0 ? amount(n) : 'NIL');
+  const address = invoice.financier_id ? [invoice.financier_address, invoice.financier_town] : [invoice.customer_address, invoice.customer_town];
+  const ids = [['Chassis no', invoice.chassis_no], ['Engine no', invoice.engine_no], ['Registration no', invoice.reg_no]].filter(([, v]) => v);
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css">
+  <link rel="stylesheet" href="/css/print-note.css">
+  <script defer src="/js/print-note.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/invoices/<%= invoice.id %>">&larr; Back to the invoice</a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+  <% if (draft) { %><div class="toolbar draft-note">This is a draft: it prints with “DRAFT” across it and has no number yet. Issue it first for the customer’s copy.</div><% } %>
+
+  <main class="sheet proforma<%= draft ? ' is-draft' : '' %><%= cancelled ? ' is-cancelled' : '' %>">
+    <header class="pf-head">
+      <div class="pf-company-name"><%= company.name %></div>
+      <div class="pf-head-row">
+        <img src="/img/brand/icon.svg" alt="" width="90" height="90">
+        <div class="pf-address">
+          <% company.address.forEach((line) => { %><div><%= line %></div><% }) %>
+          <div>Tel: <%= company.phone %></div>
+          <div>Email: <%= company.email %></div>
+          <div>PIN: <%= company.kraPin %></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="pf-date">Date: <%= day %></div>
+
+    <div class="pf-to">
+      <div><%= invoice.customer_name %><%= invoice.financier_name ? ` & ${invoice.financier_name}` : '' %></div>
+      <% address.filter(Boolean).forEach((line) => { %><div><%= line %></div><% }) %>
+      <% if (!invoice.financier_id && invoice.customer_pin) { %><div>PIN: <%= invoice.customer_pin %></div><% } %>
+    </div>
+
+    <h1 class="pf-title">Invoice <%= invoice.number ?? '' %></h1>
+
+    <table class="pf-lines">
+      <thead><tr><th class="qty">Qty</th><th>Description</th><th class="money">@</th><th class="money">Amount (KShs)</th></tr></thead>
+      <tbody>
+        <% invoice.lines.forEach((l, i) => { %>
+          <tr>
+            <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+            <td class="desc">
+              <% let list = []; const flush = () => { if (list.length) { %><ul><% list.forEach((b) => { %><li><%= b %></li><% }) %></ul><% list = []; } }; %>
+              <% String(l.description).split('\n').forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
+              <% if (i === 0 && ids.length) { %><div class="vehicle"><% ids.forEach(([label, value]) => { %><div><%= label %>: <%= value %></div><% }) %></div><% } %>
+              <% if (i === 0 && !ids.length && invoice.vehicle_description) { %><div class="vehicle"><%= invoice.vehicle_description %></div><% } %>
+            </td>
+            <td class="money"><%= amount(l.unit_price) %></td>
+            <td class="money"><%= amount(l.amount) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+      <tfoot>
+        <tr class="paid"><td class="blank"></td><td colspan="2">Deposit paid by client</td><th><%= paidOrNil(invoice.payments.client) %></th></tr>
+        <% if (invoice.payments.financier > 0) { %><tr class="paid"><td class="blank"></td><td colspan="2">Paid by <%= invoice.financier_name ?? 'the bank' %></td><th><%= amount(invoice.payments.financier) %></th></tr><% } %>
+        <tr class="paid"><td class="blank"></td><th colspan="2"><%= invoice.financier_id ? `Amount payable by ${invoice.financier_name}` : 'Balance due' %></th><th><%= paidOrNil(Math.max(invoice.balance, 0)) %></th></tr>
+        <tr><td colspan="2" class="blank"></td><th class="money">Total</th><th class="money"><%= amount(invoice.total) %></th></tr>
+        <tr><td colspan="4" class="vat">Prices include VAT at <%= vatRate %>% (KShs <%= fmt.money(vat) %>).</td></tr>
+      </tfoot>
+    </table>
+
+    <table class="pf-bank">
+      <tr><td></td><th>Bank details</th></tr>
+      <tr><td>Account name:</td><td><%= company.bank.accountName %></td></tr>
+      <tr><td>Account number:</td><td><%= company.bank.accountNumber %></td></tr>
+      <tr><td>Bank:</td><td><%= company.bank.bank %></td></tr>
+      <tr><td>Branch:</td><td><%= company.bank.branch %></td></tr>
+    </table>
+
+    <% if (invoice.etims_number) { %><div class="pf-etims">KRA eTIMS invoice no: <strong><%= invoice.etims_number %></strong></div><% } %>
+    <% if (invoice.notes) { %><div class="pf-notes"><%= invoice.notes %></div><% } %>
+
+    <div class="pf-sign">
+      <div>Yours faithfully,</div>
+      <div>For &amp; on behalf of</div>
+      <div><%= company.name %></div>
+      <div class="pf-sign-line"></div>
+      <div><%= company.signatory %></div>
+    </div>
+  </main>
+</body>
+</html>

@@ -51,8 +51,8 @@ export const ROLES = [
   },
   {
     key: 'sales', name: 'Sales',
-    description: 'Customers, enquiries, quotations and invoices',
-    permissions: ['customers.manage', 'enquiries.manage', 'quotations.manage', 'invoices.manage', 'jobs.view'],
+    description: 'Customers, enquiries and quotations',
+    permissions: ['customers.manage', 'enquiries.manage', 'quotations.manage', 'jobs.view'],
   },
   {
     key: 'storekeeper', name: 'Storekeeper',

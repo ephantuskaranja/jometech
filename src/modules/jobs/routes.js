@@ -13,6 +13,7 @@ import { getVehicle } from '../vehicles/service.js';
 import { typeOptions } from '../job-types/service.js';
 import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.js';
 import { materialsForJob } from '../issues/service.js';
+import { moneyForJob, METHODS as PAYMENT_METHODS } from '../invoices/service.js';
 
 // Jobs: start one from an accepted proforma or from scratch, move it along, print the job card.
 
@@ -152,6 +153,9 @@ router.get('/jobs/:id', view, async (req, res) => {
     // What materials cost: for those who run the stores and managers, not the workshop floor.
     canSeeCost: req.user.can('stores.issue') || req.user.can('inventory.manage'),
     canOpenIssues: req.user.can('stores.issue') || req.user.can('inventory.manage'),
+    // Invoice and payments: admins and managers.
+    money: req.user.can('invoices.manage') ? await moneyForJob(job.id) : null,
+    paymentMethods: PAYMENT_METHODS,
   });
 });
 

@@ -1,6 +1,7 @@
 import { db } from '../../core/db.js';
 import { dayStart, isDay, localDay, nextDay } from '../../core/dates.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
+import { forPeriod as moneyFor } from '../invoices/service.js';
 
 // Period summary for admins and managers: what happened between two days, at one
 // site or all. "Now" figures (overdue jobs, low stock, orders waiting) are today's
@@ -213,6 +214,6 @@ async function frontOffice(p, siteId) {
 
 /** Everything on the summary page for one period, at one site (siteId) or all (null). */
 export async function summary(p, siteId = null, today = localDay()) {
-  const [j, s, f] = [await jobs(p, siteId, today), await stores(p, siteId), await frontOffice(p, siteId)];
-  return { jobs: j, stores: s, front: f };
+  const [j, s, f, m] = [await jobs(p, siteId, today), await stores(p, siteId), await frontOffice(p, siteId), await moneyFor(p, siteId)];
+  return { jobs: j, stores: s, front: f, money: m };
 }

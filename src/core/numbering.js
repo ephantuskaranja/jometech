@@ -32,7 +32,7 @@ export const NUMBER_FORMATS = {
   request:   { prefix: 'PR', yearly: true },
   order:     { prefix: 'PO', yearly: true },
   receipt:   { prefix: 'GRN', yearly: true },
-  invoice:   { prefix: 'INV', yearly: true },
+  invoice:   { prefix: 'INV', yearly: false, plain: true, first: () => config.invoiceFirstNumber }, // 105 … continuing the paper Final Invoices
   payment:   { prefix: 'RCT', yearly: true },
   release:   { prefix: 'RN', yearly: true },
   backup:    { prefix: 'BKP', yearly: true },

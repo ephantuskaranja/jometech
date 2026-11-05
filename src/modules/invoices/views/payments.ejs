@@ -1,0 +1,76 @@
+<%#
+  Payments for a job, and the form to record one. Shown on the invoice and on the job page.
+  Locals: payments ({ list, client, financier, total }), jobId, back (this page's address), methods, today,
+  financierName (the bank on the invoice, if any), canRecord.
+%>
+<section class="card" x-data="{ adding: false, voiding: null }">
+  <div class="card-header d-flex align-items-center gap-3">
+    <h2 class="h6 mb-0 me-auto">Payments</h2>
+    <% if (payments.total > 0) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(payments.total) %></span><% } %>
+  </div>
+  <% if (!payments.list.length) { %>
+    <div class="card-body small text-body-secondary">Nothing received yet. Record deposits here as they come in.</div>
+  <% } else { %>
+    <ul class="list-group list-group-flush">
+      <% payments.list.forEach((p) => { const voided = Boolean(p.voided_at); %>
+        <li class="list-group-item d-grid gap-1">
+          <div class="d-flex align-items-baseline gap-2">
+            <span class="jt-num fw-semibold text-nowrap<%= voided ? ' text-decoration-line-through text-body-tertiary' : '' %>">KES <%= fmt.money(p.amount) %></span>
+            <span class="small text-body-secondary"><%= methods[p.method] %><%= p.reference ? ` · ${p.reference}` : '' %></span>
+            <span class="ms-auto small text-nowrap"><%= fmt.date(`${p.paid_on}T12:00:00Z`) %></span>
+          </div>
+          <div class="small text-body-secondary">
+            <span class="font-monospace"><%= p.number %></span> · from <%= p.payer === 'financier' ? (financierName ?? 'the bank') : 'the client' %><%= p.received_name ? ` · entered by ${p.received_name}` : '' %>
+            <% if (p.notes) { %><div><%= p.notes %></div><% } %>
+            <% if (voided) { %><div class="text-danger-emphasis">Voided: <%= p.void_reason %></div><% } %>
+          </div>
+          <% if (canRecord && !voided) { %>
+            <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" x-show="voiding !== <%= p.id %>" @click="voiding = <%= p.id %>">Entered by mistake?</button>
+            <form method="post" action="/payments/<%= p.id %>/void" class="d-grid gap-2" x-show="voiding === <%= p.id %>" x-cloak>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="back" value="<%= back %>">
+              <%- include('partials/field', { name: 'reason', id: `void-${p.id}`, label: 'Why void it?', placeholder: 'e.g. Entered twice', required: true }) %>
+              <div class="d-flex gap-2"><button class="btn btn-sm btn-outline-danger" type="submit">Void <%= p.number %></button><button class="btn btn-link btn-sm" type="button" @click="voiding = null">Keep it</button></div>
+            </form>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+  <% if (canRecord) { %>
+    <div class="card-body border-top">
+      <button type="button" class="btn btn-outline-primary w-100" x-show="!adding" @click="adding = true; $nextTick(() => $refs.amount.focus())"><i class="bi bi-cash-coin"></i>Record a payment</button>
+      <form method="post" action="/jobs/<%= jobId %>/payments" class="d-grid gap-3" x-show="adding" x-cloak novalidate>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <div class="jt-field">
+          <label class="form-label" for="pay-amount">Amount (KES)<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control jt-num" id="pay-amount" name="amount" type="text" inputmode="decimal" data-number="decimal" x-ref="amount" autocomplete="off" required>
+        </div>
+        <fieldset class="jt-field">
+          <legend class="form-label">How</legend>
+          <div class="jt-choices" style="--jt-cols: 2">
+            <% Object.entries(methods).forEach(([key, label], i) => { %>
+              <label class="jt-choice" for="pay-m-<%= key %>"><input class="form-check-input" type="radio" id="pay-m-<%= key %>" name="method" value="<%= key %>"<%= i === 0 ? ' checked' : '' %>><span class="jt-choice-label"><%= label %></span></label>
+            <% }) %>
+          </div>
+        </fieldset>
+        <% if (financierName) { %>
+          <fieldset class="jt-field">
+            <legend class="form-label">From</legend>
+            <div class="jt-choices" style="--jt-cols: 1">
+              <label class="jt-choice" for="pay-p-client"><input class="form-check-input" type="radio" id="pay-p-client" name="payer" value="client" checked><span class="jt-choice-label">The client (deposit)</span></label>
+              <label class="jt-choice" for="pay-p-bank"><input class="form-check-input" type="radio" id="pay-p-bank" name="payer" value="financier"><span class="jt-choice-label"><%= financierName %></span></label>
+            </div>
+          </fieldset>
+        <% } else { %>
+          <input type="hidden" name="payer" value="client">
+        <% } %>
+        <%- include('partials/field', { name: 'reference', id: 'pay-reference', label: 'Reference', placeholder: 'M-Pesa code, cheque or bank reference', hint: 'Optional, but makes it easy to find later.' }) %>
+        <%- include('partials/field', { name: 'paid_on', id: 'pay-date', label: 'Date received', type: 'date', value: today, required: true }) %>
+        <%- include('partials/field', { name: 'notes', id: 'pay-notes', label: 'Note', placeholder: 'Optional' }) %>
+        <div class="d-flex gap-2"><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save payment</button><button class="btn btn-link" type="button" @click="adding = false">Cancel</button></div>
+      </form>
+    </div>
+  <% } %>
+</section>

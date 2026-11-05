@@ -27,13 +27,14 @@ const vehicleSchema = z.object({
   year: z.union([z.literal(''), z.coerce.number().int().min(1950, 'Check the year').max(thisYear + 1, 'Check the year')])
     .optional().transform((v) => (v ? v : null)),
   body_type: optionalText(60),
+  engine_no: optionalText(30).transform((v) => v && v.toUpperCase().replace(/\s+/g, '')),
   colour: optionalText(30),
   notes: optionalText(2000),
 });
 // Checked on its own (not as a Zod refine) so it shows together with the other errors.
 const NEEDS_ID = 'Enter the reg number, or the chassis number if it has no plates yet';
 
-const blank = { reg_no: '', chassis_no: '', customer_id: '', contact_id: '', type: 'truck', make: '', model: '', year: '', body_type: '', colour: '', notes: '' };
+const blank = { reg_no: '', chassis_no: '', customer_id: '', contact_id: '', type: 'truck', make: '', model: '', year: '', body_type: '', engine_no: '', colour: '', notes: '' };
 
 async function renderForm(res, { status = 200, vehicle = null, values, errors = {}, existingId = null }) {
   // The customer and contact dropdowns need their current choice as an option.

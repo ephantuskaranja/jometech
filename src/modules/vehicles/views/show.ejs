@@ -73,6 +73,7 @@
         <dl class="jt-kv">
           <div><dt>Reg number</dt><dd><%= vehicle.reg_no ?? '—' %></dd></div>
           <div><dt>Chassis number</dt><dd class="font-monospace"><%= vehicle.chassis_no ?? '—' %></dd></div>
+          <% if (vehicle.engine_no) { %><div><dt>Engine number</dt><dd class="font-monospace"><%= vehicle.engine_no %></dd></div><% } %>
           <% if (vehicle.temp_tag) { %><div><dt>Temporary tag</dt><dd class="font-monospace"><%= vehicle.temp_tag %></dd></div><% } %>
           <div><dt>Colour</dt><dd><%= vehicle.colour ?? '—' %></dd></div>
           <div><dt>Added</dt><dd><%= fmt.date(vehicle.created_at) %></dd></div>
@@ -99,7 +100,7 @@
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
       <div class="card-body">
-        <%- include('partials/history', { entries, labels: { reg_no: 'Reg', chassis_no: 'Chassis', temp_tag: 'Temporary tag', customer: 'Owner', contact: 'Usual contact', type: 'Type', make: 'Make', model: 'Model', year: 'Year', body_type: 'Body', colour: 'Colour', notes: 'Notes' } }) %>
+        <%- include('partials/history', { entries, labels: { reg_no: 'Reg', chassis_no: 'Chassis', temp_tag: 'Temporary tag', customer: 'Owner', contact: 'Usual contact', type: 'Type', make: 'Make', model: 'Model', year: 'Year', body_type: 'Body', engine_no: 'Engine', colour: 'Colour', notes: 'Notes' } }) %>
       </div>
     </section>
   </div>

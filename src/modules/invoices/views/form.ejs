@@ -1,0 +1,84 @@
+<%# A draft invoice for a job: the bank paying (if any), the lines with prices (VAT included), notes. Customer and vehicle come from the job. %>
+<%
+  const vehicle = job.vehicle_label ?? job.vehicle_description;
+%>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Invoices', href: '/invoices' }, invoice ? 'Edit draft' : 'New'],
+  heading: invoice ? `Edit draft invoice for ${job.number}` : `Invoice for ${job.number}`,
+  sub: 'Prices include VAT. It is saved as a draft and gets its number when you issue it.',
+}) %>
+
+<form method="post" action="<%= invoice ? `/invoices/${invoice.id}` : `/jobs/${job.id}/invoice` %>" novalidate
+      x-data="proformaForm(<%= JSON.stringify({ rows, vatRate }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">For</h2></div>
+    <div class="card-body d-grid gap-3">
+      <dl class="jt-kv mb-0">
+        <div><dt>Customer</dt><dd><%= job.customer_name %> <span class="text-body-tertiary small text-nowrap"><%= job.customer_number %></span></dd></div>
+        <div><dt>Vehicle</dt><dd><%= vehicle ?? '—' %><% if (job.vehicle_id && !job.chassis_no) { %><span class="d-block small text-body-secondary">The paper invoice shows the chassis and engine numbers: add them on the <a href="/vehicles/<%= job.vehicle_id %>/edit">vehicle</a>.</span><% } %></dd></div>
+        <div><dt>Job</dt><dd><a class="font-monospace" href="/jobs/<%= job.id %>"><%= job.number %></a><% if (job.proforma_number) { %> <span class="small text-body-secondary">· proforma <%= job.proforma_number %></span><% } %></dd></div>
+      </dl>
+      <div style="max-width: 32rem">
+        <%- include('partials/field', { name: 'financier_id', label: 'Bank financing the vehicle (optional)', type: 'select', url: '/api/customers',
+              options: financierOption, value: values.financier_id, error: errors.financier_id, blank: 'Type the bank’s name, e.g. Co-operative Bank',
+              hint: 'The invoice is then addressed to the customer and the bank, and shows what the bank has to pay. Not in the list? Type the name and choose “Add new customer”.',
+              attrs: 'data-tom-create="customer"' }) %>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">What is being invoiced</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (!invoice && job.proforma_number) { %><div class="jt-info-box"><i class="bi bi-files"></i><span>Lines and prices copied from proforma <%= job.proforma_number %>. Add any extra work done.</span></div><% } %>
+      <% if (!invoice && !job.proforma_number) { %><div class="jt-info-box"><i class="bi bi-info-circle"></i><span>This job has no proforma: the work is copied from the job. Enter the prices.</span></div><% } %>
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <div class="jt-lines">
+        <div class="jt-lines-head" aria-hidden="true"><span>Qty</span><span>Unit</span><span>Description</span><span class="text-end">Price (KES)</span><span class="text-end">Amount</span><span></span></div>
+        <template x-for="(row, i) in rows" :key="row.key">
+          <div class="jt-lines-row">
+            <label class="jt-lines-label">Qty</label>
+            <input class="form-control text-end jt-num" type="text" inputmode="decimal" data-number="decimal" name="line_quantity" x-model="row.quantity" :aria-label="`Quantity, line ${i + 1}`">
+            <label class="jt-lines-label">Unit</label>
+            <input class="form-control" type="text" name="line_unit" x-model="row.unit" maxlength="20" list="line-units" :aria-label="`Unit, line ${i + 1}`">
+            <label class="jt-lines-label">Description</label>
+            <textarea class="form-control" name="line_description" x-model="row.description" rows="4" :aria-label="`Description, line ${i + 1}`"
+                      placeholder="Open body on Isuzu FRR chassis"></textarea>
+            <label class="jt-lines-label">Price (KES)</label>
+            <input class="form-control text-end jt-num" type="text" inputmode="decimal" data-number="decimal" name="line_price" x-model="row.unit_price" :aria-label="`Price, line ${i + 1}`">
+            <span class="jt-lines-amount jt-num" x-text="money(amount(row))"></span>
+            <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          </div>
+        </template>
+      </div>
+      <datalist id="line-units"><option value="Unit"><option value="Pc"><option value="Set"><option value="Lot"><option value="Day"></datalist>
+      <div class="d-flex flex-wrap align-items-start gap-3">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button>
+        <span class="form-text mt-0">The vehicle’s chassis, engine and reg numbers are printed under the first line.</span>
+        <dl class="jt-totals ms-auto mb-0">
+          <div><dt>Total (VAT included)</dt><dd class="jt-num fw-semibold" x-text="`KES ${money(total)}`"></dd></div>
+          <div class="text-body-secondary small"><dt>of which VAT <%= vatRate %>%</dt><dd class="jt-num" x-text="money(vat)"></dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <%- include('partials/field', { name: 'notes', label: 'Notes on the invoice', type: 'textarea', rows: 2, value: values.notes, error: errors.notes,
+            hint: 'Optional. Printed under the bank details.', placeholder: 'e.g. Payment within 14 days' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-receipt"></i>Saved as a draft: no number is used until you issue it.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= invoice ? `/invoices/${invoice.id}` : `/jobs/${job.id}` %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= invoice ? 'Save changes' : 'Save draft' %></button>
+    </div>
+  </div>
+</form>
+
+<%- include('customers/views/quick-add') %>

@@ -1,0 +1,137 @@
+<%# One invoice: its lines and total, what has been paid, and what happens next (issue, eTIMS number, payments, cancel). %>
+<%
+  const st = statuses[invoice.status];
+  const ps = paidStates[invoice.paid_state];
+  const issued = invoice.status === 'issued';
+  const heading = invoice.number ? `Invoice ${invoice.number}` : 'Draft invoice';
+  const vehicle = invoice.vehicle_label ?? invoice.vehicle_description;
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Sales <i class="bi bi-chevron-right"></i><a href="/invoices">Invoices</a><i class="bi bi-chevron-right"></i><span><%= invoice.number ?? 'Draft' %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= heading %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %><% if (issued) { %> <%- include('partials/pill', { text: ps.label, tone: ps.tone }) %><% } %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-person"></i><span><a href="/customers/<%= invoice.customer_id %>"><%= invoice.customer_name %></a><%= invoice.financier_name ? ` & ${invoice.financier_name}` : '' %></span></span>
+          <span><i class="bi bi-wrench-adjustable"></i><a href="/jobs/<%= invoice.job_id %>"><%= invoice.job_number %></a></span>
+          <% if (invoice.invoice_date) { %><span><i class="bi bi-calendar"></i><%= fmt.date(`${invoice.invoice_date}T12:00:00Z`) %></span><% } %>
+          <span><i class="bi bi-cash"></i>KES <%= fmt.money(invoice.total) %></span>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <% if (invoice.status === 'draft') { %><a class="btn btn-outline-secondary" href="/invoices/<%= invoice.id %>/edit"><i class="bi bi-pencil"></i>Edit</a><% } %>
+        <a class="btn btn-primary" href="/invoices/<%= invoice.id %>/print"><i class="bi bi-printer"></i>Print or PDF</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<% if (invoice.status === 'cancelled') { %>
+  <div class="jt-info-box mb-4"><i class="bi bi-x-circle"></i><span>Cancelled <%= fmt.dateTime(invoice.cancelled_at) %>: <%= invoice.cancelled_reason %>. Payments stay on job <a href="/jobs/<%= invoice.job_id %>"><%= invoice.job_number %></a>, which can be invoiced again.</span></div>
+<% } %>
+<% const earlier = invoice.others.filter((o) => o.status === 'cancelled'); if (earlier.length && invoice.status !== 'cancelled') { %>
+  <div class="jt-info-box mb-4"><i class="bi bi-info-circle"></i><span>Replaces cancelled <%- earlier.map((o) => `<a href="/invoices/${o.id}">invoice ${o.number}</a>`).join(', ') %>.</span></div>
+<% } %>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">What is invoiced</h2></div>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Qty</th><th>Description</th><th class="text-end">@</th><th class="text-end">Amount (KES)</th></tr></thead>
+          <tbody>
+            <% invoice.lines.forEach((l) => { %>
+              <tr>
+                <td class="text-nowrap"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+                <td>
+                  <% String(l.description).split('\n').forEach((text) => { const bullet = /^\s*[-•*]\s+/.test(text); %>
+                    <div class="<%= bullet ? 'jt-bullet' : '' %>"><%= bullet ? text.replace(/^\s*[-•*]\s+/, '') : text %></div>
+                  <% }) %>
+                </td>
+                <td class="text-end jt-num"><%= fmt.money(l.unit_price) %></td>
+                <td class="text-end jt-num"><%= fmt.money(l.amount) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+          <tfoot>
+            <tr><th colspan="3" class="text-end">Total (VAT included)</th><th class="text-end jt-num">KES <%= fmt.money(invoice.total) %></th></tr>
+            <tr class="small text-body-secondary"><td colspan="3" class="text-end">of which VAT <%= vatRate %>%</td><td class="text-end jt-num"><%= fmt.money(vat) %></td></tr>
+            <tr><td colspan="3" class="text-end">Paid by the client</td><td class="text-end jt-num"><%= fmt.money(invoice.payments.client) %></td></tr>
+            <% if (invoice.financier_id || invoice.payments.financier > 0) { %><tr><td colspan="3" class="text-end">Paid by the bank</td><td class="text-end jt-num"><%= fmt.money(invoice.payments.financier) %></td></tr><% } %>
+            <tr><th colspan="3" class="text-end"><%= invoice.balance < 0 ? 'Paid in excess' : invoice.financier_id ? 'Bank still to pay' : 'Balance' %></th><th class="text-end jt-num">KES <%= fmt.money(Math.abs(invoice.balance)) %></th></tr>
+          </tfoot>
+        </table>
+      </div>
+      <% if (invoice.notes) { %><div class="card-body border-top small" style="white-space: pre-line"><%= invoice.notes %></div><% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { etims: 'eTIMS number' } }) %></div>
+    </section>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card" x-data="{ step: '' }">
+      <div class="card-header"><h2 class="h6 mb-0">Next step</h2></div>
+      <div class="card-body d-grid gap-3">
+        <% if (invoice.status === 'draft') { %>
+          <p class="small mb-0">Check it, then issue it. It gets the next invoice number and today’s date, and can’t be changed after that.</p>
+          <form method="post" action="/invoices/<%= invoice.id %>/issue" x-show="!step">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-primary w-100" type="submit"><i class="bi bi-send"></i>Issue the invoice</button>
+          </form>
+          <% if (invoice.job_status !== 'completed') { %><p class="small text-body-secondary mb-0"><i class="bi bi-info-circle"></i> The job isn’t completed yet. That’s fine if the bank needs the invoice before paying.</p><% } %>
+          <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" x-show="!step" @click="step = 'delete'">Delete this draft</button>
+          <form method="post" action="/invoices/<%= invoice.id %>/delete" class="d-grid gap-2" x-show="step === 'delete'" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <p class="small mb-0">The draft is removed. Payments stay on the job.</p>
+            <div class="d-flex gap-2"><button class="btn btn-outline-danger" type="submit">Delete draft</button><button class="btn btn-link" type="button" @click="step = ''">Keep it</button></div>
+          </form>
+        <% } else if (issued) { %>
+          <p class="small mb-0">Issued <%= fmt.dateTime(invoice.issued_at) %>.
+            <%= invoice.balance > 0 ? `KES ${fmt.money(invoice.balance)} still to pay.` : 'Fully paid.' %></p>
+          <form method="post" action="/invoices/<%= invoice.id %>/etims" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'etims_number', label: 'KRA eTIMS invoice number', value: invoice.etims_number ?? '', autocomplete: 'off',
+                  hint: invoice.etims_number ? 'Printed on the invoice.' : 'Optional: only if the customer needs a KRA invoice. Once it is keyed into the KRA portal, add it here and it is printed on the invoice.', attrs: 'style="text-transform: uppercase"' }) %>
+            <div><button class="btn btn-outline-secondary btn-sm" type="submit"><%= invoice.etims_number ? 'Change' : 'Save' %> eTIMS number</button></div>
+          </form>
+          <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" x-show="!step" @click="step = 'cancel'">Cancel this invoice</button>
+          <form method="post" action="/invoices/<%= invoice.id %>/cancel" class="d-grid gap-2" x-show="step === 'cancel'" x-cloak>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'reason', label: 'Why is it being cancelled?', placeholder: 'e.g. Wrong price; reissued', required: true }) %>
+            <p class="small text-body-secondary mb-0">It keeps its number, marked cancelled. Remember to cancel the eTIMS invoice on the KRA portal too.</p>
+            <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit">Cancel the invoice</button><button class="btn btn-link" type="button" @click="step = ''">Keep it</button></div>
+          </form>
+        <% } else { %>
+          <a class="btn btn-outline-primary" href="/jobs/<%= invoice.job_id %>/invoice"><i class="bi bi-receipt"></i>Invoice <%= invoice.job_number %> again</a>
+        <% } %>
+      </div>
+    </section>
+
+    <%- include('invoices/views/payments', { payments: invoice.payments, jobId: invoice.job_id, back: `/invoices/${invoice.id}`, methods, today,
+          financierName: invoice.financier_name, canRecord: invoice.status !== 'cancelled' }) %>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">For</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Customer</dt><dd><a href="/customers/<%= invoice.customer_id %>"><%= invoice.customer_name %></a> <span class="text-body-tertiary small text-nowrap"><%= invoice.customer_number %></span></dd></div>
+          <% if (invoice.financier_id) { %><div><dt>Bank</dt><dd><a href="/customers/<%= invoice.financier_id %>"><%= invoice.financier_name %></a></dd></div><% } %>
+          <div><dt>Vehicle</dt><dd><% if (invoice.vehicle_id) { %><a href="/vehicles/<%= invoice.vehicle_id %>"><%= vehicle %></a><% } else { %><%= vehicle ?? '—' %><% } %></dd></div>
+          <% if (invoice.vehicle_id) { %>
+            <div><dt>Chassis</dt><dd class="font-monospace"><%= invoice.chassis_no ?? '—' %></dd></div>
+            <div><dt>Engine</dt><dd class="font-monospace"><%= invoice.engine_no ?? '—' %></dd></div>
+          <% } %>
+          <div><dt>Proforma</dt><dd><% if (invoice.proforma_id) { %><a class="font-monospace" href="/proformas/<%= invoice.proforma_id %>"><%= invoice.proforma_number %></a><% } else { %>—<% } %></dd></div>
+          <div><dt>eTIMS</dt><dd class="font-monospace"><%= invoice.etims_number ?? '—' %></dd></div>
+          <div><dt>Prepared by</dt><dd><%= invoice.created_name ?? '—' %></dd></div>
+        </dl>
+        <% if (invoice.vehicle_id && (!invoice.chassis_no || !invoice.engine_no)) { %><div class="form-text">The paper invoice shows the chassis and engine numbers. Add them on the <a href="/vehicles/<%= invoice.vehicle_id %>/edit">vehicle</a>.</div><% } %>
+      </div>
+    </section>
+  </div>
+</div>

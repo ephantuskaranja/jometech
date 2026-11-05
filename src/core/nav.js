@@ -22,7 +22,7 @@ export const nav = [
       { label: 'Vehicles', href: '/vehicles', icon: 'truck-front', permission: VIEW_CUSTOMERS, ready: true },
       { label: 'Enquiries', href: '/enquiries', icon: 'inbox', permission: 'enquiries.manage', ready: true },
       { label: 'Proformas', href: '/proformas', icon: 'file-earmark-text', permission: 'quotations.manage', ready: true },
-      { label: 'Invoices', href: '/invoices', icon: 'receipt', permission: 'invoices.manage' },
+      { label: 'Invoices', href: '/invoices', icon: 'receipt', permission: 'invoices.manage', ready: true },
     ],
   },
   {

@@ -77,6 +77,13 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .pf-sign { margin-top: 16px; line-height: 2.1; }
 .pf-sign-line { width: 60mm; height: 14mm; border-bottom: 1px dotted #111827; }
 
+/* ---------- Final invoice (invoices/views/print.ejs): the proforma's layout, plus what has been paid ---------- */
+.proforma.is-cancelled::after { content: "CANCELLED"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 90pt Archivo, Arial, sans-serif; color: rgb(180 35 24 / .14); transform: rotate(-30deg); pointer-events: none; }
+.pf-lines .vehicle { margin-top: 10px; text-transform: uppercase; }
+.pf-lines .paid td, .pf-lines .paid th { text-transform: uppercase; font-size: 10pt; text-align: right; }
+.pf-lines .paid th { font-weight: 700; }
+.pf-etims { margin-top: 6px; font-size: 10pt; }
+
 /* ---------- Purchase order (purchasing/views/print.ejs), like the paper one ---------- */
 .po-to { line-height: 1.9; margin-bottom: 10px; }
 .po-dear { margin: 12px 0 4px; }

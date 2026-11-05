@@ -5,6 +5,7 @@ import { localDay } from '../../core/dates.js';
 import { fmt } from '../../core/format.js';
 import { config } from '../../config.js';
 import * as reports from './service.js';
+import { METHODS as PAYMENT_METHODS } from '../invoices/service.js';
 
 // Period summary: a day or a range, one site or all. Printed from the browser, or downloaded as Excel.
 
@@ -32,6 +33,7 @@ router.get('/reports/summary', see, async (req, res) => {
     periods: reports.PERIODS,
     sites: req.user.sites,
     changes: reports.JOB_CHANGES,
+    methods: PAYMENT_METHODS,
     s: await reports.summary(p, site?.id ?? null, today),
   });
 });
@@ -60,7 +62,7 @@ function sheet(book, name, columns, rows) {
 }
 
 function workbook(s, { p, site, today }) {
-  const { jobs, stores, front } = s;
+  const { jobs, stores, front, money } = s;
   const book = new ExcelJS.Workbook();
   book.creator = config.company?.name ?? 'Jome-Tech';
 
@@ -87,9 +89,11 @@ function workbook(s, { p, site, today }) {
     ['Proformas accepted', front.proformas.accepted.length],
     ['Proformas accepted (KES)', front.proformas.acceptedValue],
     ['New enquiries', front.enquiries.count],
+    ['Invoiced (KES)', money.issuedValue],
+    ['Payments received (KES)', money.receivedValue],
   ]);
   glance.getRow(1).font = { bold: true, size: 13 };
-  for (const r of [9, 10, 17, 19]) glance.getCell(`B${r}`).numFmt = MONEY;
+  for (const r of [9, 10, 17, 19, 21, 22]) glance.getCell(`B${r}`).numFmt = MONEY;
 
   sheet(book, 'Job changes', [['When', 'at', 20], ['Job', 'number', 16], ['Change', 'change', 16], ['Detail', 'summary', 30], ['Customer', 'customer_name', 28], ['Vehicle', 'vehicle', 16], ['By', 'user_name', 20]],
     jobs.changes.map((c) => ({ ...c, at: fmt.dateTime(c.created_at), change: reports.JOB_CHANGES[c.action] })));
@@ -122,5 +126,9 @@ function workbook(s, { p, site, today }) {
   ].map((r) => ({ ...r, when: fmt.dateTime(r.at), total: Number(r.total) })));
   sheet(book, 'Enquiries', [['Work type', 'work_type', 30], ['New enquiries', 'n', 14]], front.enquiries.byWorkType)
     .addRows([[], ['Won in the period', front.enquiries.won], ['Lost in the period', front.enquiries.lost]]);
+  sheet(book, 'Invoices', [['Invoice', 'number'], ['Issued', 'when', 20], ['Job', 'job_number'], ['Customer', 'customer_name', 28], ['Total incl. VAT (KES)', 'total', 20, MONEY], ['Note', 'note', 12]],
+    money.issued.map((i) => ({ ...i, when: fmt.dateTime(i.issued_at), total: Number(i.total), note: i.status === 'cancelled' ? 'Cancelled' : '' })));
+  sheet(book, 'Payments', [['Receipt', 'number'], ['Date', 'date', 14], ['Job', 'job_number'], ['Customer', 'customer_name', 28], ['From', 'from', 10], ['How', 'how', 14], ['Reference', 'reference', 18], ['Amount (KES)', 'amount', 16, MONEY]],
+    money.received.map((p) => ({ ...p, date: day(p.paid_on), from: p.payer === 'financier' ? 'Bank' : 'Client', how: PAYMENT_METHODS[p.method], amount: Number(p.amount) })));
   return book;
 }

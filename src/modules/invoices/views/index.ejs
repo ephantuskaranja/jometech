@@ -1,0 +1,59 @@
+<%#
+  Invoices. "Not paid" (the default) is the issued ones with money still to come in.
+  A search looks through all of them.
+%>
+<%
+  const tabs = [['unpaid', 'Not fully paid'], ['draft', 'Drafts'], ['paid', 'Paid'], ['all', 'All']];
+  const empty = {
+    draft: { icon: 'file-earmark', heading: 'No drafts', text: 'An invoice stays here until it is issued.' },
+    unpaid: { icon: 'cash-coin', heading: 'Nothing waiting to be paid', text: 'Issued invoices with a balance show here.' },
+    paid: { icon: 'check2-circle', heading: 'Nothing fully paid yet', text: 'Invoices move here once the balance is cleared.' },
+    all: { icon: 'receipt', heading: 'No invoices yet', text: 'Open a job and choose “Invoice” to make one from its proforma.' },
+  };
+%>
+<%- include('partials/page-header', {
+  crumb: ['Sales', 'Invoices'],
+  heading: 'Invoices',
+  sub: 'One invoice per job, made from the job page. Prices include VAT.',
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/invoices?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/invoices">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Invoice or job number, customer, bank or reg" aria-label="Search invoices">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/invoices?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'invoice' : 'invoices' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the invoice or job number, part of the customer’s name, or the reg.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Invoice</th><th>Customer</th><th class="d-none d-md-table-cell">Job</th><th class="d-none d-md-table-cell">Date</th><th class="text-end">Total (KES)</th><th class="text-end">Balance</th></tr></thead>
+        <tbody>
+          <% list.forEach((i) => { const st = i.status === 'issued' ? paidStates[i.balance <= 0 ? 'paid' : Number(i.paid) > 0 ? 'part' : 'unpaid'] : statuses[i.status]; %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/invoices/<%= i.id %>"><%= i.number ?? 'Draft' %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= i.customer_name %><% if (i.financier_name) { %><span class="jt-sub">&amp; <%= i.financier_name %></span><% } %>
+                <% if (i.vehicle_label) { %><span class="jt-sub"><%= i.vehicle_label %></span><% } %></td>
+              <td class="d-none d-md-table-cell"><span class="font-monospace small"><%= i.job_number %></span></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= i.invoice_date ? fmt.date(`${i.invoice_date}T12:00:00Z`) : '—' %></td>
+              <td class="text-end jt-num"><%= fmt.money(i.total) %></td>
+              <td class="text-end jt-num"><%= i.status === 'issued' ? fmt.money(Math.max(i.balance, 0)) : '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

@@ -40,6 +40,10 @@ export async function cleanup() {
   const enquiryIds = await db('enquiries').where('caller_phone', 'like', '+25470000%').orWhereIn('customer_id', customerIds).pluck('id');
   const proformaIds = await db('proformas').whereIn('customer_id', customerIds).orWhereIn('enquiry_id', enquiryIds).pluck('id');
   const jobIds = await db('jobs').whereIn('customer_id', customerIds).pluck('id');
+  const invoiceIds = await db('invoices').whereIn('job_id', jobIds).orWhereIn('financier_id', customerIds).pluck('id');
+  await db('audit_log').where({ entity: 'invoice' }).whereIn('entity_id', invoiceIds).delete();
+  await db('invoices').whereIn('id', invoiceIds).delete(); // lines go with them
+  await db('payments').whereIn('job_id', jobIds).delete();
   await db('audit_log').where({ entity: 'job' }).whereIn('entity_id', jobIds).delete();
   await db('jobs').whereIn('id', jobIds).delete(); // lines go with them
   await db('audit_log').where({ entity: 'proforma' }).whereIn('entity_id', proformaIds).delete();
