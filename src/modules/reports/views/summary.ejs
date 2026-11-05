@@ -1,0 +1,304 @@
+<%
+  const money = (v) => `KES ${fmt.money(v)}`;
+  const day = (d) => fmt.date(`${d}T12:00:00Z`);
+  const { jobs, stores, front } = s;
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
+  const vehicleCell = (r) => !r.vehicle ? '<span class="text-body-tertiary">—</span>' : r.plate ? `<span class="font-monospace small text-nowrap">${esc(r.vehicle)}</span>` : esc(r.vehicle);
+%>
+<%- include('partials/page-header', {
+  crumb: ['Reports', 'Summary'],
+  heading: `Summary · ${periodLabel}`,
+  sub: `${site ? site.name : 'All sites'}. Figures marked “now” are as of today, whatever the period.`,
+}) %>
+
+<form class="card jt-noprint mb-3" method="get" action="/reports/summary" x-data="{ period: '<%= p.key %>' }">
+  <div class="card-body d-flex flex-wrap align-items-end gap-2">
+    <div>
+      <label class="form-label small mb-1" for="period">Period</label>
+      <select class="form-select" id="period" name="period" x-model="period" @change="period !== 'custom' && $el.form.requestSubmit()">
+        <% Object.entries(periods).forEach(([key, label]) => { %>
+          <option value="<%= key %>" <%= key === p.key ? 'selected' : '' %>><%= label %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div x-show="period === 'custom'" <%- p.key === 'custom' ? '' : 'x-cloak' %>>
+      <label class="form-label small mb-1" for="from">From</label>
+      <input class="form-control" type="date" id="from" name="from" value="<%= p.from %>" max="<%= today %>">
+    </div>
+    <div x-show="period === 'custom'" <%- p.key === 'custom' ? '' : 'x-cloak' %>>
+      <label class="form-label small mb-1" for="to">To</label>
+      <input class="form-control" type="date" id="to" name="to" value="<%= p.to %>" max="<%= today %>">
+    </div>
+    <div>
+      <label class="form-label small mb-1" for="site">Site</label>
+      <select class="form-select" id="site" name="site" @change="$el.form.requestSubmit()">
+        <option value="">All sites</option>
+        <% sites.forEach((x) => { %><option value="<%= x.id %>" <%= site?.id === x.id ? 'selected' : '' %>><%= x.name %></option><% }) %>
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit" x-show="period === 'custom'" <%- p.key === 'custom' ? '' : 'x-cloak' %>>Show</button>
+    <div class="ms-auto d-flex gap-2">
+      <button class="btn btn-outline-secondary" type="button" @click="window.print()"><i class="bi bi-printer"></i>Print</button>
+      <a class="btn btn-outline-secondary" href="/reports/summary.xlsx?<%= qs %>"><i class="bi bi-file-earmark-spreadsheet"></i>Download Excel</a>
+    </div>
+  </div>
+</form>
+
+<div class="row g-3 mb-4">
+  <% [
+    { icon: 'play-circle', label: 'Jobs started', value: jobs.started, foot: `${jobs.created} new job${jobs.created === 1 ? '' : 's'}` },
+    { icon: 'check2-circle', label: 'Jobs completed', value: jobs.completed.length, foot: `${jobs.completed.filter((j) => j.late).length} late` },
+    { icon: 'alarm', label: 'Overdue now', value: jobs.overdue.length, foot: 'past their due date' },
+    { icon: 'box-seam', label: 'Stock issued', value: fmt.money(stores.issuedValue), foot: 'KES at cost, less returns' },
+    { icon: 'box-arrow-in-down', label: 'Goods received', value: fmt.money(stores.receivedValue), foot: `KES, ${stores.received.filter((g) => !g.reversed_at).length} deliveries` },
+    { icon: 'stack', label: 'Low stock now', value: stores.lowStock.length, foot: 'items, all sites' },
+    { icon: 'hourglass-split', label: 'Orders waiting now', value: stores.ordersWaiting.length, foot: 'for approval' },
+    { icon: 'file-earmark-text', label: 'Proformas accepted', value: front.proformas.accepted.length, foot: `of ${front.proformas.sent.length} sent` },
+  ].forEach((k) => { %>
+    <div class="col-6 col-md-4 col-xl-3">
+      <div class="card jt-kpi h-100">
+        <div class="jt-kpi-label"><i class="bi bi-<%= k.icon %>"></i><%= k.label %></div>
+        <div class="jt-kpi-value jt-kpi-value-sm"><%= k.value %></div>
+        <div class="jt-kpi-foot"><%= k.foot %></div>
+      </div>
+    </div>
+  <% }) %>
+</div>
+
+<%# One card per section; an empty one is a single line. %>
+<% const head = (title, count, note) => `<div class="card-header d-flex flex-wrap align-items-baseline column-gap-2 row-gap-1"><h3 class="h6 mb-0">${title}</h3><span class="badge text-bg-secondary">${count}</span>${note ? `<span class="small text-body-secondary ms-auto">${note}</span>` : ''}</div>`; %>
+<% const none = (text) => `<p class="small text-body-secondary px-3 py-2 mb-0">${text}</p>`; %>
+
+<h2 class="h5 mt-2 mb-3">Jobs</h2>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('What changed', jobs.changes.length, jobs.changesCut ? 'Showing the latest 500. Choose a shorter period to see all.' : '') %>
+  <% if (!jobs.changes.length) { %><%- none('No job was created, started, moved on or closed in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>When</th><th>Job</th><th>Change</th><th class="d-none d-md-table-cell">Customer</th><th class="d-none d-lg-table-cell">Vehicle</th><th class="d-none d-md-table-cell">By</th></tr></thead>
+      <tbody>
+        <% jobs.changes.forEach((c) => { %>
+          <tr>
+            <td class="text-nowrap small"><%= p.from === p.to ? fmt.time(c.created_at) : fmt.dateTime(c.created_at) %></td>
+            <td><a class="font-monospace text-nowrap" href="/jobs/<%= c.id %>"><%= c.number %></a></td>
+            <td><%= changes[c.action] %><% if (c.summary) { %><span class="jt-sub"><%= c.summary %></span><% } %></td>
+            <td class="d-none d-md-table-cell"><%= c.customer_name %></td>
+            <td class="d-none d-lg-table-cell"><%- vehicleCell(c) %></td>
+            <td class="d-none d-md-table-cell small"><%= c.user_name ?? '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Completed', jobs.completed.length) %>
+  <% if (!jobs.completed.length) { %><%- none('No jobs completed in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Job</th><th>Customer</th><th class="d-none d-md-table-cell">Vehicle</th><th>Completed</th><th class="text-end">Days</th><th>Due</th></tr></thead>
+      <tbody>
+        <% jobs.completed.forEach((j) => { %>
+          <tr>
+            <td><a class="font-monospace text-nowrap" href="/jobs/<%= j.id %>"><%= j.number %></a></td>
+            <td><%= j.customer_name %></td>
+            <td class="d-none d-md-table-cell"><%- vehicleCell(j) %></td>
+            <td class="text-nowrap small"><%= fmt.dateTime(j.completed_at) %></td>
+            <td class="text-end jt-num"><%= j.days %></td>
+            <td class="text-nowrap"><% if (j.due_on) { %><%= day(j.due_on) %> <%- include('partials/pill', j.late ? { text: 'Late', tone: 'bad' } : { text: 'On time', tone: 'ok' }) %><% } else { %><span class="text-body-tertiary">—</span><% } %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Overdue now', jobs.overdue.length, 'Open or in progress, past the due date') %>
+  <% if (!jobs.overdue.length) { %><%- none('No jobs are overdue.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Job</th><th>Customer</th><th class="d-none d-md-table-cell">Vehicle</th><th>Due</th><th class="text-end">Days late</th><th class="d-none d-md-table-cell">Current step</th></tr></thead>
+      <tbody>
+        <% jobs.overdue.forEach((j) => { %>
+          <tr>
+            <td><a class="font-monospace text-nowrap" href="/jobs/<%= j.id %>"><%= j.number %></a></td>
+            <td><%= j.customer_name %></td>
+            <td class="d-none d-md-table-cell"><%- vehicleCell(j) %></td>
+            <td class="text-nowrap"><%= day(j.due_on) %></td>
+            <td class="text-end jt-num"><%= j.daysLate %></td>
+            <td class="d-none d-md-table-cell"><%= j.status === 'open' ? 'Not started' : (j.current_step ?? '') %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<h2 class="h5 mt-4 mb-3">Stores</h2>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Issued to jobs', stores.issuedToJobs.length, `${money(stores.issuedValue)} at cost, less returns`) %>
+  <% if (!stores.issuedToJobs.length) { %><%- none('No materials issued or returned in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Job</th><th>Items</th><th class="text-end">Cost (KES)</th></tr></thead>
+      <tbody>
+        <% stores.issuedToJobs.forEach((j) => { %>
+          <tr>
+            <td><a class="font-monospace text-nowrap" href="/jobs/<%= j.id %>"><%= j.number %></a><span class="jt-sub"><%= j.customer_name %></span></td>
+            <td class="small">
+              <% j.lines.forEach((l) => { %><div><%= l.name %> <span class="text-body-secondary">· <%= l.amount %></span></div><% }) %>
+              <% if (j.returnedValue) { %><div class="text-body-secondary">Returned: −<%= fmt.money(j.returnedValue) %></div><% } %>
+            </td>
+            <td class="text-end jt-num"><%= fmt.money(j.net) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Goods received', stores.received.length, money(stores.receivedValue)) %>
+  <% if (!stores.received.length) { %><%- none('No goods received in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>GRN</th><th>Supplier</th><th class="d-none d-md-table-cell">Order</th><th>Date</th><th class="text-end">Into stock (KES)</th></tr></thead>
+      <tbody>
+        <% stores.received.forEach((g) => { %>
+          <tr>
+            <td><a class="font-monospace text-nowrap" href="/goods-received/<%= g.id %>"><%= g.number %></a>
+              <% if (g.reversed_at) { %><span class="d-block mt-1"><%- include('partials/pill', { text: 'Reversed', tone: 'bad' }) %></span><% } %></td>
+            <td><%= g.supplier_name %></td>
+            <td class="d-none d-md-table-cell"><a class="font-monospace small" href="/purchase-orders/<%= g.order_id %>"><%= g.order_number %></a></td>
+            <td class="text-nowrap"><%= day(g.received_on) %></td>
+            <td class="text-end jt-num <%= g.reversed_at ? 'text-decoration-line-through text-body-tertiary' : '' %>"><%= fmt.money(g.value) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Price rises of 10% or more', stores.priceRises.length, 'Price paid, excluding VAT') %>
+  <% if (!stores.priceRises.length) { %><%- none('No price went up by 10% or more in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Item</th><th class="text-end">Was</th><th class="text-end">Now</th><th class="text-end">Rise</th><th class="d-none d-md-table-cell">GRN</th></tr></thead>
+      <tbody>
+        <% stores.priceRises.forEach((r) => { %>
+          <tr>
+            <td><a href="/items/<%= r.item_id %>"><%= r.item_name %></a><span class="jt-sub">per <%= r.unit %></span></td>
+            <td class="text-end jt-num"><%= fmt.money(r.previous_price) %></td>
+            <td class="text-end jt-num"><%= fmt.money(r.unit_price) %></td>
+            <td class="text-end jt-num fw-semibold">+<%= Math.round(r.rise) %>%</td>
+            <td class="d-none d-md-table-cell"><a class="font-monospace small" href="/goods-received/<%= r.receipt_id %>"><%= r.receipt_number %></a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Low stock now', stores.lowStock.length, 'At or below the reorder level, all sites') %>
+  <% if (!stores.lowStock.length) { %><%- none('No items are low.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Item</th><th class="text-end">On hand</th><th class="text-end">Reorder at</th></tr></thead>
+      <tbody>
+        <% stores.lowStock.forEach((i) => { %>
+          <tr>
+            <td><a href="/items/<%= i.id %>"><%= i.name %></a></td>
+            <td class="text-end jt-num"><%= fmt.qty(i.on_hand_qty) %> <%= i.unit %></td>
+            <td class="text-end jt-num"><%= fmt.qty(i.reorder_level) %> <%= i.unit %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Orders waiting for approval now', stores.ordersWaiting.length) %>
+  <% if (!stores.ordersWaiting.length) { %><%- none('No purchase orders are waiting for approval.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Order</th><th>Supplier</th><th class="text-end">Value (KES)</th><th>Waiting since</th></tr></thead>
+      <tbody>
+        <% stores.ordersWaiting.forEach((o) => { %>
+          <tr>
+            <td><a class="font-monospace text-nowrap" href="/purchase-orders/<%= o.id %>"><%= o.number %></a></td>
+            <td><%= o.supplier_name %></td>
+            <td class="text-end jt-num"><%= o.total === null ? '—' : fmt.money(o.total) %></td>
+            <td class="text-nowrap small"><%= fmt.dateTime(o.waitingSince) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<h2 class="h5 mt-4 mb-3">Front office</h2>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Vehicles in and out', front.checkedIn.length + front.checkedOut.length + front.movements.length, `${front.checkedIn.length} in · ${front.checkedOut.length} out · ${front.movements.length} moved`) %>
+  <% const vehicles = [
+    ...front.checkedIn.map((k) => ({ what: 'Checked in', at: k.at, href: `/check-in/${k.id}`, number: k.number, vehicle: k.vehicle, plate: k.plate, detail: k.customer_name })),
+    ...front.checkedOut.map((k) => ({ what: 'Checked out', at: k.at, href: `/check-in/${k.id}`, number: k.number, vehicle: k.vehicle, plate: k.plate, detail: k.customer_name })),
+    ...front.movements.map((m) => ({ what: 'Moved', at: m.sent_at, href: `/check-in/${m.checkin_id}`, number: m.number, vehicle: m.vehicle, plate: m.plate, detail: `${m.from_site} → ${m.to_site}` })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at)); %>
+  <% if (!vehicles.length) { %><%- none('No vehicles checked in, out or moved in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>When</th><th>What</th><th>Vehicle</th><th class="d-none d-md-table-cell">Customer or sites</th><th class="d-none d-md-table-cell">Number</th></tr></thead>
+      <tbody>
+        <% vehicles.forEach((v) => { %>
+          <tr>
+            <td class="text-nowrap small"><%= p.from === p.to ? fmt.time(v.at) : fmt.dateTime(v.at) %></td>
+            <td><%= v.what %></td>
+            <td><%- vehicleCell(v) %></td>
+            <td class="d-none d-md-table-cell"><%= v.detail %></td>
+            <td class="d-none d-md-table-cell"><a class="font-monospace small" href="<%= v.href %>"><%= v.number %></a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <% const pf = front.proformas; %>
+  <%- head('Proformas', pf.sent.length + pf.accepted.length + pf.declined.length, `Sent ${money(pf.sentValue)} · accepted ${money(pf.acceptedValue)} · incl. VAT`) %>
+  <% const pfRows = [
+    ...pf.sent.map((r) => ({ ...r, what: 'Sent', tone: 'info' })),
+    ...pf.accepted.map((r) => ({ ...r, what: 'Accepted', tone: 'ok' })),
+    ...pf.declined.map((r) => ({ ...r, what: 'Declined', tone: 'bad' })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at)); %>
+  <% if (!pfRows.length) { %><%- none('No proformas sent, accepted or declined in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>When</th><th>Proforma</th><th></th><th class="d-none d-md-table-cell">Customer</th><th class="text-end">Total (KES)</th></tr></thead>
+      <tbody>
+        <% pfRows.forEach((r) => { %>
+          <tr>
+            <td class="text-nowrap small"><%= p.from === p.to ? fmt.time(r.at) : fmt.dateTime(r.at) %></td>
+            <td><a class="font-monospace text-nowrap" href="/proformas/<%= r.id %>"><%= r.number %></a></td>
+            <td><%- include('partials/pill', { text: r.what, tone: r.tone }) %></td>
+            <td class="d-none d-md-table-cell"><%= r.customer_name %></td>
+            <td class="text-end jt-num"><%= fmt.money(r.total) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <% const enq = front.enquiries; %>
+  <%- head('New enquiries', enq.count, `${enq.won} won · ${enq.lost} lost in the period`) %>
+  <% if (!enq.count) { %><%- none('No new enquiries in this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Work type</th><th class="text-end">Enquiries</th></tr></thead>
+      <tbody>
+        <% enq.byWorkType.forEach((e) => { %>
+          <tr><td><%= e.work_type %></td><td class="text-end jt-num"><%= e.n %></td></tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>

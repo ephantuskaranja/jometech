@@ -32,6 +32,7 @@ import { router as purchasingRoutes } from './modules/purchasing/routes.js';
 import { router as stockRoutes } from './modules/stock/routes.js';
 import { router as issueRoutes } from './modules/issues/routes.js';
 import { router as siteRoutes } from './modules/sites/routes.js';
+import { router as reportRoutes } from './modules/reports/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -136,6 +137,7 @@ export function createApp() {
   app.use(stockRoutes);
   app.use(issueRoutes);
   app.use(siteRoutes);
+  app.use(reportRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

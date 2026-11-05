@@ -238,6 +238,7 @@ Each step is committed as `Step N: …`; `git log --oneline` shows them.
 | 16 | Goods received against an order: real prices, part deliveries, rejected goods, transport shared by value. Stock by site and by sheet size, weighted average, permanent movement record, reverse a delivery, low stock | Done |
 | 17 | Issuing materials to jobs at the day's average cost, whole sheets only; returns at the cost they left at; each job shows its materials, with cost only for stores and managers; opening stock, with undo | Done |
 | 18 | Site management: admins add a site and update its name, address and phone from the app. Sites are switched off, never deleted, and only once no vehicles, stock, active jobs, open orders, visitors or staff who work only there remain | Done |
+| 19 | Period summary at Reports → Summary, for admins and managers (new permission reports.summary): today, yesterday, this week, this month, last month or chosen dates, one site or all. Jobs changed, completed (late or on time) and overdue now; stock issued to jobs less returns, goods received, price rises of 10% or more, low stock now, orders waiting now; vehicles in, out and moved, proformas, new enquiries. Print, or download an Excel file with a sheet per section | Done |
 
 ### Materials and costing decisions (agreed 2026-11-04)
 
@@ -250,10 +251,6 @@ Sample: `docs/source/Purchase Order/` (git-ignored, client data). Paper purchase
 - **Transport:** entered on the goods received note and spread across its items.
 - **Offcuts:** ignored for now, to be added later.
 - **Purchase orders:** the price is optional, as on paper; goods received needs it, from the supplier's eTIMS receipt.
-
-| Next | What |
-|---|---|
-| 19 | **Period summary for admins.** Pick a day or any date range; it opens on today. Shows stock issued and to which jobs, items running low, jobs that changed status (started, moved a step, completed, cancelled), jobs completed, jobs overdue. Also fits here: goods received and their value, orders waiting for approval, price rises of 10% or more, vehicles in and out, proformas sent and accepted, new enquiries. Filter by site, and print or export |
 
 ### Step 7 decisions (updated 2026-10-31)
 

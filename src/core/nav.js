@@ -44,6 +44,12 @@ export const nav = [
     ],
   },
   {
+    label: 'Reports',
+    items: [
+      { label: 'Summary', href: '/reports/summary', icon: 'clipboard-data', permission: 'reports.summary', ready: true },
+    ],
+  },
+  {
     label: 'System',
     items: [
       { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },

@@ -27,6 +27,7 @@ export const PERMISSIONS = [
   ['People', 'payroll.manage', 'Prepare payroll'],
   ['People', 'payroll.approve', 'Approve payroll'],
   ['Reports', 'reports.view', 'See reports and dashboards'],
+  ['Reports', 'reports.summary', 'See the period summary, with costs and stock values'],
   ['System', 'users.manage', 'Add users, set roles and reset passwords'],
   ['System', 'system.settings', 'Change company settings'],
   ['System', 'system.backup.manage', 'Run, download and delete backups'],

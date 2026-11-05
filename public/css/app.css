@@ -541,3 +541,17 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 @media (max-width: 420px) { .jt-choices-compact .jt-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Long text in a table cell: two lines, then … */
 .jt-clamp { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 28rem; }
+
+/* ---- Reports ---- */
+.jt-kpi-value-sm { font-size: 1.6rem; }
+
+/* Printing an ordinary page (the period summary): just the content, light, no menus or filters */
+@media print {
+  .jt-side, .jt-topbar, .jt-flash, .jt-noprint, .jt-skip { display: none !important; }
+  .jt-shell { display: block; }
+  .jt-main, .jt-content { padding: 0 !important; margin: 0 !important; }
+  .card { box-shadow: none !important; break-inside: avoid; }
+  .jt-report-section .table-responsive { overflow: visible; }
+  .jt-report-section .d-none { display: table-cell !important; }
+  a { color: inherit !important; text-decoration: none !important; }
+}
