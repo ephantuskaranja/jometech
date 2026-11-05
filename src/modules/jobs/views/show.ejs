@@ -112,7 +112,7 @@
 
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
-      <div class="card-body"><%- include('partials/history', { entries, labels: { job_type: 'Job type', customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { job_type: 'Job type', customer: 'Customer', vehicle: 'Vehicle', supervisor: 'Supervisor', responsible: 'Responsible', due_on: 'Promised by', instructions: 'Instructions', work: 'Work' } }) %></div>
     </section>
   </div>
 
@@ -248,6 +248,7 @@
             <% } else { %><span class="font-monospace"><%= job.proforma_number ?? '—' %></span><% } %>
           </dd></div>
           <div><dt>Supervisor</dt><dd><%= job.supervisor_name ?? '—' %></dd></div>
+          <% if (job.responsible_name) { %><div><dt>Responsible</dt><dd><%= job.responsible_name %><span class="d-block small text-body-secondary">Not an app user</span></dd></div><% } %>
           <div><dt>Promised by</dt><dd><%= promised ?? '—' %></dd></div>
           <div><dt>Opened</dt><dd><%= fmt.date(job.created_at) %><% if (job.created_name) { %><span class="d-block small text-body-secondary">By <%= job.created_name %></span><% } %></dd></div>
         </dl>

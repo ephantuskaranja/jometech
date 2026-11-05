@@ -69,7 +69,8 @@
       <tr>
         <td><span class="label">Job type:</span> <%= job.job_type_name ?? '' %></td>
         <td><span class="label">Supervisor:</span> <%= job.supervisor_name ?? '' %></td>
-        <td colspan="2"><span class="label">Promised by:</span> <strong><%= job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : '' %></strong></td>
+        <td><span class="label">Responsible:</span> <%= job.responsible_name ?? '' %></td>
+        <td><span class="label">Promised by:</span> <strong><%= job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : '' %></strong></td>
       </tr>
     </table>
 

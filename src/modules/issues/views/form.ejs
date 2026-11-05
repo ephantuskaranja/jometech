@@ -22,12 +22,25 @@
       <% if (!stock.length) { %>
         <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>Nothing is in stock at <%= site.name %> yet. Receive goods, or enter opening stock, first.</span></div>
       <% } %>
-      <datalist id="issue-stock"><% stock.forEach((s) => { %><option value="<%= s.label %>"><% }) %></datalist>
       <template x-for="(row, i) in rows" :key="row.key">
         <div class="jt-po-line">
           <div>
             <label class="form-label" :for="`iss-${row.key}`" x-text="`Item ${i + 1}`"></label>
-            <input class="form-control" :id="`iss-${row.key}`" name="line_label" list="issue-stock" autocomplete="off" x-model="row.label" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+            <%# Search what is in stock here: any words of the name, in any order. %>
+            <div class="jt-combo" @click.outside="row.open = false">
+              <input class="form-control" :id="`iss-${row.key}`" name="line_label" autocomplete="off" x-model="row.label" placeholder="Type to search, e.g. plate 4"
+                     role="combobox" aria-autocomplete="list" :aria-expanded="row.open" :aria-controls="`iss-list-${row.key}`"
+                     @input="pick(row); row.open = true; row.active = 0" @focus="row.open = true; $el.scrollIntoView({ block: 'center', behavior: 'smooth' })" @keydown.down.prevent="move(row, 1)" @keydown.up.prevent="move(row, -1)"
+                     @keydown.enter="enter(row, $event)" @keydown.escape="row.open = false" @keydown.tab="row.open = false">
+              <ul class="jt-combo-list" :id="`iss-list-${row.key}`" role="listbox" x-show="row.open && matches(row).length" x-cloak>
+                <template x-for="(s, n) in matches(row)" :key="s.id">
+                  <li role="option" :aria-selected="n === row.active" :class="{ active: n === row.active }" @mousedown.prevent="choose(row, s)">
+                    <span x-text="s.label"></span><span class="small text-body-secondary text-nowrap" x-text="`${s.available} ${s.unit}`"></span>
+                  </li>
+                </template>
+              </ul>
+              <div class="jt-combo-list jt-combo-none small text-body-secondary" x-show="row.open && row.label.trim() && !matches(row).length" x-cloak>Nothing in stock here matches.</div>
+            </div>
             <input type="hidden" name="line_balance_id" :value="row.balance_id">
             <div class="form-text" x-show="row.label.trim() && !row.balance_id">Not in stock here.</div>
           </div>

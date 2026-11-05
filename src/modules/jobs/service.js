@@ -95,6 +95,7 @@ async function snapshot(trx, job, lines) {
     customer: customer?.name,
     vehicle: vehicle ? vehicleLabel(vehicle) : job.vehicle_description ?? null,
     supervisor: supervisor?.name ?? null,
+    responsible: job.responsible_name ?? null,
     due_on: job.due_on ?? null,
     instructions: job.instructions ?? null,
     work: lines.map((l) => `${Number(l.quantity)} ${l.unit}: ${l.description}`),
@@ -111,7 +112,8 @@ export async function createJob(input, actor) {
     const number = await nextNumber(trx, 'job');
     const [id] = await trx('jobs').insert({
       number, site_id: siteId, job_type_id: typeId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
-      checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, due_on: input.due_on, instructions: input.instructions, created_by: actor.user.id,
+      checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
+      due_on: input.due_on, instructions: input.instructions, created_by: actor.user.id,
     });
     await writeLines(trx, id, input.lines);
     await copySteps(trx, id, typeId);
@@ -176,7 +178,8 @@ export async function updateJob(id, input, actor) {
     const lines = fixed ? beforeLines : input.lines;
     const changes = {
       customer_id: customerId, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
-      supervisor_id: input.supervisor_id, due_on: input.due_on, instructions: input.instructions, site_id: siteId,
+      supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
+      due_on: input.due_on, instructions: input.instructions, site_id: siteId,
       ...(vehicleChanged ? { checkin_id: checkin?.id ?? null } : {}),
       ...(typeChanged ? { job_type_id: input.job_type_id } : {}),
     };

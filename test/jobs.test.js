@@ -75,6 +75,32 @@ test('a job can start with no proforma and no vehicle; it needs a customer and t
   assert.match(page, /Not chosen yet/);
 });
 
+test('a supervisor (app user) and, optionally, a responsible employee who doesn’t use the app', async () => {
+  const me = await db('users').where({ phone: '+254700000081' }).first('id');
+  let res = await post(supervisor, '/jobs', { customer_id: customer.id, supervisor_id: me.id, responsible_name: 'Otieno (welding foreman)', ...work });
+  assert.equal(res.status, 302, res.text);
+  const id = idOf(res.headers.location);
+  const job = await db('jobs').where({ id }).first();
+  assert.equal(job.supervisor_id, me.id);
+  assert.equal(job.responsible_name, 'Otieno (welding foreman)');
+  assert.match((await supervisor.get(`/jobs/${id}`)).text, /<dt>Responsible<\/dt><dd>Otieno \(welding foreman\)/);
+  assert.match((await supervisor.get(`/jobs/${id}/print`)).text, /Responsible:<\/span> Otieno \(welding foreman\)/);
+
+  res = await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, supervisor_id: me.id, responsible_name: '', ...work });
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await db('jobs').where({ id }).first()).responsible_name, null, 'not mandatory');
+  assert.match((await supervisor.get(`/jobs/${id}`)).text, /Responsible/, 'the change is in the history');
+});
+
+test('with no supervisors at the site, admins are pointed to Users', async () => {
+  const admin = await loginAs(app, await makeUser(79, ['admin']));
+  const someone = await db('user_roles as ur').join('roles as r', 'r.id', 'ur.role_id').join('users as u', 'u.id', 'ur.user_id')
+    .whereIn('r.key', ['supervisor', 'manager']).where('u.is_active', true).first('u.id');
+  const form = (await admin.get('/jobs/new')).text;
+  assert.match(form, /name="supervisor_id"[^>]*data-tom-select/, 'searchable');
+  if (!someone) assert.match(form, /No supervisors at .* yet\. <a href="\/admin\/users\/new">Add one under Users/);
+});
+
 test('a vehicle must be the customer’s own', async () => {
   const res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: vehicle.id, ...work });
   assert.equal(res.status, 422);

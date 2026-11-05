@@ -29,6 +29,7 @@ const jobSchema = z.object({
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
   supervisor_id: optionalId(),
+  responsible_name: optionalText(100),
   due_on: z.string().trim().optional().refine((v) => !v || isDay(v), 'Check the date').transform((v) => v || null),
   instructions: optionalText(2000),
 });
@@ -54,7 +55,7 @@ function readLines(body) {
   return { rows, lines, error };
 }
 
-const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', supervisor_id: '', due_on: '', instructions: '' });
+const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', supervisor_id: '', responsible_name: '', due_on: '', instructions: '' });
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '' });
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
@@ -75,12 +76,15 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
   const supervisors = await jobs.supervisorOptions(job?.site_id ?? req.site.id);
   // Someone already in charge stays on the list, even if their role has since changed.
   if (job?.supervisor_id && !supervisors.some((u) => u.value === job.supervisor_id)) supervisors.unshift({ value: job.supervisor_id, label: job.supervisor_name });
+  const noSupervisors = !supervisors.length;
   const jobTypes = await typeOptions();
   // A job whose type has since been removed still shows that type.
   if (job?.job_type_id && !jobTypes.some((t) => t.value === job.job_type_id)) jobTypes.push({ value: job.job_type_id, label: job.job_type_name });
   res.status(status).render('jobs/views/form', {
     title: job ? `Edit ${job.number}` : 'New job',
     job, values, errors, supervisors, jobTypes,
+    // No app user can supervise here yet: admins get a link to add one.
+    supervisorHelp: noSupervisors ? { site: job?.site_name ?? req.site.name, canAdd: req.user.can('users.manage') } : null,
     rows: rows.length ? rows : [blankRow()],
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await vehicleOptions(customer.id) : [],

@@ -500,6 +500,14 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 /* Purchase order lines (purchasing/views/form.ejs): each line a small card, and sizes only for plates */
 .jt-po-line { display: grid; grid-template-columns: minmax(0, 1fr) 2.375rem; gap: .5rem; padding: .75rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); }
 .jt-po-line > .jt-icon-btn { align-self: start; }
+
+/* Search list under a text box (issues/views/form.ejs: items in stock) */
+.jt-combo { position: relative; }
+.jt-combo-list { position: absolute; z-index: 1020; /* over the save bar (1010), under dialogs */ inset: calc(100% + 2px) 0 auto; max-height: 16rem; overflow-y: auto; margin: 0; padding: .25rem 0; list-style: none;
+  background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); box-shadow: 0 8px 24px rgb(16 24 40 / .14); }
+.jt-combo-list li { display: flex; justify-content: space-between; gap: .75rem; padding: .5rem .75rem; cursor: pointer; }
+.jt-combo-list li:hover, .jt-combo-list li.active { background: var(--bs-tertiary-bg); }
+.jt-combo-none { padding: .5rem .75rem; }
 .jt-po-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: .5rem; }
 .jt-po-fields .form-label { font-size: .8rem; margin-bottom: .25rem; }
 .jt-po-for { grid-column: span 2; }

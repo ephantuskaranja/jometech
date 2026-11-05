@@ -87,7 +87,15 @@
               hint: 'Sets the production steps. It can change until the first step is ticked off.' }) %>
       <% } %>
       <div class="jt-fields">
-        <%- include('partials/field', { name: 'supervisor_id', label: 'Supervisor', type: 'select', options: supervisors, value: values.supervisor_id, error: errors.supervisor_id, blank: 'Not decided yet' }) %>
+        <div>
+          <%- include('partials/field', { name: 'supervisor_id', label: 'Supervisor', type: 'select', options: supervisors, value: values.supervisor_id, error: errors.supervisor_id,
+                blank: 'Not decided yet', searchable: true }) %>
+          <% if (supervisorHelp) { %>
+            <div class="form-text">No supervisors at <%= supervisorHelp.site %> yet.<% if (supervisorHelp.canAdd) { %> <a href="/admin/users/new">Add one under Users</a> (role: Supervisor).<% } %></div>
+          <% } %>
+        </div>
+        <%- include('partials/field', { name: 'responsible_name', label: 'Responsible employee', value: values.responsible_name, error: errors.responsible_name,
+              placeholder: 'e.g. Otieno (welding foreman)', hint: 'Optional. Someone who doesn’t use the app, e.g. the foreman doing the work.' }) %>
         <%- include('partials/field', { name: 'due_on', label: 'Promised by', type: 'date', value: values.due_on, error: errors.due_on, hint: 'Optional. The date the customer expects it.' }) %>
       </div>
       <%- include('partials/field', { name: 'instructions', label: 'Instructions', type: 'textarea', rows: 3, value: values.instructions, error: errors.instructions,

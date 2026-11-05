@@ -524,13 +524,35 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('issueForm', ({ rows = [], stock = [] } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
-    const row = (r = {}) => ({ key: next++, balance_id: '', label: '', quantity: '', ...r });
+    const row = (r = {}) => ({ key: next++, balance_id: '', label: '', quantity: '', open: false, active: 0, ...r });
     return {
       rows: rows.map(row), stock,
       stockOf(r) { return this.stock.find((s) => String(s.id) === String(r.balance_id)) ?? null; },
       pick(r) {
         const typed = r.label.trim().toLowerCase();
         r.balance_id = this.stock.find((s) => s.label.toLowerCase() === typed)?.id ?? '';
+      },
+      // The search list under each item box: every typed word somewhere in the name ("4 plate" finds "Plate 4 mm, 8 × 4 ft").
+      matches(r) {
+        const words = r.label.toLowerCase().split(/\s+/).filter(Boolean);
+        return this.stock.filter((s) => words.every((w) => s.label.toLowerCase().includes(w))).slice(0, 30);
+      },
+      choose(r, s) {
+        r.label = s.label;
+        r.balance_id = s.id;
+        r.open = false;
+      },
+      move(r, step) {
+        const n = this.matches(r).length;
+        if (!n) return;
+        if (!r.open) { r.open = true; return; }
+        r.active = (r.active + step + n) % n;
+      },
+      enter(r, e) {
+        const list = this.matches(r);
+        if (!r.open || !list.length) return;
+        e.preventDefault(); // choose, don't submit the form
+        this.choose(r, list[r.active] ?? list[0]);
       },
       tooMany(r) { const s = this.stockOf(r); return Boolean(s) && num(r.quantity) > s.available; },
       cost(r) {
