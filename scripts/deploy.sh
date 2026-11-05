@@ -31,8 +31,12 @@ if [ -n "$(find "$APP_DIR" ! -user "$APP_USER" -print -quit)" ]; then
   }
 fi
 
-# DB_* settings from .env
-set -a; . ./.env; set +a
+# Settings from .env, read by Node exactly as the app reads them
+# (bash can't load .env itself: values with spaces needn't be quoted there).
+env_get() { node --env-file=.env -p "process.env['$1'] ?? ''"; }
+DB_HOST="$(env_get DB_HOST)"; DB_PORT="$(env_get DB_PORT)"
+DB_DATABASE="$(env_get DB_DATABASE)"; DB_USERNAME="$(env_get DB_USERNAME)"; DB_PASSWORD="$(env_get DB_PASSWORD)"
+PORT="$(env_get PORT)"
 
 echo "==> Backing up database $DB_DATABASE"
 mkdir -p storage/backups
