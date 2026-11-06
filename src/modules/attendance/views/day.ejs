@@ -1,0 +1,117 @@
+<%#
+  One site's day: everyone, filled in from the clock-in punches; the supervisor changes the exceptions,
+  saves, then confirms the day (locked for payroll; a manager can reopen it).
+%>
+<%
+  const locked = Boolean(grid.confirmation);
+  const dayLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const counts = Object.fromEntries(Object.keys(statuses).map((k) => [k, grid.rows.filter((r) => r.status === k).length]));
+  const unmarked = grid.rows.filter((r) => !r.status && !r.visiting).length;
+  const copy = last ? Object.fromEntries(last.rows.map((r) => [r.employee_id, r.status])) : {};
+  const href = (extra) => `/attendance?${new URLSearchParams({ site: site.id, day, ...extra })}`;
+%>
+<%- include('partials/page-header', {
+  crumb: ['People', 'Attendance'],
+  heading: `Attendance · ${site.name}`,
+  sub: `Filled in from the clock-in machines: ${rules.fullDayHours} hours or more is a full day, ${rules.halfDayHours} a half day. Change what’s wrong, save, then confirm the day.`,
+  actions: [{ label: 'Import punches', href: '/attendance/import', icon: 'upload' }, { label: 'Employees', href: '/employees', icon: 'person-vcard' }],
+}) %>
+
+<section class="card mb-4">
+  <form class="card-body d-flex flex-wrap align-items-end gap-3" method="get" action="/attendance">
+    <div class="d-flex align-items-center gap-1">
+      <a class="btn btn-outline-secondary" href="<%= href({ day: prev }) %>" aria-label="Day before"><i class="bi bi-chevron-left"></i></a>
+      <input class="form-control" type="date" name="day" value="<%= day %>" max="<%= today %>" aria-label="Day" x-data @change="$el.form.requestSubmit()">
+      <% if (next) { %><a class="btn btn-outline-secondary" href="<%= href({ day: next }) %>" aria-label="Day after"><i class="bi bi-chevron-right"></i></a><% } %>
+    </div>
+    <% if (sites.length > 1) { %>
+      <select class="form-select w-auto" name="site" aria-label="Site" x-data @change="$el.form.requestSubmit()">
+        <% sites.forEach((s) => { %><option value="<%= s.id %>"<%= s.id === site.id ? ' selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+    <% } else { %><input type="hidden" name="site" value="<%= site.id %>"><% } %>
+    <div class="fw-semibold ms-md-2"><%= dayLabel %><%= day === today ? ' (today)' : '' %></div>
+    <div class="ms-auto d-flex flex-wrap gap-2 small">
+      <% Object.entries(statuses).filter(([k]) => counts[k]).forEach(([k, s]) => { %><%- include('partials/pill', { text: `${s.label} ${counts[k]}`, tone: s.tone }) %><% }) %>
+      <% if (unmarked) { %><%- include('partials/pill', { text: `Not marked ${unmarked}`, tone: 'warn' }) %><% } %>
+    </div>
+  </form>
+</section>
+
+<% if (unknown) { %>
+  <div class="jt-warn-box mb-4"><i class="bi bi-person-exclamation"></i><span><%= unknown %> clock <%= unknown === 1 ? 'ID isn’t' : 'IDs aren’t' %> linked to an employee, so <%= unknown === 1 ? 'its' : 'their' %> punches don’t count yet. <a href="/attendance/import#unknown">Link them</a>.</span></div>
+<% } %>
+<% if (locked) { %>
+  <div class="jt-info-box mb-4"><i class="bi bi-lock"></i><span>Confirmed by <%= grid.confirmation.confirmed_by_name ?? 'a removed user' %>, <%= fmt.dateTime(grid.confirmation.confirmed_at) %>. Ready for payroll.</span>
+    <% if (canReopen) { %>
+      <form method="post" action="/attendance/reopen" class="ms-auto">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="site" value="<%= site.id %>"><input type="hidden" name="day" value="<%= day %>">
+        <button class="btn btn-link btn-sm p-0" type="submit">Reopen to change it</button>
+      </form>
+    <% } %>
+  </div>
+<% } else if (!grid.covered) { %>
+  <div class="jt-info-box mb-4"><i class="bi bi-info-circle"></i><span>No punches imported for this day at <%= site.name %> yet. <a href="/attendance/import">Import the machine’s export</a>, or mark everyone by hand<%= last ? ', or start from the last day marked' : '' %>.</span></div>
+<% } %>
+
+<form method="post" action="/attendance" x-data="{ copy: <%= JSON.stringify(copy) %>, copyLast() { this.$root.querySelectorAll('select[data-employee]').forEach((el) => { if (!el.value && this.copy[el.dataset.employee]) el.value = this.copy[el.dataset.employee]; }); } }">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <input type="hidden" name="site" value="<%= site.id %>">
+  <input type="hidden" name="day" value="<%= day %>">
+  <section class="card">
+    <% if (!grid.rows.length) { %>
+      <%- include('partials/empty', { icon: 'people', heading: `No staff at ${site.name} yet`, text: 'Add employees, or import the clock-in export and add everyone on it in one go.', action: { label: 'Import punches', href: '/attendance/import' } }) %>
+    <% } else { %>
+      <% if (last && !locked) { %>
+        <div class="card-body border-bottom d-flex align-items-center gap-2 small">
+          <span class="me-auto">Last day marked: <%= fmt.date(`${last.day}T12:00:00Z`) %>.</span>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyLast()"><i class="bi bi-copy"></i>Fill the empty ones from it</button>
+        </div>
+      <% } %>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0 align-middle">
+          <thead><tr><th>Name</th><th class="text-nowrap d-none d-md-table-cell">In</th><th class="text-nowrap d-none d-md-table-cell">Out</th><th class="text-end d-none d-md-table-cell">Hours</th><th style="min-width: 9rem">Status</th><th class="d-none d-md-table-cell">Note</th></tr></thead>
+          <tbody>
+            <% grid.rows.forEach((r) => { const s = r.summary; %>
+              <tr>
+                <td><a href="/employees/<%= r.id %>"><%= r.name %></a>
+                  <span class="jt-sub"><%= [r.trade, r.visiting ? 'from another site' : null].filter(Boolean).join(' · ') || r.number %></span>
+                  <% if (s) { %><span class="jt-sub d-md-none font-monospace"><%= s.first_in %>–<%= s.last_out ?? '?' %><%= s.hours !== null ? ` · ${s.hours} h` : '' %></span><% } %>
+                  <% if (s?.flag) { %><span class="d-block mt-1"><%- include('partials/pill', { text: flags[s.flag], tone: 'warn' }) %></span><% } %></td>
+                <td class="font-monospace small d-none d-md-table-cell"><%= s?.first_in ?? '—' %></td>
+                <td class="font-monospace small d-none d-md-table-cell"><%= s?.last_out ?? '—' %><% if (s && s.punches.length > 2) { %><span class="jt-sub text-nowrap" title="All punches"><%= s.punches.join(' · ') %></span><% } %></td>
+                <td class="text-end jt-num d-none d-md-table-cell"><%= s?.hours ?? '—' %></td>
+                <td>
+                  <input type="hidden" name="row_employee" value="<%= r.id %>">
+                  <% if (locked) { %>
+                    <% if (r.status) { %><%- include('partials/pill', { text: statuses[r.status].label, tone: statuses[r.status].tone }) %><% } else { %>—<% } %>
+                    <input type="hidden" name="row_status" value="<%= r.status %>">
+                  <% } else { %>
+                    <select class="form-select form-select-sm<%= !r.status ? ' is-invalid' : '' %>" name="row_status" data-employee="<%= r.id %>" aria-label="Status of <%= r.name %>">
+                      <option value="">Not marked</option>
+                      <% Object.entries(statuses).forEach(([k, st]) => { %><option value="<%= k %>"<%= r.status === k ? ' selected' : '' %>><%= st.label %></option><% }) %>
+                    </select>
+                    <% if (!r.record && r.suggestion) { %><span class="jt-sub">From the punches</span><% } %>
+                  <% } %>
+                </td>
+                <td class="d-none d-md-table-cell">
+                  <% if (locked) { %><span class="small"><%= r.note %></span><input type="hidden" name="row_note" value="<%= r.note %>">
+                  <% } else { %><input class="form-control form-control-sm" name="row_note" value="<%= r.note %>" maxlength="255" placeholder="e.g. Left early, sick" aria-label="Note for <%= r.name %>"><% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+  <% if (grid.rows.length && !locked) { %>
+    <div class="jt-savebar">
+      <span class="jt-savebar-note"><i class="bi bi-calendar-check"></i>Save as you go. Confirm when everyone is marked: it is then ready for payroll.</span>
+      <div class="jt-savebar-actions">
+        <button class="btn btn-outline-primary" type="submit" name="action" value="save"><i class="bi bi-check2"></i>Save</button>
+        <button class="btn btn-primary" type="submit" name="action" value="confirm"><i class="bi bi-lock"></i>Save and confirm the day</button>
+      </div>
+    </div>
+  <% } %>
+</form>

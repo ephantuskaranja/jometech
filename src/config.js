@@ -47,6 +47,11 @@ export const config = {
   proformaFirstNumber: Number(process.env.PROFORMA_FIRST_NUMBER || 490),
   // The same for invoices, which have their own paper series (Final Invoice 104 …).
   invoiceFirstNumber: Number(process.env.INVOICE_FIRST_NUMBER || 105),
+  // Attendance from the clock-in machines: hours worked (lunch excluded) for a full and a half day.
+  attendance: {
+    fullDayHours: Number(process.env.FULL_DAY_HOURS || 7),
+    halfDayHours: Number(process.env.HALF_DAY_HOURS || 3.5),
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 3306),

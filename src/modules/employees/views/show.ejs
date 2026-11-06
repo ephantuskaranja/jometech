@@ -1,0 +1,82 @@
+<%# One employee: their details and clock IDs, the last six weeks' attendance; pay for managers and admins. %>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">People <i class="bi bi-chevron-right"></i><a href="/employees">Employees</a><i class="bi bi-chevron-right"></i><span><%= employee.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= employee.name %><% if (!employee.is_active) { %> <%- include('partials/pill', { text: 'Left', tone: 'neutral' }) %><% } %></h1>
+        <div class="jt-meta">
+          <span class="font-monospace"><%= employee.number %></span>
+          <% if (employee.trade) { %><span><i class="bi bi-tools"></i><%= employee.trade %></span><% } %>
+          <span><i class="bi bi-geo-alt"></i><%= employee.site_name %></span>
+          <% if (employee.phone) { %><span><i class="bi bi-telephone"></i><span class="font-monospace"><%= fmt.phone(employee.phone) %></span></span><% } %>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <a class="btn btn-outline-secondary" href="/employees/<%= employee.id %>/edit"><i class="bi bi-pencil"></i>Edit</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <% const worked = attendance.reduce((sum, a) => sum + attendanceStatuses[a.status].days, 0); %>
+      <div class="card-header d-flex align-items-center gap-2"><h2 class="h6 mb-0 me-auto">Attendance, last six weeks</h2><span class="small text-body-secondary"><%= worked %> <%= worked === 1 ? 'day' : 'days' %> worked</span></div>
+      <% if (!attendance.length) { %>
+        <div class="card-body small text-body-secondary">Nothing marked yet. Days appear here once a supervisor saves them on the Attendance page.</div>
+      <% } else { %>
+        <div class="table-responsive" style="max-height: 22rem">
+          <table class="table jt-table mb-0">
+            <thead><tr><th>Day</th><th>Status</th><th>In – out</th><th class="text-end">Hours</th></tr></thead>
+            <tbody>
+              <% attendance.forEach((a) => { const st = attendanceStatuses[a.status]; %>
+                <tr>
+                  <td class="text-nowrap"><a href="/attendance?<%= new URLSearchParams({ day: a.day, site: a.site_id }) %>"><%= new Date(`${a.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) %></a></td>
+                  <td><%- include('partials/pill', { text: st.label, tone: st.tone }) %><% if (a.note) { %><span class="jt-sub"><%= a.note %></span><% } %></td>
+                  <td class="font-monospace small"><%= a.first_in ? `${a.first_in.slice(0, 5)} – ${a.last_out?.slice(0, 5) ?? '?'}` : '—' %></td>
+                  <td class="text-end jt-num"><%= a.hours ?? '—' %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Employed as</dt><dd><%= categories[employee.category] %></dd></div>
+          <div><dt>Clock ID</dt><dd class="font-monospace"><%= employee.clock_ids.join(', ') || '—' %></dd></div>
+          <% if (canSeePay) { %><div><dt>Daily rate</dt><dd class="jt-num"><%= employee.daily_rate === null ? '—' : `KES ${fmt.money(employee.daily_rate)}` %></dd></div><% } %>
+          <div><dt>ID number</dt><dd class="font-monospace"><%= employee.id_no ?? '—' %></dd></div>
+          <div><dt>M-Pesa</dt><dd class="font-monospace"><%= employee.mpesa_phone ? fmt.phone(employee.mpesa_phone) : '—' %></dd></div>
+          <div><dt>Joined</dt><dd><%= employee.joined_on ? fmt.date(`${employee.joined_on}T12:00:00Z`) : '—' %></dd></div>
+          <% if (!employee.is_active && employee.left_on) { %><div><dt>Left</dt><dd><%= fmt.date(`${employee.left_on}T12:00:00Z`) %></dd></div><% } %>
+          <div><dt>Emergency contact</dt><dd><%= employee.emergency_name ?? '—' %><% if (employee.emergency_phone) { %><span class="d-block small font-monospace"><%= fmt.phone(employee.emergency_phone) %></span><% } %></dd></div>
+        </dl>
+        <% if (employee.notes) { %><p class="mt-3 mb-0 text-body-secondary" style="white-space: pre-line"><%= employee.notes %></p><% } %>
+        <% if (!employee.clock_ids.length) { %><div class="form-text mt-3">No clock ID yet: their punches on the clock-in machine can’t be matched to them. <a href="/employees/<%= employee.id %>/edit">Add it</a>.</div><% } %>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+        <p class="small mb-0 me-auto"><%= employee.is_active ? 'No longer working here? Mark them as left. Their attendance and pay records are kept.' : 'Marked as left.' %></p>
+        <form method="post" action="/employees/<%= employee.id %>/<%= employee.is_active ? 'left' : 'back' %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="btn btn-outline-secondary btn-sm" type="submit"><%= employee.is_active ? 'Mark as left' : 'Back at work' %></button>
+        </form>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-5">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', phone: 'Phone', id_no: 'ID number', trade: 'Trade', site: 'Site', category: 'Employed as', joined_on: 'Joined', mpesa_phone: 'M-Pesa', emergency: 'Emergency contact', notes: 'Notes', clock_ids: 'Clock ID', daily_rate: 'Daily rate' } }) %></div>
+    </section>
+  </div>
+</div>

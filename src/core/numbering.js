@@ -28,6 +28,7 @@ export const NUMBER_FORMATS = {
   job:       { prefix: 'JOB', yearly: true },
   item:      { prefix: 'ITM', yearly: false },
   supplier:  { prefix: 'SUP', yearly: false },
+  employee:  { prefix: 'EMP', yearly: false },
   issue:     { prefix: 'ISS', yearly: true },
   request:   { prefix: 'PR', yearly: true },
   order:     { prefix: 'PO', yearly: true },

@@ -521,6 +521,25 @@ document.addEventListener('alpine:init', () => {
 
   // Issuing materials (issues/views/form.ejs): find what is in stock here by typing.
   // The sums here are only for showing; the server works out what is saved.
+  // A file upload form (attendance/views/import.ejs): sent with fetch so the CSRF token can go in a header
+  // (the server reads the body as a file, after the token is checked). The answer says where to go next.
+  Alpine.data('uploadForm', () => ({
+    busy: false, error: '',
+    async send(form) {
+      this.busy = true;
+      this.error = '';
+      try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'x-csrf-token': token, Accept: 'application/json' } });
+        const json = await res.json();
+        window.location.href = json.go;
+      } catch {
+        this.busy = false;
+        this.error = 'The file couldn’t be sent. Check the connection and try again.';
+      }
+    },
+  }));
+
   Alpine.data('issueForm', ({ rows = [], stock = [] } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;

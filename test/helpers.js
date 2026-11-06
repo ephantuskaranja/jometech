@@ -76,6 +76,17 @@ export async function cleanup() {
   await db('audit_log').where({ entity: 'visitor' }).whereIn('entity_id', visitorIds).delete();
   await db('visitors').whereIn('id', visitorIds).delete();
   const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
+  // Staff and attendance made by test users; test machines are named TEST-…
+  const staffIds = await db('employees').whereIn('created_by', ids).pluck('id');
+  await db('attendance_days').whereIn('employee_id', staffIds).delete();
+  await db('attendance_confirmations').whereIn('confirmed_by', ids).delete();
+  await db('audit_log').where({ entity: 'employee' }).whereIn('entity_id', staffIds).delete();
+  await db('employees').whereIn('id', staffIds).delete(); // clock IDs go with them
+  const importIds = await db('attendance_imports').whereIn('created_by', ids).pluck('id');
+  await db('attendance_punches').whereIn('import_id', importIds).delete();
+  await db('attendance_imports').whereIn('id', importIds).delete();
+  await db('clock_devices').where('name', 'like', 'TEST-%').delete();
+  await db('audit_log').whereIn('entity', ['attendance', 'attendance_import', 'clock_device']).whereIn('user_id', ids).delete();
   await db('audit_log').where({ entity: 'user' }).whereIn('entity_id', ids).delete();
   await db('users').whereIn('id', ids).delete();
   await sessionStore.close();

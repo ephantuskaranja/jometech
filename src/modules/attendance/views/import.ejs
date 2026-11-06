@@ -1,0 +1,120 @@
+<%#
+  Import the clock-in machines' export, set where each machine is, and link clock IDs to employees.
+  The upload goes by fetch (uploadForm in public/js/app.js) so the CSRF token can travel in a header.
+%>
+<%- include('partials/page-header', {
+  crumb: ['People', { label: 'Attendance', href: '/attendance' }, 'Import'],
+  heading: 'Import from the clock-in machines',
+  sub: 'Every punch is kept as it came. Importing the same file twice adds nothing.',
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Upload the export</h2></div>
+      <form class="card-body d-grid gap-3" method="post" action="/attendance/import" enctype="multipart/form-data" x-data="uploadForm" @submit.prevent="send($el)">
+        <div class="jt-field">
+          <label class="form-label" for="punch-file">Excel or CSV file<span class="jt-req" aria-hidden="true">*</span></label>
+          <input class="form-control" type="file" id="punch-file" name="file" accept=".xlsx,.csv,text/csv" required>
+          <div class="form-text">In the ZKTeco software: the <strong>Transaction</strong> report, exported as Excel or CSV, with the ID, Date, Time and Device Name columns.</div>
+        </div>
+        <div class="jt-error-text" x-show="error" x-text="error" x-cloak></div>
+        <div><button class="btn btn-primary" type="submit" :disabled="busy"><i class="bi bi-upload"></i><span x-text="busy ? 'Importing…' : 'Import'">Import</span></button></div>
+      </form>
+    </section>
+
+    <section class="card" id="unknown">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">Clock IDs not linked to anyone</h2>
+        <span class="badge text-bg-<%= unknown.length ? 'warning' : 'secondary' %>"><%= unknown.length %></span>
+      </div>
+      <% if (!unknown.length) { %>
+        <div class="card-body small text-body-secondary">Every clock ID in the punches belongs to an employee.</div>
+      <% } else { %>
+        <form method="post" action="/attendance/clock-ids">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div class="card-body small pb-0">Their punches can’t count until each ID is linked. <strong>Add as new</strong> makes an employee from the machine’s name (casual, at the machine’s site); add the trade and rate later.
+            Two IDs with the same name become one person.</div>
+          <div class="table-responsive">
+            <table class="table jt-table mb-0">
+              <thead><tr><th>Clock ID</th><th>Name on the machine</th><th class="d-none d-md-table-cell">Punches</th><th>Link to</th></tr></thead>
+              <tbody>
+                <% unknown.forEach((u) => { %>
+                  <tr>
+                    <td class="font-monospace"><%= u.clock_id %></td>
+                    <td><%= u.clock_name ?? '—' %>
+                      <% if (u.match) { %><span class="jt-sub">Same name as <%= u.match.number %></span><% } %>
+                      <% if (u.sameNameAs.length) { %><span class="jt-sub">Same name as clock ID <%= u.sameNameAs.join(', ') %></span><% } %></td>
+                    <td class="d-none d-md-table-cell small"><%= u.punches %><span class="jt-sub text-nowrap"><%= u.first_day === u.last_day ? fmt.date(`${u.first_day}T12:00:00Z`) : `${fmt.date(`${u.first_day}T12:00:00Z`)} – ${fmt.date(`${u.last_day}T12:00:00Z`)}` %></span></td>
+                    <td style="min-width: 14rem">
+                      <input type="hidden" name="clock_id" value="<%= u.clock_id %>">
+                      <input type="hidden" name="clock_name" value="<%= u.clock_name ?? '' %>">
+                      <input type="hidden" name="site_id" value="<%= u.site_id ?? currentSiteId %>">
+                      <select class="form-select form-select-sm" name="choice" aria-label="Link clock ID <%= u.clock_id %> to">
+                        <option value="">Leave for now</option>
+                        <option value="new"<%= u.match ? '' : ' selected' %>>Add as new employee</option>
+                        <% if (staff.length) { %><optgroup label="Existing employee">
+                          <% staff.filter((e) => e.is_active).forEach((e) => { %><option value="<%= e.id %>"<%= u.match?.id === e.id ? ' selected' : '' %>><%= e.name %> (<%= e.number %>)</option><% }) %>
+                        </optgroup><% } %>
+                      </select>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-body border-top"><button class="btn btn-primary" type="submit"><i class="bi bi-link-45deg"></i>Save links</button></div>
+        </form>
+      <% } %>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card" id="machines">
+      <div class="card-header"><h2 class="h6 mb-0">Machines</h2></div>
+      <% if (!devices.length) { %>
+        <div class="card-body small text-body-secondary">Machines appear here after the first import.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% devices.forEach((d) => { %>
+            <li class="list-group-item d-grid gap-2">
+              <div class="d-flex align-items-baseline gap-2">
+                <strong><%= d.name %></strong><span class="small text-body-secondary font-monospace"><%= d.serial ?? '' %></span>
+                <span class="ms-auto small text-body-secondary"><%= d.last_day ? `Last punch ${fmt.date(`${d.last_day}T12:00:00Z`)}` : '' %></span>
+              </div>
+              <% if (canSetMachines) { %>
+                <form method="post" action="/attendance/machines/<%= d.id %>" class="d-flex gap-2 align-items-center">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <select class="form-select form-select-sm" name="site_id" aria-label="Where <%= d.name %> is">
+                    <option value="">Not set</option>
+                    <% sites.forEach((s) => { %><option value="<%= s.id %>"<%= d.site_id === s.id ? ' selected' : '' %>><%= s.name %></option><% }) %>
+                  </select>
+                  <button class="btn btn-outline-secondary btn-sm text-nowrap" type="submit">Save</button>
+                </form>
+              <% } else { %>
+                <div class="small">At <%= d.site_name ?? 'no site yet' %></div>
+              <% } %>
+              <% if (!d.site_id) { %><div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> Set its site: until then its punches don’t show on a site’s day<%= canSetMachines ? '' : ' (a manager can set it)' %>.</div><% } %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Recent imports</h2></div>
+      <% if (!imports.length) { %>
+        <div class="card-body small text-body-secondary">Nothing imported yet.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% imports.forEach((i) => { %>
+            <li class="list-group-item small">
+              <div class="d-flex gap-2"><span class="text-truncate"><%= i.file_name %></span><span class="ms-auto text-nowrap"><%= fmt.dateTime(i.created_at) %></span></div>
+              <div class="text-body-secondary"><%= i.added %> new of <%= i.rows %> punches<%= i.first_day ? ` · ${i.first_day === i.last_day ? fmt.date(`${i.first_day}T12:00:00Z`) : `${fmt.date(`${i.first_day}T12:00:00Z`)} – ${fmt.date(`${i.last_day}T12:00:00Z`)}`}` : '' %> · <%= i.by_name ?? '' %></div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+</div>

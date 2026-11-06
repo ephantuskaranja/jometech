@@ -1,0 +1,57 @@
+<%# The staff list: by site, active (default), left, or all. Pay only for managers and admins. %>
+<%
+  const filters = (extra) => new URLSearchParams({ ...(q ? { q } : {}), ...(siteId ? { site: siteId } : {}), status, ...extra }).toString();
+%>
+<%- include('partials/page-header', {
+  crumb: ['People', 'Employees'],
+  heading: 'Employees',
+  sub: 'Workshop staff, paid by the day. They don’t use the app; the clock ID links them to the clock-in machine.',
+  actions: [{ label: 'New employee', href: '/employees/new', icon: 'plus-lg', primary: true }],
+}) %>
+
+<section class="card">
+  <form class="jt-toolbar" method="get" action="/employees">
+    <input type="hidden" name="status" value="<%= status %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Name, trade, phone or clock ID" aria-label="Search employees">
+    </div>
+    <% if (sites.length > 1) { %>
+      <select class="form-select w-auto" name="site" aria-label="Site" x-data @change="$el.form.requestSubmit()">
+        <option value="">All sites</option>
+        <% sites.forEach((s) => { %><option value="<%= s.id %>"<%= siteId === s.id ? ' selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+    <% } %>
+    <nav class="jt-seg" aria-label="Show">
+      <% [['active', 'Working'], ['inactive', 'Left'], ['all', 'All']].forEach(([key, label]) => { %>
+        <a href="?<%= filters({ status: key }) %>" class="<%= status === key ? 'active' : '' %>"<%- status === key ? ' aria-current="true"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'person' : 'people' %></span>
+  </form>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q || status !== 'active'
+      ? { icon: 'search', heading: 'Nothing matches', text: 'Try part of the name, the trade or the clock ID.' }
+      : { icon: 'people', heading: 'No employees yet', text: 'Add them one by one, or import the clock-in machine’s export under Attendance: everyone on it can be added in one go.', action: { label: 'New employee', href: '/employees/new' } }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr><th>Name</th><th>Trade</th><th class="d-none d-md-table-cell">Site</th><th>Clock ID</th><% if (canSeePay) { %><th class="text-end">Daily rate (KES)</th><% } %></tr></thead>
+        <tbody>
+          <% list.forEach((e) => { %>
+            <tr>
+              <td><a class="jt-row-link" href="/employees/<%= e.id %>"><%= e.name %></a>
+                <% if (!e.is_active) { %><%- include('partials/pill', { text: 'Left', tone: 'neutral' }) %><% } %>
+                <span class="jt-sub"><span class="font-monospace"><%= e.number %></span> · <%= categories[e.category] %></span></td>
+              <td><%= e.trade ?? '—' %></td>
+              <td class="d-none d-md-table-cell"><%= e.site_name %></td>
+              <td class="font-monospace"><%= e.clock_ids ?? '—' %></td>
+              <% if (canSeePay) { %><td class="text-end jt-num"><%= e.daily_rate === null ? '—' : fmt.money(e.daily_rate) %></td><% } %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

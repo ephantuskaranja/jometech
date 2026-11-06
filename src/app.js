@@ -26,6 +26,8 @@ import { router as enquiryRoutes } from './modules/enquiries/routes.js';
 import { router as proformaRoutes } from './modules/proformas/routes.js';
 import { router as jobRoutes } from './modules/jobs/routes.js';
 import { router as invoiceRoutes } from './modules/invoices/routes.js';
+import { router as employeeRoutes } from './modules/employees/routes.js';
+import { router as attendanceRoutes } from './modules/attendance/routes.js';
 import { router as jobTypeRoutes } from './modules/job-types/routes.js';
 import { router as itemRoutes } from './modules/items/routes.js';
 import { router as supplierRoutes } from './modules/suppliers/routes.js';
@@ -132,6 +134,8 @@ export function createApp() {
   app.use(proformaRoutes);
   app.use(jobRoutes);
   app.use(invoiceRoutes);
+  app.use(employeeRoutes);
+  app.use(attendanceRoutes);
   app.use(jobTypeRoutes);
   app.use(itemRoutes);
   app.use(supplierRoutes);
