@@ -540,6 +540,28 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // A payslip to WhatsApp (payroll/views/show.ejs). On a phone: the share sheet, with the PDF attached.
+  // Elsewhere a page can't attach a file to WhatsApp: it saves the PDF and opens the person's chat.
+  Alpine.data('shareSlip', ({ url, name, phone = '' }) => ({
+    note: '',
+    async send() {
+      try {
+        const blob = await (await fetch(url)).blob();
+        const file = new File([blob], name, { type: 'application/pdf' });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: name });
+          return;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return; // they closed the share sheet
+      }
+      window.location.href = url;
+      const digits = phone.replace(/\D/g, '');
+      if (digits) window.open(`https://wa.me/${digits}`, '_blank', 'noopener');
+      this.note = 'PDF saved: attach it in WhatsApp';
+    },
+  }));
+
   Alpine.data('issueForm', ({ rows = [], stock = [] } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;

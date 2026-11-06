@@ -42,7 +42,7 @@ export const nav = [
     items: [
       { label: 'Employees', href: '/employees', icon: 'person-vcard', permission: ['attendance.manage', 'payroll.manage', 'payroll.approve'], ready: true },
       { label: 'Attendance', href: '/attendance', icon: 'calendar-check', permission: 'attendance.manage', ready: true },
-      { label: 'Payroll', href: '/payroll', icon: 'wallet2', permission: ['payroll.manage', 'payroll.approve'] },
+      { label: 'Payroll', href: '/payroll', icon: 'wallet2', permission: ['attendance.manage', 'payroll.manage', 'payroll.approve'], ready: true },
     ],
   },
   {

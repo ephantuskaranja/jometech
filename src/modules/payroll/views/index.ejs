@@ -1,0 +1,84 @@
+<%#
+  Payroll: pick a site and a week (Monday to Saturday, paid on the Saturday). Shows which days are confirmed,
+  and the week's payroll or the button to prepare it; below, recent payrolls.
+%>
+<%
+  const label = (d, o) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', ...o });
+  const missing = confirmed.filter((d) => !d.confirmed);
+  const href = (w) => `/payroll?${new URLSearchParams({ site: site.id, week: w })}`;
+%>
+<%- include('partials/page-header', {
+  crumb: ['People', 'Payroll'],
+  heading: 'Weekly payroll',
+  sub: 'Monday to Saturday, paid on the Saturday: days worked × daily rate, from confirmed attendance.',
+}) %>
+
+<section class="card mb-4">
+  <form class="card-body d-flex flex-wrap align-items-center gap-3" method="get" action="/payroll">
+    <div class="d-flex align-items-center gap-1">
+      <a class="btn btn-outline-secondary" href="<%= href(prev) %>" aria-label="Week before"><i class="bi bi-chevron-left"></i></a>
+      <input type="hidden" name="week" value="<%= week %>">
+      <span class="fw-semibold px-2 text-nowrap"><%= label(confirmed[0].day, { day: 'numeric', month: 'short' }) %> – <%= label(confirmed[5].day, { day: 'numeric', month: 'short', year: 'numeric' }) %></span>
+      <% if (next) { %><a class="btn btn-outline-secondary" href="<%= href(next) %>" aria-label="Week after"><i class="bi bi-chevron-right"></i></a><% } %>
+    </div>
+    <% if (sites.length > 1) { %>
+      <select class="form-select w-auto" name="site" aria-label="Site" x-data @change="$el.form.requestSubmit()">
+        <% sites.forEach((s) => { %><option value="<%= s.id %>"<%= s.id === site.id ? ' selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+    <% } %>
+  </form>
+  <div class="border-top card-body d-grid gap-3">
+    <div class="d-flex flex-wrap gap-2">
+      <% confirmed.forEach((d) => { %>
+        <a class="text-decoration-none" href="/attendance?<%= new URLSearchParams({ site: site.id, day: d.day }) %>">
+          <%- include('partials/pill', { text: `${label(d.day, { weekday: 'short', day: 'numeric' })}: ${d.confirmed ? 'confirmed' : 'not confirmed'}`, tone: d.confirmed ? 'ok' : 'warn' }) %>
+        </a>
+      <% }) %>
+    </div>
+    <% if (waiting.length && !current) { %>
+      <div class="jt-warn-box"><i class="bi bi-hourglass-split"></i><span><%= site.name %> staff worked at another site this week. Waiting for it to confirm:
+        <% waiting.forEach((w, i) => { %><a href="/attendance?<%= new URLSearchParams({ site: w.site_id, day: w.day }) %>"><%= w.site_name %> <%= label(w.day, { weekday: 'short', day: 'numeric' }) %></a><%= i < waiting.length - 1 ? ', ' : '.' %><% }) %></span></div>
+    <% } %>
+    <% if (current) { %>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span>This week’s payroll: <a class="font-monospace" href="/payroll/<%= current.id %>"><%= current.number %></a></span>
+        <%- include('partials/pill', { text: statuses[current.status].label, tone: statuses[current.status].tone }) %>
+      </div>
+    <% } else if (canPrepare) { %>
+      <form method="post" action="/payroll" class="d-flex align-items-center gap-3 flex-wrap">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="site" value="<%= site.id %>">
+        <input type="hidden" name="week" value="<%= week %>">
+        <button class="btn btn-primary" type="submit"<%= missing.length || waiting.length ? ' disabled' : '' %>><i class="bi bi-calculator"></i>Prepare payroll</button>
+        <% if (missing.length) { %><span class="small text-body-secondary">Every day of the week must be confirmed first. A day nobody worked: mark everyone Off and confirm it.</span><% } %>
+      </form>
+    <% } else { %>
+      <p class="small text-body-secondary mb-0">A manager prepares the payroll once every day is confirmed.</p>
+    <% } %>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-header"><h2 class="h6 mb-0">Recent payrolls</h2></div>
+  <% if (!list.length) { %>
+    <%- include('partials/empty', { icon: 'wallet2', heading: 'No payrolls yet', text: 'Confirm each day of the week in Attendance, then prepare the payroll here.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Payroll</th><th>Week</th><th class="d-none d-md-table-cell">Site</th><th class="text-end">People</th><% if (canSeePay) { %><th class="text-end">Total (KES)</th><% } %></tr></thead>
+        <tbody>
+          <% list.forEach((p) => { const st = statuses[p.status]; %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/payroll/<%= p.id %>"><%= p.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td class="text-nowrap"><%= label(p.week_start, { day: 'numeric', month: 'short' }) %> – <%= label(p.pay_day, { day: 'numeric', month: 'short' }) %></td>
+              <td class="d-none d-md-table-cell"><%= p.site_name %></td>
+              <td class="text-end jt-num"><%= p.people %></td>
+              <% if (canSeePay) { %><td class="text-end jt-num"><%= fmt.money(p.total) %></td><% } %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

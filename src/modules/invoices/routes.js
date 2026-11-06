@@ -5,6 +5,7 @@ import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalAmount, optionalId, optionalText } from '../../core/validate.js';
 import { readLines } from '../../core/price-lines.js';
+import { fileTitle as documentTitle } from '../../core/file-title.js';
 import { config } from '../../config.js';
 import * as invoices from './service.js';
 import * as customers from '../customers/service.js';
@@ -176,18 +177,8 @@ router.post('/invoices/:id/etims', manage, async (req, res) => {
   res.redirect(`/invoices/${invoice.id}`);
 });
 
-const shorten = (text, max) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
-
-/**
- * The print page's title, which is also the file name when it is saved as PDF:
- * "Invoice 105 - Mike Juma Wandeme & Co-operative Bank", like the paper ones. Names are
- * shortened (customer and bank names can be 150 characters each) so it stays about
- * 110 characters at most, and characters Windows doesn't allow in file names are dropped.
- */
-export function fileTitle({ number, customer_name: customer, financier_name: bank }) {
-  const who = bank ? `${shorten(customer, 50)} & ${shorten(bank, 40)}` : shorten(customer, 90);
-  return `Invoice ${number ?? 'draft'} - ${who}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
+/** The print page's title, also the PDF's file name: "Invoice 105 - Mike Juma Wandeme & Co-operative Bank". */
+export const fileTitle = ({ number, customer_name: customer, financier_name: bank }) => documentTitle(`Invoice ${number ?? 'draft'}`, customer, bank);
 
 // The paper invoice, filled in: an A4 page to print or save as PDF.
 router.get('/invoices/:id/print', manage, async (req, res) => {

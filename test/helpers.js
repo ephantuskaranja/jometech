@@ -77,6 +77,9 @@ export async function cleanup() {
   await db('visitors').whereIn('id', visitorIds).delete();
   const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
   // Staff and attendance made by test users; test machines are named TEST-…
+  const payrollIds = await db('payrolls').whereIn('prepared_by', ids).pluck('id');
+  await db('audit_log').where({ entity: 'payroll' }).whereIn('entity_id', payrollIds).delete();
+  await db('payrolls').whereIn('id', payrollIds).delete(); // payslips and adjustments go with them
   const staffIds = await db('employees').whereIn('created_by', ids).pluck('id');
   await db('attendance_days').whereIn('employee_id', staffIds).delete();
   await db('attendance_confirmations').whereIn('confirmed_by', ids).delete();
@@ -89,6 +92,7 @@ export async function cleanup() {
   await db('audit_log').whereIn('entity', ['attendance', 'attendance_import', 'clock_device']).whereIn('user_id', ids).delete();
   await db('audit_log').where({ entity: 'user' }).whereIn('entity_id', ids).delete();
   await db('users').whereIn('id', ids).delete();
+  await db('sites').whereIn('code', ['TSTATT', 'TSTAT2']).delete(); // the attendance tests' own sites
   await sessionStore.close();
   await db.destroy();
 }

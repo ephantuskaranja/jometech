@@ -62,8 +62,13 @@ router.post('/attendance', manage, async (req, res) => {
 
 router.post('/attendance/reopen', reopen, async (req, res) => {
   const { site, day } = choice(req, req.body);
-  await attendance.reopenDay(site.id, day, req);
-  req.session.flash = { type: 'warning', text: 'Reopened: the day can be changed again. Confirm it when done.' };
+  try {
+    await attendance.reopenDay(site.id, day, req);
+    req.session.flash = { type: 'warning', text: 'Reopened: the day can be changed again. Confirm it when done.' };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
   res.redirect(`/attendance?site=${site.id}&day=${day}`);
 });
 

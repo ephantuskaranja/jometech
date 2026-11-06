@@ -61,6 +61,7 @@ test('a proforma needs a customer and at least one priced line; numbers continue
   assert.match(page, /110,344\.83/, 'VAT inside 800,000 at 16%');
   const print = (await sales.get(`/proformas/${p.id}/print`).expect(200)).text;
   assert.match(print, new RegExp(`Proforma Invoice ${p.number}`));
+  assert.match(print, new RegExp(`<title>Proforma ${p.number} - Komu Water Services</title>`), 'the PDF’s file name');
   assert.match(print, /<li>Toolbox<\/li>/, '"- " lines print as bullets');
   assert.match(print, /01100210891001/, 'bank details');
   assert.match(print, /is-draft/);

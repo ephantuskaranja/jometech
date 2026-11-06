@@ -7,13 +7,15 @@ import { localDay } from '../src/core/dates.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
-let supervisor, manager, sales, hq, siteB;
+let supervisor, manager, sales, home, siteB;
 const day = localDay(new Date(Date.now() - 86_400_000)); // yesterday: a whole day of punches
 
 before(async () => {
-  hq = await db('sites').where({ code: 'HQ' }).first();
+  // A site of its own: marking a whole day touches everyone at the site, and real staff must never be among them.
+  const [homeId] = await db('sites').insert({ code: 'TSTATT', name: 'Test Attendance Site' });
+  home = await db('sites').where({ id: homeId }).first();
   siteB = await db('sites').where({ code: 'SITEB' }).first();
-  supervisor = await loginAs(app, await makeUser(76, ['supervisor'], { siteIds: [hq.id, siteB.id] }));
+  supervisor = await loginAs(app, await makeUser(76, ['supervisor'], { siteIds: [home.id, siteB.id] }));
   manager = await loginAs(app, await makeUser(77, ['manager']));
   sales = await loginAs(app, await makeUser(78, ['sales']));
 });
@@ -41,18 +43,18 @@ async function upload(agent, buffer, name = 'Transaction.xlsx') {
 
 test('supervisors manage staff; only managers see and set the daily rate; sales can’t', async () => {
   await sales.get('/employees').expect(403);
-  let res = await post(supervisor, '/employees', { name: '', site_id: hq.id });
+  let res = await post(supervisor, '/employees', { name: '', site_id: home.id });
   assert.equal(res.status, 422);
   assert.match(res.text, /Enter their name/);
   assert.doesNotMatch(res.text, /Daily rate/, 'no pay box for supervisors');
 
-  res = await post(supervisor, '/employees', { name: 'Test Welder Otieno', site_id: hq.id, trade: 'Welder', clock_ids: '901', daily_rate: '5,000' });
+  res = await post(supervisor, '/employees', { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901', daily_rate: '5,000' });
   assert.equal(res.status, 302, res.text);
   const e = await db('employees').where({ name: 'Test Welder Otieno' }).first();
   assert.match(e.number, /^EMP-\d{4}$/);
   assert.equal(e.daily_rate, null, 'a supervisor can’t set pay');
 
-  await post(manager, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: hq.id, trade: 'Welder', clock_ids: '901, 902', daily_rate: '1,800' });
+  await post(manager, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901, 902', daily_rate: '1,800' });
   const after = await db('employees').where({ id: e.id }).first();
   assert.equal(Number(after.daily_rate), 1800);
   assert.deepEqual(await db('employee_clock_ids').where({ employee_id: e.id }).orderBy('clock_id').pluck('clock_id'), ['901', '902']);
@@ -62,10 +64,10 @@ test('supervisors manage staff; only managers see and set the daily rate; sales 
   assert.doesNotMatch(forSupervisor, /Daily rate/, 'not even in the history');
 
   // A supervisor's edit leaves the rate alone.
-  await post(supervisor, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: hq.id, trade: 'Welder', clock_ids: '901, 902' });
+  await post(supervisor, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901, 902' });
   assert.equal(Number((await db('employees').where({ id: e.id }).first()).daily_rate), 1800);
 
-  res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: hq.id, clock_ids: '902' });
+  res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: home.id, clock_ids: '902' });
   assert.equal(res.status, 422);
   assert.match(res.text, /Clock ID 902 is already Test Welder Otieno’s/);
 });
@@ -92,10 +94,10 @@ test('the export is imported; the same file twice adds nothing; unknown clock ID
   // Machines get a site: managers set it, supervisors can't.
   const devices = await db('clock_devices').whereIn('name', ['TEST-HQ', 'TEST-B']).select('id', 'name');
   const id = (name) => devices.find((d) => d.name === name).id;
-  assert.equal((await post(supervisor, `/attendance/machines/${id('TEST-HQ')}`, { site_id: hq.id })).status, 403);
-  await post(manager, `/attendance/machines/${id('TEST-HQ')}`, { site_id: hq.id });
+  assert.equal((await post(supervisor, `/attendance/machines/${id('TEST-HQ')}`, { site_id: home.id })).status, 403);
+  await post(manager, `/attendance/machines/${id('TEST-HQ')}`, { site_id: home.id });
   await post(manager, `/attendance/machines/${id('TEST-B')}`, { site_id: siteB.id });
-  assert.equal((await db('clock_devices').where({ id: id('TEST-HQ') }).first()).site_id, hq.id);
+  assert.equal((await db('clock_devices').where({ id: id('TEST-HQ') }).first()).site_id, home.id);
 });
 
 test('unknown clock IDs become employees in one go: one person per name, at the machine’s site', async () => {
@@ -103,7 +105,7 @@ test('unknown clock IDs become employees in one go: one person per name, at the 
   const res = await supervisor.post('/attendance/clock-ids').type('form').send({
     _csrf: csrf,
     clock_id: ['961', '967', '962'], clock_name: ['Test Kelvin Mbuthia', 'Test Kelvin Mbuthia', 'TEST GEORGE ANDAYE'],
-    site_id: [hq.id, hq.id, siteB.id], choice: ['new', 'new', 'new'],
+    site_id: [home.id, home.id, siteB.id], choice: ['new', 'new', 'new'],
   });
   assert.equal(res.status, 302);
   const kelvin = await db('employees').where({ name: 'Test Kelvin Mbuthia' }).select('id');
@@ -115,7 +117,7 @@ test('unknown clock IDs become employees in one go: one person per name, at the 
 });
 
 test('the day is filled in from the punches; the supervisor changes it, saves and confirms', async () => {
-  let page = (await supervisor.get(`/attendance?day=${day}&site=${hq.id}`).expect(200)).text;
+  let page = (await supervisor.get(`/attendance?day=${day}&site=${home.id}`).expect(200)).text;
   assert.match(page, /Test Welder Otieno/);
   assert.match(page, /07:10/);
   assert.match(page, />9\.42</, 'hours, lunch excluded');
@@ -124,38 +126,38 @@ test('the day is filled in from the punches; the supervisor changes it, saves an
 
   const otieno = await db('employees').where({ name: 'Test Welder Otieno' }).first('id');
   const kelvin = await db('employees').where({ name: 'Test Kelvin Mbuthia' }).first('id');
-  const grid = await db('employees').where({ site_id: hq.id, is_active: true }).orderBy('name').pluck('id');
+  const grid = await db('employees').where({ site_id: home.id, is_active: true }).orderBy('name').pluck('id');
   // Confirming needs everyone at the site marked.
-  let res = await post(supervisor, '/attendance', { site: hq.id, day, action: 'confirm', row_employee: [otieno.id, kelvin.id], row_status: ['present', 'half'], row_note: ['', 'Left at lunch'] });
+  let res = await post(supervisor, '/attendance', { site: home.id, day, action: 'confirm', row_employee: [otieno.id, kelvin.id], row_status: ['present', 'half'], row_note: ['', 'Left at lunch'] });
   const others = grid.filter((g) => ![otieno.id, kelvin.id].includes(g));
   if (others.length) {
-    assert.match((await supervisor.get(`/attendance?day=${day}&site=${hq.id}`)).text, /Mark everyone before confirming/);
-    res = await post(supervisor, '/attendance', { site: hq.id, day, action: 'confirm', row_employee: grid, row_status: grid.map((g) => (g === kelvin.id ? 'half' : g === otieno.id ? 'present' : 'absent')), row_note: grid.map(() => '') });
+    assert.match((await supervisor.get(`/attendance?day=${day}&site=${home.id}`)).text, /Mark everyone before confirming/);
+    res = await post(supervisor, '/attendance', { site: home.id, day, action: 'confirm', row_employee: grid, row_status: grid.map((g) => (g === kelvin.id ? 'half' : g === otieno.id ? 'present' : 'absent')), row_note: grid.map(() => '') });
   }
   assert.equal(res.status, 302);
   const k = await db('attendance_days').where({ employee_id: kelvin.id, day }).first();
   assert.equal(k.status, 'half');
   assert.equal(k.note, 'Left at lunch');
   assert.equal(k.first_in.slice(0, 5), '07:30');
-  assert.ok(await db('attendance_confirmations').where({ site_id: hq.id, day }).first(), 'confirmed');
+  assert.ok(await db('attendance_confirmations').where({ site_id: home.id, day }).first(), 'confirmed');
 
   // Locked: no more changes until a manager reopens it.
-  page = (await supervisor.get(`/attendance?day=${day}&site=${hq.id}`)).text;
+  page = (await supervisor.get(`/attendance?day=${day}&site=${home.id}`)).text;
   assert.match(page, /Confirmed by/);
   assert.doesNotMatch(page, /Reopen to change it/, 'supervisors can’t reopen');
-  await post(supervisor, '/attendance', { site: hq.id, day, row_employee: [kelvin.id], row_status: ['present'] });
+  await post(supervisor, '/attendance', { site: home.id, day, row_employee: [kelvin.id], row_status: ['present'] });
   assert.equal((await db('attendance_days').where({ employee_id: kelvin.id, day }).first()).status, 'half');
-  assert.equal((await post(supervisor, '/attendance/reopen', { site: hq.id, day })).status, 403);
-  await post(manager, '/attendance/reopen', { site: hq.id, day });
-  assert.equal(await db('attendance_confirmations').where({ site_id: hq.id, day }).first(), undefined);
+  assert.equal((await post(supervisor, '/attendance/reopen', { site: home.id, day })).status, 403);
+  await post(manager, '/attendance/reopen', { site: home.id, day });
+  assert.equal(await db('attendance_confirmations').where({ site_id: home.id, day }).first(), undefined);
 
   // The employee's page shows the day.
   assert.match((await supervisor.get(`/employees/${kelvin.id}`)).text, /Half day[\s\S]*Left at lunch/);
 });
 
 test('a day with no punches imported suggests nothing; the last day marked can fill it', async () => {
-  const page = (await supervisor.get(`/attendance?site=${hq.id}`)).text; // today: after the day marked above
+  const page = (await supervisor.get(`/attendance?site=${home.id}`)).text; // today: after the day marked above
   assert.match(page, /No punches imported for this day/);
   assert.match(page, /Fill the empty ones from it/);
-  assert.match((await supervisor.get(`/attendance?day=2099-01-01&site=${hq.id}`)).text, /\(today\)/, 'no future days');
+  assert.match((await supervisor.get(`/attendance?day=2099-01-01&site=${home.id}`)).text, /\(today\)/, 'no future days');
 });

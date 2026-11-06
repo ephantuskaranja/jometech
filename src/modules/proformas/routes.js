@@ -6,6 +6,7 @@ import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import { config } from '../../config.js';
 import { readLines } from '../../core/price-lines.js';
+import { fileTitle } from '../../core/file-title.js';
 import * as proformas from './service.js';
 import * as customers from '../customers/service.js';
 import * as enquiries from '../enquiries/service.js';
@@ -180,7 +181,7 @@ router.get('/proformas/:id/print', manage, async (req, res) => {
   const proforma = await loadProforma(req);
   res.render('proformas/views/print', {
     layout: false,
-    title: `Proforma ${proforma.number} ${proforma.customer_name}`,
+    title: fileTitle(`Proforma ${proforma.number}`, proforma.customer_name), // also the PDF's file name
     proforma, company: config.company,
     vat: proformas.vatIn(proforma.total), vatRate: config.vatRate,
   });

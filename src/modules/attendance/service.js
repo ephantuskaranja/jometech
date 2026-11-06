@@ -135,31 +135,58 @@ export async function linkClockIds(choices, actor) {
 // ---------- a site's day ----------
 
 /**
- * Everyone who counts at a site on a day: its staff, anyone who punched on its machine, anyone already saved
- * there. Each row has the saved status (if any), the suggestion from the punches, and the punches.
+ * Staff criss-cross the sites, so a person's day belongs to the site of their first punch that day (on a machine
+ * whose site is set): that site marks and confirms it. Pay still goes through their home site (payroll/service.js).
+ * @returns {Promise<Map<string, number>>} `${employee_id}|${day}` → site id
+ */
+export async function firstPunchSites(q, employeeIds, days) {
+  const rows = await q('attendance_punches as p').join('employee_clock_ids as c', 'c.clock_id', 'p.clock_id').join('clock_devices as d', 'd.id', 'p.device_id')
+    .whereIn('c.employee_id', employeeIds).whereIn('p.day', days).whereNotNull('d.site_id')
+    .orderBy('p.day').orderBy('p.time').select('c.employee_id', 'p.day', 'd.site_id');
+  const first = new Map();
+  for (const r of rows) {
+    const key = `${r.employee_id}|${r.day}`;
+    if (!first.has(key)) first.set(key, r.site_id);
+  }
+  return first;
+}
+
+/**
+ * Everyone who counts at a site on a day: its staff, anyone who punched on its machine, anyone saved there.
+ * Each row has the saved status (if any), the suggestion from the punches, and the punches. A person whose day
+ * belongs to another site is `elsewhere`: shown, but only that site can mark them.
  */
 export async function dayGrid(siteId, day) {
   const confirmation = await db('attendance_confirmations as c').leftJoin('users as u', 'u.id', 'c.confirmed_by')
     .where({ 'c.site_id': siteId, 'c.day': day }).first('c.confirmed_at', 'u.name as confirmed_by_name');
-  const saved = await db('attendance_days').where({ site_id: siteId, day }).select();
+  const savedHere = db('attendance_days').where({ site_id: siteId, day }).select('employee_id');
   const punchedHere = db('attendance_punches as p').join('clock_devices as d', 'd.id', 'p.device_id').join('employee_clock_ids as c', 'c.clock_id', 'p.clock_id')
     .where({ 'p.day': day, 'd.site_id': siteId }).distinct('c.employee_id');
   const people = await db('employees as e')
     .where((w) => w.where((x) => x.where('e.site_id', siteId).where('e.is_active', true))
       .orWhereIn('e.id', punchedHere)
-      .orWhereIn('e.id', saved.map((s) => s.employee_id)))
+      .orWhereIn('e.id', savedHere))
     .orderBy('e.name')
     .select('e.id', 'e.name', 'e.number', 'e.trade', 'e.site_id', 'e.is_active');
+  const ids = people.map((p) => p.id);
+  const saved = await db('attendance_days').where({ day }).whereIn('employee_id', ids).select();
   const punches = await db('attendance_punches as p').join('employee_clock_ids as c', 'c.clock_id', 'p.clock_id')
-    .where('p.day', day).whereIn('c.employee_id', people.map((p) => p.id)).select('c.employee_id', 'p.time', 'p.state');
+    .where('p.day', day).whereIn('c.employee_id', ids).select('c.employee_id', 'p.time', 'p.state');
+  const first = await firstPunchSites(db, ids, [day]);
+  const siteNames = new Map((await db('sites').select('id', 'name')).map((s) => [s.id, s.name]));
   // Did the machines' data cover this day? Then no punch means absent; otherwise nothing is suggested.
   const covered = Boolean(await db('attendance_punches as p').join('clock_devices as d', 'd.id', 'p.device_id').where({ 'p.day': day, 'd.site_id': siteId }).first('p.id'));
   const rules = config.attendance;
   const rows = people.map((e) => {
     const summary = summarize(punches.filter((p) => p.employee_id === e.id), rules);
     const record = saved.find((s) => s.employee_id === e.id) ?? null;
+    // Once saved it stays where it was saved; before that, the first punch decides, else their home site.
+    const owner = record?.site_id ?? first.get(`${e.id}|${day}`) ?? e.site_id;
     const suggestion = summary ? summary.status : covered ? 'absent' : null;
-    return { ...e, summary, record, suggestion, status: record?.status ?? suggestion ?? '', note: record?.note ?? '', visiting: e.site_id !== siteId };
+    return {
+      ...e, summary, record, suggestion, status: record?.status ?? suggestion ?? '', note: record?.note ?? '',
+      visiting: e.site_id !== siteId, elsewhere: owner !== siteId, owner_name: siteNames.get(owner),
+    };
   });
   return { rows, confirmation: confirmation ?? null, covered };
 }
@@ -182,7 +209,7 @@ export async function saveDay(siteId, day, rows, actor, { confirm = false } = {}
     let saved = 0;
     for (const r of rows) {
       const g = allowed.get(r.employee_id);
-      if (!g || !STATUSES[r.status]) continue;
+      if (!g || g.elsewhere || !STATUSES[r.status]) continue; // another site's day is never moved here
       const values = {
         status: r.status, note: r.note, site_id: siteId,
         first_in: g.summary?.first_in ?? null, last_out: g.summary?.last_out ?? null, hours: g.summary?.hours ?? null, updated_by: actor.user.id,
@@ -192,7 +219,7 @@ export async function saveDay(siteId, day, rows, actor, { confirm = false } = {}
     }
     if (confirm) {
       const marked = new Set(await trx('attendance_days').where({ site_id: siteId, day }).pluck('employee_id'));
-      const missing = grid.rows.filter((r) => !r.visiting && !marked.has(r.id));
+      const missing = grid.rows.filter((r) => !r.elsewhere && !marked.has(r.id));
       if (missing.length) throw httpError(422, `Mark everyone before confirming: ${missing.slice(0, 5).map((m) => m.name).join(', ')}${missing.length > 5 ? ` and ${missing.length - 5} more` : ''}.`);
       await trx('attendance_confirmations').insert({ site_id: siteId, day, confirmed_by: actor.user.id });
     }
@@ -203,6 +230,14 @@ export async function saveDay(siteId, day, rows, actor, { confirm = false } = {}
 
 export async function reopenDay(siteId, day, actor) {
   await db.transaction(async (trx) => {
+    // Approved payroll can't change, so neither can the days it was worked out from.
+    // That is this site's own payroll, and any other site's that pays someone who worked here that day.
+    const paidFrom = await trx('payrolls as p').where('p.week_start', '<=', day).where('p.pay_day', '>=', day)
+      .whereIn('p.status', ['approved', 'paid', 'closed'])
+      .where((w) => w.where('p.site_id', siteId).orWhereExists(trx('payslips as s').join('attendance_days as a', 'a.employee_id', 's.employee_id')
+        .whereRaw('s.payroll_id = p.id').where({ 'a.site_id': siteId, 'a.day': day })))
+      .first('p.number');
+    if (paidFrom) throw httpError(409, `This day is on approved payroll ${paidFrom.number}, so it can’t be reopened. Correct it with an adjustment on next week’s payroll.`);
     const n = await trx('attendance_confirmations').where({ site_id: siteId, day }).delete();
     if (n) await audit(trx, actor, { entity: 'attendance', id: siteId, action: 'attendance_reopened', summary: `${day} reopened` });
   });

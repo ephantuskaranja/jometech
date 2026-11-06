@@ -1,0 +1,162 @@
+<%#
+  One week's payroll. Everyone sees the days; only managers and admins see money.
+  draft → checked (supervisor) → approved (manager, locked) → paid → closed.
+%>
+<%
+  const st = statuses[p.status];
+  const label = (d, o) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', ...o });
+  const editable = ['draft', 'checked'].includes(p.status);
+  const ready = ['approved', 'paid', 'closed'].includes(p.status);
+  const noRate = p.slips.filter((s) => s.daily_rate === null);
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">People <i class="bi bi-chevron-right"></i><a href="/payroll">Payroll</a><i class="bi bi-chevron-right"></i><span><%= p.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= p.number %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-geo-alt"></i><%= p.site_name %></span>
+          <span><i class="bi bi-calendar-week"></i><%= label(p.days[0], { day: 'numeric', month: 'short' }) %> – <%= label(p.days[5], { day: 'numeric', month: 'short', year: 'numeric' }) %></span>
+          <span><i class="bi bi-people"></i><%= p.slips.length %> <%= p.slips.length === 1 ? 'person' : 'people' %></span>
+          <% if (canSeePay) { %><span><i class="bi bi-cash"></i>KES <%= fmt.money(p.total) %></span><% } %>
+        </div>
+      </div>
+      <% if (canManage) { %>
+        <div class="jt-page-actions"><a class="btn btn-outline-secondary" href="/payroll/<%= p.id %>/register.xlsx"><i class="bi bi-file-earmark-spreadsheet"></i>Register (Excel)</a></div>
+      <% } %>
+    </div>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-header"><h2 class="h6 mb-0">Next step</h2></div>
+  <div class="card-body d-grid gap-3">
+    <% if (p.status === 'draft') { %>
+      <p class="small mb-0"><%= canSeePay ? 'Add any advances or allowances below. ' : '' %>The supervisor checks each person’s days<%= canCheck ? ': if they are right, confirm below. If a day is wrong, a manager reopens it in Attendance.' : '.' %></p>
+      <div class="d-flex flex-wrap gap-2">
+        <% if (canCheck) { %>
+          <form method="post" action="/payroll/<%= p.id %>/check"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-primary" type="submit"><i class="bi bi-check2-square"></i>The days are right</button></form>
+        <% } %>
+        <% if (canManage) { %>
+          <form method="post" action="/payroll/<%= p.id %>/recalculate"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat"></i>Work it out again</button></form>
+        <% } %>
+      </div>
+    <% } else if (p.status === 'checked') { %>
+      <p class="small mb-0">Days checked by <%= p.checked_by_name ?? 'a removed user' %>, <%= fmt.dateTime(p.checked_at) %>. <%= canApprove ? 'Approving locks it: it can’t change after this.' : 'A manager approves it next.' %></p>
+      <% if (canApprove && noRate.length) { %><div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>No daily rate yet: <%= noRate.map((s) => s.name).join(', ') %>. Add it under Employees, put this back to draft and work it out again.</span></div><% } %>
+      <div class="d-flex flex-wrap gap-2">
+        <% if (canApprove) { %>
+          <form method="post" action="/payroll/<%= p.id %>/approve"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-primary" type="submit"<%= noRate.length ? ' disabled' : '' %>><i class="bi bi-lock"></i>Approve KES <%= fmt.money(p.total) %></button></form>
+        <% } %>
+        <% if (canManage) { %>
+          <form method="post" action="/payroll/<%= p.id %>/draft"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-outline-secondary" type="submit">Back to draft</button></form>
+        <% } %>
+      </div>
+    <% } else if (p.status === 'approved') { %>
+      <p class="small mb-0">Approved by <%= p.approved_by_name ?? 'a removed user' %>, <%= fmt.dateTime(p.approved_at) %>. Locked. Paid so far: <%= p.paidCount %> of <%= p.slips.length %>.</p>
+      <% if (canManage) { %>
+        <form method="post" action="/payroll/<%= p.id %>/pay" class="d-flex flex-wrap align-items-end gap-2">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div><label class="form-label small mb-1" for="pay-all-method">Everyone left, paid by</label>
+            <select class="form-select form-select-sm" id="pay-all-method" name="method"><% Object.entries(methods).forEach(([k, v]) => { %><option value="<%= k %>"><%= v %></option><% }) %></select></div>
+          <div><label class="form-label small mb-1" for="pay-all-ref">Reference</label>
+            <input class="form-control form-control-sm" id="pay-all-ref" name="reference" maxlength="60" placeholder="Optional"></div>
+          <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-cash-coin"></i>Mark everyone paid</button>
+        </form>
+      <% } %>
+    <% } else if (p.status === 'paid') { %>
+      <p class="small mb-0">Everyone is paid.</p>
+      <% if (canManage) { %>
+        <form method="post" action="/payroll/<%= p.id %>/close"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-primary" type="submit"><i class="bi bi-archive"></i>Close the payroll</button></form>
+      <% } %>
+    <% } else { %>
+      <p class="small mb-0">Closed <%= fmt.dateTime(p.closed_at) %>.</p>
+    <% } %>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="table-responsive">
+    <table class="table jt-table mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <% p.days.forEach((d) => { %><th class="text-center d-none d-md-table-cell"><%= label(d, { weekday: 'short' }) %><span class="jt-sub"><%= label(d, { day: 'numeric' }) %></span></th><% }) %>
+          <th class="text-end">Days</th>
+          <% if (canSeePay) { %><th class="text-end d-none d-md-table-cell">Rate</th><th class="text-end d-none d-md-table-cell">Adjust</th><th class="text-end">To pay (KES)</th><% } %>
+        </tr>
+      </thead>
+      <tbody>
+        <% p.slips.forEach((s) => { %>
+          <tr>
+            <td><a href="/employees/<%= s.employee_id %>"><%= s.name %></a>
+              <span class="jt-sub"><%= [s.employee_number, s.trade].filter(Boolean).join(' · ') %></span>
+              <% if (s.paid_at) { %><span class="d-block mt-1"><%- include('partials/pill', { text: `Paid: ${methods[s.paid_method]}`, tone: 'ok' }) %></span><% } %></td>
+            <% p.days.forEach((d) => { const a = attendance[s.detail[d]]; %><td class="text-center d-none d-md-table-cell" title="<%= a?.label ?? 'Not marked' %>"><%= a?.short ?? '—' %><% if (s.worked_at[d]) { %><span class="jt-sub"><%= s.worked_at[d] %></span><% } %></td><% }) %>
+            <td class="text-end jt-num"><%= Number(s.days) %></td>
+            <% if (canSeePay) { %>
+              <td class="text-end jt-num d-none d-md-table-cell"><%= s.daily_rate === null ? '—' : fmt.money(s.daily_rate) %></td>
+              <td class="text-end jt-num d-none d-md-table-cell"><%= Number(s.adjustments) ? fmt.money(s.adjustments) : '—' %></td>
+              <td class="text-end jt-num fw-semibold"><%= fmt.money(s.net) %></td>
+            <% } %>
+          </tr>
+          <% if (canManage) { %>
+            <tr class="jt-slip-actions" x-data="{ adding: false, paying: false }">
+              <td colspan="<%= p.days.length + 5 %>" class="pt-0 border-top-0">
+                <div class="d-grid gap-2 small">
+                  <% s.adjustment_lines.forEach((a) => { %>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="text-body-secondary"><%= a.reason %></span>
+                      <span class="jt-num"><%= Number(a.amount) > 0 ? '+' : '' %><%= fmt.money(a.amount) %></span>
+                      <% if (editable) { %>
+                        <form method="post" action="/payroll/<%= p.id %>/adjustments/<%= a.id %>/delete"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Remove</button></form>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                  <div class="d-flex flex-wrap align-items-center gap-3">
+                    <% if (editable) { %><button type="button" class="btn btn-link btn-sm p-0" x-show="!adding" @click="adding = true"><i class="bi bi-plus-lg"></i>Advance or allowance</button><% } %>
+                    <% if (ready) { %>
+                      <a class="btn btn-link btn-sm p-0" href="/payroll/<%= p.id %>/slips/<%= s.id %>.pdf"><i class="bi bi-file-earmark-pdf"></i>PDF</a>
+                      <a class="btn btn-link btn-sm p-0" href="/payroll/<%= p.id %>/slips/<%= s.id %>.xlsx"><i class="bi bi-file-earmark-spreadsheet"></i>Excel</a>
+                      <button type="button" class="btn btn-link btn-sm p-0" x-data="shareSlip(<%= JSON.stringify({ url: `/payroll/${p.id}/slips/${s.id}.pdf`, name: `Payslip ${s.name}.pdf`, phone: s.mpesa_phone || s.phone || '' }) %>)" @click="send()"><i class="bi bi-whatsapp"></i><span x-text="note || 'Send on WhatsApp'">Send on WhatsApp</span></button>
+                    <% } %>
+                    <% if (p.status === 'approved' && !s.paid_at) { %><button type="button" class="btn btn-link btn-sm p-0" x-show="!paying" @click="paying = true"><i class="bi bi-cash-coin"></i>Mark paid</button><% } %>
+                    <% if (s.paid_at) { %><span class="text-body-secondary"><%= fmt.dateTime(s.paid_at) %><%= s.paid_reference ? ` · ${s.paid_reference}` : '' %></span><% } %>
+                  </div>
+                  <% if (editable) { %>
+                    <form method="post" action="/payroll/<%= p.id %>/slips/<%= s.id %>/adjustments" class="d-flex flex-wrap align-items-end gap-2" x-show="adding" x-cloak>
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <select class="form-select form-select-sm w-auto" name="direction" aria-label="Deduct or add"><option value="deduct">Deduct</option><option value="add">Add</option></select>
+                      <input class="form-control form-control-sm w-auto" name="amount" inputmode="decimal" data-number="decimal" placeholder="Amount" aria-label="Amount">
+                      <input class="form-control form-control-sm w-auto flex-grow-1" name="reason" maxlength="120" placeholder="e.g. Advance 12 Nov, Sunday work" aria-label="Reason">
+                      <button class="btn btn-primary btn-sm" type="submit">Save</button><button class="btn btn-link btn-sm" type="button" @click="adding = false">Cancel</button>
+                    </form>
+                  <% } %>
+                  <% if (p.status === 'approved' && !s.paid_at) { %>
+                    <form method="post" action="/payroll/<%= p.id %>/pay" class="d-flex flex-wrap align-items-end gap-2" x-show="paying" x-cloak>
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="slip" value="<%= s.id %>">
+                      <select class="form-select form-select-sm w-auto" name="method" aria-label="Paid by"><% Object.entries(methods).forEach(([k, v]) => { %><option value="<%= k %>"><%= v %></option><% }) %></select>
+                      <input class="form-control form-control-sm w-auto flex-grow-1" name="reference" maxlength="60" placeholder="M-Pesa code (optional)" aria-label="Reference">
+                      <button class="btn btn-primary btn-sm" type="submit">Mark paid</button><button class="btn btn-link btn-sm" type="button" @click="paying = false">Cancel</button>
+                    </form>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% } %>
+        <% }) %>
+      </tbody>
+      <% if (canSeePay) { %>
+        <tfoot><tr><th colspan="<%= p.days.length + 4 %>" class="text-end">Total (KES)</th><th class="text-end jt-num"><%= fmt.money(p.total) %></th></tr></tfoot>
+      <% } %>
+    </table>
+  </div>
+</section>
+
+<% if (canSeePay) { %>
+  <section class="card">
+    <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+    <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+  </section>
+<% } %>

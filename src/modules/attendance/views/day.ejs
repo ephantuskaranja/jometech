@@ -5,8 +5,9 @@
 <%
   const locked = Boolean(grid.confirmation);
   const dayLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-  const counts = Object.fromEntries(Object.keys(statuses).map((k) => [k, grid.rows.filter((r) => r.status === k).length]));
-  const unmarked = grid.rows.filter((r) => !r.status && !r.visiting).length;
+  const here = grid.rows.filter((r) => !r.elsewhere);
+  const counts = Object.fromEntries(Object.keys(statuses).map((k) => [k, here.filter((r) => r.status === k).length]));
+  const unmarked = here.filter((r) => !r.status).length;
   const copy = last ? Object.fromEntries(last.rows.map((r) => [r.employee_id, r.status])) : {};
   const href = (extra) => `/attendance?${new URLSearchParams({ site: site.id, day, ...extra })}`;
 %>
@@ -81,6 +82,11 @@
                 <td class="font-monospace small d-none d-md-table-cell"><%= s?.last_out ?? '—' %><% if (s && s.punches.length > 2) { %><span class="jt-sub text-nowrap" title="All punches"><%= s.punches.join(' · ') %></span><% } %></td>
                 <td class="text-end jt-num d-none d-md-table-cell"><%= s?.hours ?? '—' %></td>
                 <td>
+                  <% if (r.elsewhere) { %>
+                    <%# This day belongs to the site of their first punch: only that site marks it. No form fields. %>
+                    <%- include('partials/pill', { text: `Worked at ${r.owner_name}`, tone: 'neutral' }) %>
+                    <span class="jt-sub"><%= r.record ? statuses[r.status].label : `${r.owner_name} marks this day` %></span>
+                  <% } else { %>
                   <input type="hidden" name="row_employee" value="<%= r.id %>">
                   <% if (locked) { %>
                     <% if (r.status) { %><%- include('partials/pill', { text: statuses[r.status].label, tone: statuses[r.status].tone }) %><% } else { %>—<% } %>
@@ -92,9 +98,11 @@
                     </select>
                     <% if (!r.record && r.suggestion) { %><span class="jt-sub">From the punches</span><% } %>
                   <% } %>
+                  <% } %>
                 </td>
                 <td class="d-none d-md-table-cell">
-                  <% if (locked) { %><span class="small"><%= r.note %></span><input type="hidden" name="row_note" value="<%= r.note %>">
+                  <% if (r.elsewhere) { %><span class="small"><%= r.note %></span>
+                  <% } else if (locked) { %><span class="small"><%= r.note %></span><input type="hidden" name="row_note" value="<%= r.note %>">
                   <% } else { %><input class="form-control form-control-sm" name="row_note" value="<%= r.note %>" maxlength="255" placeholder="e.g. Left early, sick" aria-label="Note for <%= r.name %>"><% } %>
                 </td>
               </tr>
