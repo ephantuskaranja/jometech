@@ -96,12 +96,14 @@ function initSearchableSelects(root = document) {
     };
     // data-tom-create="customer": typing a name that isn't found offers "+ Add new customer",
     // which opens the quick-add window (customers/views/quick-add.ejs) and selects the result.
+    // data-tom-create-as="bank" opens it with that type of customer chosen ("Add new bank").
     if (el.dataset.tomCreate) {
+      const as = el.dataset.tomCreateAs;
       options.create = (input, done) => {
-        window.dispatchEvent(new CustomEvent(`jt:quick-add-${el.dataset.tomCreate}`, { detail: { name: input, done } }));
+        window.dispatchEvent(new CustomEvent(`jt:quick-add-${el.dataset.tomCreate}`, { detail: { name: input, done, category: as } }));
       };
       options.createOnBlur = false;
-      options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-plus-lg"></i> Add new ${escape(el.dataset.tomCreate)} “${escape(data.input)}”</div>`;
+      options.render.option_create = (data, escape) => `<div class="create"><i class="bi bi-plus-lg"></i> Add new ${escape(as ?? el.dataset.tomCreate)} “${escape(data.input)}”</div>`;
     }
     // data-tom-free: a name that isn't in the list can be used as typed ("Use “Eunice”"),
     // sent as "name:Eunice" for the server to keep as plain text.
@@ -116,7 +118,8 @@ function initSearchableSelects(root = document) {
         valueField: 'value',
         labelField: 'label',
         searchField: ['label'],
-        shouldLoad: (query) => query.length >= 2,
+        // data-tom-preload: a short list (e.g. banks) that opens in full on click, before any typing.
+        ...('tomPreload' in el.dataset ? { preload: 'focus', shouldLoad: () => true } : { shouldLoad: (query) => query.length >= 2 }),
         load(query, callback) {
           fetch(`${url}?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } })
             .then((res) => res.json())
@@ -688,8 +691,8 @@ document.addEventListener('alpine:init', () => {
   // Quick add customer window: opened from a searchable customer dropdown.
   Alpine.data('quickAddCustomer', () => ({
     name: '', phone: '', category: 'individual', errors: {}, busy: false, matches: [], done: null, modal: null,
-    open({ name, done }) {
-      Object.assign(this, { name, phone: '', category: 'individual', errors: {}, matches: [], done });
+    open({ name, done, category }) {
+      Object.assign(this, { name, phone: '', category: category ?? 'individual', errors: {}, matches: [], done });
       this.modal ??= window.bootstrap.Modal.getOrCreateInstance(this.$el);
       this.modal.show();
       setTimeout(() => this.$refs.phone?.focus(), 300);

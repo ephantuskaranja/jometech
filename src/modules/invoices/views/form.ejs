@@ -21,10 +21,10 @@
         <div><dt>Job</dt><dd><a class="font-monospace" href="/jobs/<%= job.id %>"><%= job.number %></a><% if (job.proforma_number) { %> <span class="small text-body-secondary">· proforma <%= job.proforma_number %></span><% } %></dd></div>
       </dl>
       <div style="max-width: 32rem">
-        <%- include('partials/field', { name: 'financier_id', label: 'Bank financing the vehicle (optional)', type: 'select', url: '/api/customers',
-              options: financierOption, value: values.financier_id, error: errors.financier_id, blank: 'Type the bank’s name, e.g. Co-operative Bank',
-              hint: 'The invoice is then addressed to the customer and the bank, and shows what the bank has to pay. Not in the list? Type the name and choose “Add new customer”.',
-              attrs: 'data-tom-create="customer"' }) %>
+        <%- include('partials/field', { name: 'financier_id', label: 'Bank financing the vehicle (optional)', type: 'select', url: '/api/banks',
+              options: financierOption, value: values.financier_id, error: errors.financier_id, blank: 'Choose or type the bank, e.g. Co-operative Bank',
+              hint: 'The invoice is then addressed to the customer and the bank, with the bank’s address, and shows what the bank has to pay. Not in the list? Type the name and choose “Add new bank”.',
+              attrs: 'data-tom-create="customer" data-tom-create-as="bank" data-tom-preload' }) %>
       </div>
     </div>
   </section>

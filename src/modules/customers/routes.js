@@ -180,6 +180,10 @@ router.get('/api/customers', view, async (req, res) => {
   res.json(await customers.lookupCustomers(String(req.query.q ?? '')));
 });
 
+router.get('/api/banks', view, async (req, res) => {
+  res.json(await customers.lookupBanks(String(req.query.q ?? '')));
+});
+
 // "Existing customer: ABC Transport. Use this?"
 router.get('/api/customers/check-phone', view, async (req, res) => {
   const except = Number(req.query.except) || null;

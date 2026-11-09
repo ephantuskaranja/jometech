@@ -169,3 +169,15 @@ test('the period summary shows invoices issued and payments received', async () 
   assert.match(page, /COOP-831/, 'the bank payment');
   assert.doesNotMatch(page, /TST831ABC[\s\S]*TST831ABC/, 'the voided one is left out');
 });
+
+test('the bank list holds banks and banks already used on invoices, not other customers', async () => {
+  const csrf = csrfFrom((await manager.get('/invoices')).text);
+  const added = await manager.post('/api/customers').set('x-csrf-token', csrf)
+    .send({ name: 'Test Equity Bank', phone: '0700000833', category: 'bank' }).expect(201);
+  const all = (await manager.get('/api/banks').expect(200)).body.map((o) => o.label);
+  assert.ok(all.some((l) => l.startsWith('Test Equity Bank')), 'a Bank / Financier customer');
+  assert.ok(all.some((l) => l.startsWith('Test Co-operative Bank')), 'saved as a company, but already the bank on an invoice');
+  assert.ok(!all.some((l) => l.startsWith('Mike Test Wandeme')), 'an ordinary customer is not a bank');
+  const typed = (await manager.get('/api/banks?q=Test%20Equity').expect(200)).body;
+  assert.deepEqual(typed.map((o) => o.value), [added.body.value]);
+});

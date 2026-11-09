@@ -10,6 +10,7 @@ export const CATEGORIES = [
   { value: 'company', label: 'Company' },
   { value: 'government', label: 'Government' },
   { value: 'ngo', label: 'NGO' },
+  { value: 'bank', label: 'Bank / Financier' }, // financing a customer's vehicle: chosen on invoices
 ];
 export const categoryLabel = (value) => CATEGORIES.find((c) => c.value === value)?.label ?? value;
 
@@ -119,6 +120,20 @@ export async function lookupCustomers(q) {
     })
     .orderBy('name').limit(20).select('id', 'name', 'number', 'category');
   return rows.map((c) => ({ value: c.id, label: `${c.name} (${c.number})`, category: c.category }));
+}
+
+/**
+ * Banks for an invoice's "bank financing the vehicle": customers of the Bank type, and any
+ * customer already chosen as a bank on an invoice (saved before the type existed). The whole
+ * list when nothing is typed, so it opens like a dropdown.
+ */
+export async function lookupBanks(q) {
+  const term = q.trim();
+  const rows = await db('customers')
+    .where((w) => w.where('category', 'bank').orWhereIn('id', db('invoices').whereNotNull('financier_id').distinct('financier_id')))
+    .modify((query) => term && query.where((w) => w.where('name', 'like', `%${term}%`).orWhere('number', 'like', `%${term}%`)))
+    .orderBy('name').limit(100).select('id', 'name', 'number');
+  return rows.map((c) => ({ value: c.id, label: `${c.name} (${c.number})` }));
 }
 
 // ---------- Contacts ----------
