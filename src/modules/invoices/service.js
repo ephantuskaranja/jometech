@@ -166,22 +166,90 @@ export async function setEtims(id, etimsNumber, actor) {
 
 // ---------- Payments ----------
 
-/** @returns {Promise<{ id: number, number: string }>} */
+/**
+ * What a job's payments are checked against: its invoice (a draft counts), else the accepted
+ * proforma it was made from (deposits before invoicing). Null when it has neither.
+ * @returns {Promise<{ total: number, against: string } | null>}
+ */
+export async function amountDue(jobId, trx = db) {
+  const inv = await currentInvoice(jobId, trx);
+  if (inv) return { total: Number(inv.total), against: inv.number ? `invoice ${inv.number}` : 'the draft invoice' };
+  const pf = await trx('jobs as j').join('proformas as p', 'p.id', 'j.proforma_id')
+    .where({ 'j.id': jobId, 'p.status': 'accepted' }).first('p.number', 'p.total');
+  return pf ? { total: Number(pf.total), against: `proforma ${pf.number}` } : null;
+}
+
+/**
+ * For the payment form: what is still owed on the job and against what (null: nothing to check),
+ * and where extra work would be added to the invoice instead of holding the money as credit.
+ */
+export async function owedOn(jobId) {
+  const due = await amountDue(jobId);
+  if (!due) return null;
+  const inv = await currentInvoice(jobId);
+  const extraWork = !inv ? { href: `/jobs/${jobId}/invoice`, text: 'make the invoice with it' }
+    : inv.status === 'draft' ? { href: `/invoices/${inv.id}/edit`, text: 'add it to the draft invoice' }
+      : { href: `/invoices/${inv.id}`, text: `cancel invoice ${inv.number} and invoice again with it` };
+  return { owed: round(Math.max(due.total - (await paidOn(db, jobId)), 0)), against: due.against, extraWork };
+}
+
+const paidOn = async (trx, jobId) => Number((await trx('payments').where({ job_id: jobId }).whereNull('voided_at').sum({ s: 'amount' }).first()).s ?? 0);
+
+/**
+ * Records a payment. One that is more than what is still owed needs confirming
+ * (input.confirm_excess) and a reason (input.excess_reason): the extra is held as the
+ * customer's credit, e.g. paid ahead for future work.
+ * @returns {Promise<{ id: number, number: string, credit: number }>}
+ */
 export async function recordPayment(jobId, input, actor) {
   return db.transaction(async (trx) => {
     const job = await trx('jobs').where({ id: jobId }).forUpdate().first('id', 'number', 'status');
     if (!job) throw httpError(404, 'That job doesn’t exist.');
     if (job.status === 'cancelled') throw httpError(409, `${job.number} was cancelled.`);
+
+    const due = await amountDue(jobId, trx);
+    const owed = due ? round(Math.max(due.total - (await paidOn(trx, jobId)), 0)) : null;
+    const credit = owed === null ? 0 : round(Math.max(input.amount - owed, 0));
+    let notes = input.notes;
+    if (credit > 0) {
+      if (!input.confirm_excess) {
+        throw err(422, `${kes(owed)} is still owed on ${due.against}: this payment is ${kes(credit)} more. Confirm to hold the extra as the customer’s credit.`, 'amount');
+      }
+      const reason = (input.excess_reason ?? '').trim();
+      if (reason.length < 3) throw err(422, 'Say why the customer paid more (e.g. a deposit for the next job).', 'excess_reason');
+      notes = [`${kes(credit)} held as credit: ${reason}`, notes].filter(Boolean).join(' · ').slice(0, 255);
+    }
+
     const number = await nextNumber(trx, 'payment');
     const [id] = await trx('payments').insert({
       number, job_id: jobId, paid_on: input.paid_on, amount: input.amount, method: input.method,
-      reference: input.reference, payer: input.payer, notes: input.notes, received_by: actor.user.id,
+      reference: input.reference, payer: input.payer, notes, received_by: actor.user.id,
     });
     const from = input.payer === 'financier' ? 'the bank' : 'the client';
     const ref = input.reference ? ` ${input.reference}` : '';
-    await audit(trx, actor, { entity: 'job', id: jobId, action: 'payment_received', summary: `${number}: ${kes(input.amount)} from ${from} by ${METHODS[input.method]}${ref}` });
-    return { id, number };
+    const held = credit > 0 ? `; ${kes(credit)} more than owed, held as credit` : '';
+    await audit(trx, actor, { entity: 'job', id: jobId, action: 'payment_received', summary: `${number}: ${kes(input.amount)} from ${from} by ${METHODS[input.method]}${ref}${held}` });
+    return { id, number, credit };
   });
+}
+
+/**
+ * A customer's credit: on each of their jobs, what was paid beyond its invoice (or accepted
+ * proforma before invoicing). For the customer's page.
+ * @returns {Promise<{ total: number, jobs: { id: number, number: string, credit: number }[] }>}
+ */
+export async function creditOf(customerId) {
+  const rows = await db('jobs as j')
+    .join(db('payments').whereNull('voided_at').groupBy('job_id').select('job_id').sum({ paid: 'amount' }).as('p'), 'p.job_id', 'j.id')
+    .leftJoin('invoices as i', (q) => q.on('i.job_id', 'j.id').andOnVal('i.status', '<>', 'cancelled'))
+    .leftJoin('proformas as pf', (q) => q.on('pf.id', 'j.proforma_id').andOnVal('pf.status', 'accepted'))
+    .where('j.customer_id', customerId)
+    .whereNot('j.status', 'cancelled')
+    .select('j.id', 'j.number', 'p.paid', db.raw('COALESCE(i.total, pf.total) as due'));
+  const jobs = rows.filter((r) => r.due !== null)
+    .map((r) => ({ id: r.id, number: r.number, credit: round(Number(r.paid) - Number(r.due)) }))
+    .filter((r) => r.credit > 0);
+  return { total: round(jobs.reduce((s, j) => s + j.credit, 0)), jobs };
 }
 
 /** A payment entered by mistake. It stays on record, crossed out. */
@@ -212,7 +280,7 @@ export async function paymentsFor(jobId) {
 export async function moneyForJob(jobId) {
   const invoice = await currentInvoice(jobId);
   const payments = await paymentsFor(jobId);
-  return { invoice, payments, balance: invoice ? round(Number(invoice.total) - payments.total) : null };
+  return { invoice, payments, balance: invoice ? round(Number(invoice.total) - payments.total) : null, due: await owedOn(jobId) };
 }
 
 // ---------- Reading ----------

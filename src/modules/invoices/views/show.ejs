@@ -60,7 +60,7 @@
             <tr class="small text-body-secondary"><td colspan="3" class="text-end">of which VAT <%= vatRate %>%</td><td class="text-end jt-num"><%= fmt.money(vat) %></td></tr>
             <tr><td colspan="3" class="text-end">Paid by the client</td><td class="text-end jt-num"><%= fmt.money(invoice.payments.client) %></td></tr>
             <% if (invoice.financier_id || invoice.payments.financier > 0) { %><tr><td colspan="3" class="text-end">Paid by the bank</td><td class="text-end jt-num"><%= fmt.money(invoice.payments.financier) %></td></tr><% } %>
-            <tr><th colspan="3" class="text-end"><%= invoice.balance < 0 ? 'Paid in excess' : invoice.financier_id ? 'Bank still to pay' : 'Balance' %></th><th class="text-end jt-num">KES <%= fmt.money(Math.abs(invoice.balance)) %></th></tr>
+            <tr><th colspan="3" class="text-end"><%= invoice.balance < 0 ? 'Customer credit (paid more than invoiced)' : invoice.financier_id ? 'Bank still to pay' : 'Balance' %></th><th class="text-end jt-num">KES <%= fmt.money(Math.abs(invoice.balance)) %></th></tr>
           </tfoot>
         </table>
       </div>
@@ -112,7 +112,7 @@
       </div>
     </section>
 
-    <%- include('invoices/views/payments', { payments: invoice.payments, jobId: invoice.job_id, back: `/invoices/${invoice.id}`, methods, today,
+    <%- include('invoices/views/payments', { payments: invoice.payments, jobId: invoice.job_id, back: `/invoices/${invoice.id}`, methods, today, due,
           financierName: invoice.financier_name, canRecord: invoice.status !== 'cancelled' }) %>
 
     <section class="card">

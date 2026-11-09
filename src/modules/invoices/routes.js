@@ -39,6 +39,9 @@ const paymentSchema = z.object({
   payer: z.enum(['client', 'financier']).catch('client'),
   reference: optionalText(60),
   notes: optionalText(255),
+  // More than is owed: confirmed in the form, with a reason (see invoices.recordPayment).
+  confirm_excess: z.preprocess((v) => v === '1', z.boolean()),
+  excess_reason: optionalText(200),
 });
 
 /** Where to go back to after a payment: the invoice or the job it was recorded from. */
@@ -112,6 +115,7 @@ router.get('/invoices/:id', manage, async (req, res) => {
     title: invoice.number ? `Invoice ${invoice.number}` : `Draft invoice ${invoice.job_number}`, invoice,
     statuses: invoices.STATUSES, paidStates: invoices.PAID_STATES, methods: invoices.METHODS,
     vat: vatIn(invoice.total), vatRate: config.vatRate, today: localDay(),
+    due: await invoices.owedOn(invoice.job_id),
     entries: await history('invoice', invoice.id),
   });
 });
@@ -200,8 +204,14 @@ router.post('/jobs/:id/payments', manage, async (req, res) => {
     req.session.flash = { type: 'warning', text: `Payment not saved: ${Object.values(errors)[0]}.` };
     return res.redirect(back);
   }
-  const { number } = await invoices.recordPayment(Number(req.params.id), data, req);
-  req.session.flash = { type: 'success', text: `Payment ${number} recorded: KES ${data.amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}.` };
+  const money = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
+  try {
+    const { number, credit } = await invoices.recordPayment(Number(req.params.id), data, req);
+    req.session.flash = { type: 'success', text: `Payment ${number} recorded: ${money(data.amount)}.${credit > 0 ? ` ${money(credit)} is held as the customer’s credit.` : ''}` };
+  } catch (err) {
+    if (!err.field) throw err;
+    req.session.flash = { type: 'warning', text: `Payment not saved: ${err.message}` };
+  }
   res.redirect(back);
 });
 

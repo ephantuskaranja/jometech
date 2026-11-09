@@ -40,12 +40,29 @@
   <% if (canRecord) { %>
     <div class="card-body border-top">
       <button type="button" class="btn btn-outline-primary w-100" x-show="!adding" @click="adding = true; $nextTick(() => $refs.amount.focus())"><i class="bi bi-cash-coin"></i>Record a payment</button>
-      <form method="post" action="/jobs/<%= jobId %>/payments" class="d-grid gap-3" x-show="adding" x-cloak novalidate>
+      <%# More than is still owed: Save first shows the split and asks why (held as the customer's credit). %>
+      <form method="post" action="/jobs/<%= jobId %>/payments" class="d-grid gap-3" x-show="adding" x-cloak novalidate
+            x-data="paymentExcess(<%= JSON.stringify(locals.due ?? null) %>)" @submit="check($event)">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
+        <input type="hidden" name="confirm_excess" :value="confirming ? '1' : ''">
         <div class="jt-field">
           <label class="form-label" for="pay-amount">Amount (KES)<span class="jt-req" aria-hidden="true">*</span></label>
-          <input class="form-control jt-num" id="pay-amount" name="amount" type="text" inputmode="decimal" data-number="decimal" x-ref="amount" autocomplete="off" required>
+          <input class="form-control jt-num" id="pay-amount" name="amount" type="text" inputmode="decimal" data-number="decimal" x-ref="amount" autocomplete="off" required @input="confirming = false">
+          <% if (locals.due) { %><div class="form-text">Still owed on <%= due.against %>: KES <%= fmt.money(due.owed) %></div><% } %>
+        </div>
+        <div class="jt-warn-box" x-show="confirming" x-cloak role="alert">
+          <i class="bi bi-exclamation-triangle"></i>
+          <div class="d-grid gap-2 flex-grow-1">
+            <strong>This is more than is owed</strong>
+            <div>Still owed on <span x-text="due?.against"></span>: <strong class="jt-num">KES <span x-text="money(due?.owed)"></span></strong><br>
+              <strong class="jt-num">KES <span x-text="money(excess)"></span></strong> will be held as the customer’s credit.</div>
+            <% if (locals.due?.extraWork) { %><div class="small">Is it for extra work on this job? Then <a href="<%= due.extraWork.href %>"><%= due.extraWork.text %></a> first, and record the payment after.</div><% } %>
+            <div class="jt-field">
+              <label class="form-label" for="pay-excess-reason">Why did they pay more?<span class="jt-req" aria-hidden="true">*</span></label>
+              <input class="form-control" id="pay-excess-reason" name="excess_reason" maxlength="200" x-ref="reason" :required="confirming" placeholder="e.g. Deposit for the canopy next month" autocomplete="off">
+            </div>
+          </div>
         </div>
         <fieldset class="jt-field">
           <legend class="form-label">How</legend>
@@ -69,7 +86,11 @@
         <%- include('partials/field', { name: 'reference', id: 'pay-reference', label: 'Reference', placeholder: 'M-Pesa code, cheque or bank reference', hint: 'Optional, but makes it easy to find later.' }) %>
         <%- include('partials/field', { name: 'paid_on', id: 'pay-date', label: 'Date received', type: 'date', value: today, required: true }) %>
         <%- include('partials/field', { name: 'notes', id: 'pay-notes', label: 'Note', placeholder: 'Optional' }) %>
-        <div class="d-flex gap-2"><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save payment</button><button class="btn btn-link" type="button" @click="adding = false">Cancel</button></div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><span x-text="confirming ? `Record and hold KES ${money(excess)} as credit` : 'Save payment'">Save payment</span></button>
+          <button class="btn btn-link" type="button" x-show="confirming" @click="confirming = false; $refs.amount.focus()">Change the amount</button>
+          <button class="btn btn-link" type="button" x-show="!confirming" @click="adding = false">Cancel</button>
+        </div>
       </form>
     </div>
   <% } %>

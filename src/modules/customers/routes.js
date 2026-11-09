@@ -7,6 +7,7 @@ import { formatKraPin } from '../../core/vehicle-format.js';
 import { check, httpError, optionalEmail, optionalPhone, optionalText, phoneField } from '../../core/validate.js';
 import * as customers from './service.js';
 import { typeLabel } from '../vehicles/service.js';
+import { creditOf } from '../invoices/service.js';
 
 export const router = Router();
 const view = canAny(...VIEW_CUSTOMERS);
@@ -110,6 +111,8 @@ router.get('/customers/:id', view, async (req, res) => {
     title: customer.name,
     customer, contacts, vehicles, tab,
     entries: tab === 'history' ? await history('customer', customer.id) : [],
+    // Money paid beyond what was invoiced: for those who handle invoices (admins and managers).
+    credit: tab === 'overview' && req.user.can('invoices.manage') ? await creditOf(customer.id) : null,
     canEdit: req.user.can('customers.manage') || req.user.isAdmin,
     canAddVehicle: EDIT_VEHICLES.some((p) => req.user.can(p)),
     categoryLabel: customers.categoryLabel,

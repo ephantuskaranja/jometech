@@ -190,7 +190,7 @@
               <a href="/invoices/<%= inv.id %>"><%= inv.number ? `Invoice ${inv.number}` : 'Draft invoice' %></a>
               <span class="ms-auto jt-num small">KES <%= fmt.money(inv.total) %></span>
             </div>
-            <% if (inv.status === 'issued') { %><div class="small text-body-secondary"><%= money.balance > 0 ? `KES ${fmt.money(money.balance)} still to pay` : 'Fully paid' %></div><% } %>
+            <% if (inv.status === 'issued') { %><div class="small text-body-secondary"><%= money.balance > 0 ? `KES ${fmt.money(money.balance)} still to pay` : money.balance < 0 ? `Fully paid · KES ${fmt.money(-money.balance)} held as the customer’s credit` : 'Fully paid' %></div><% } %>
           <% } else if (job.status !== 'cancelled') { %>
             <p class="small mb-0"><%= job.proforma_id ? `Made from proforma ${job.proforma_number}: its lines and prices are copied in.` : 'No proforma: you enter the prices.' %></p>
             <a class="btn btn-outline-primary" href="/jobs/<%= job.id %>/invoice"><i class="bi bi-receipt"></i>Make the invoice</a>
@@ -199,7 +199,7 @@
           <% } %>
         </div>
       </section>
-      <%- include('invoices/views/payments', { payments: money.payments, jobId: job.id, back: `/jobs/${job.id}`, methods: paymentMethods, today,
+      <%- include('invoices/views/payments', { payments: money.payments, jobId: job.id, back: `/jobs/${job.id}`, methods: paymentMethods, today, due: money.due,
             financierName: inv?.financier_name ?? null, canRecord: job.status !== 'cancelled' }) %>
     <% } %>
 

@@ -181,3 +181,32 @@ test('the bank list holds banks and banks already used on invoices, not other cu
   const typed = (await manager.get('/api/banks?q=Test%20Equity').expect(200)).body;
   assert.deepEqual(typed.map((o) => o.value), [added.body.value]);
 });
+
+test('paying more than is owed needs confirming with a reason; the extra is the customer’s credit', async () => {
+  // By now the job's invoice is gone (cancelled, the new draft deleted): its accepted proforma
+  // (KES 480,000) is the limit, and KES 495,000 has been paid.
+  const count = () => db('payments').where({ job_id: job }).whereNull('voided_at').count({ n: '*' }).then(([r]) => Number(r.n));
+  const before = await count();
+  const pay = (extra) => post(`/jobs/${job}/payments`, { amount: '10,000', method: 'mpesa', reference: 'TST831CR', payer: 'client', paid_on: localDay(), ...extra });
+
+  let res = await pay();
+  assert.equal(await count(), before, 'not saved without confirming');
+  let page = (await manager.get(res.headers.location)).text;
+  assert.match(page, /Payment not saved: KES 0\.00 is still owed on proforma T831/);
+
+  await pay({ confirm_excess: '1', excess_reason: '' });
+  assert.equal(await count(), before, 'nor without a reason');
+
+  await pay({ confirm_excess: '1', excess_reason: 'Deposit for the canopy' });
+  assert.equal(await count(), before + 1);
+  const p = await db('payments').where({ job_id: job }).orderBy('id', 'desc').first();
+  assert.match(p.notes, /KES 10,000\.00 held as credit: Deposit for the canopy/);
+
+  page = (await manager.get(`/customers/${customer.id}`)).text;
+  assert.match(page, /Credit held: KES 25,000\.00/, 'KES 505,000 paid against KES 480,000');
+  assert.match(page, /JOB-2026-8831/);
+
+  // A job with no invoice and no proforma has nothing to check against.
+  await post(`/jobs/${plainJob}/payments`, { amount: '1,000', method: 'cash', payer: 'client', paid_on: localDay() });
+  assert.equal(await db('payments').where({ job_id: plainJob }).count({ n: '*' }).then(([r]) => Number(r.n)), 1);
+});

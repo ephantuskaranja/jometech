@@ -27,6 +27,13 @@
 </section>
 
 <% if (tab === 'overview') { %>
+  <% if (locals.credit?.total > 0) { %>
+    <div class="jt-info-box mb-4"><i class="bi bi-piggy-bank"></i>
+      <span><strong>Credit held: KES <%= fmt.money(credit.total) %></strong>, paid more than invoiced on
+        <% credit.jobs.forEach((j, i) => { %><%= i ? ', ' : '' %><a class="font-monospace" href="/jobs/<%= j.id %>"><%= j.number %></a> (KES <%= fmt.money(j.credit) %>)<% }) %>.
+        Take it into account on their next invoice.</span>
+    </div>
+  <% } %>
   <div class="row g-4">
     <div class="col-lg-7">
       <section class="card h-100">

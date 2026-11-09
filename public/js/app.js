@@ -727,6 +727,24 @@ document.addEventListener('alpine:init', () => {
     },
     cancelled() { this.done?.(); this.done = null; }, // closing the window without saving
   }));
+
+  // Recording a payment (invoices/views/payments.ejs): more than is still owed asks first,
+  // showing how much becomes the customer's credit, and needs a reason. due = { owed, against } or null.
+  Alpine.data('paymentExcess', (due) => ({
+    due, confirming: false, excess: 0,
+    money: (n) => Number(n ?? 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    check(event) {
+      if (!this.due) return;
+      const amount = Number(String(this.$refs.amount.value).replace(/,/g, ''));
+      this.excess = Math.round((amount - this.due.owed) * 100) / 100;
+      if (!(this.excess > 0)) { this.confirming = false; return; }
+      if (!this.confirming || !this.$refs.reason.value.trim()) {
+        event.preventDefault();
+        this.confirming = true;
+        this.$nextTick(() => this.$refs.reason.focus());
+      }
+    },
+  }));
 });
 
 // Copy buttons: <button data-copy="text to copy">
