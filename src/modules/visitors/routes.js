@@ -63,10 +63,10 @@ router.get('/visitors', view, async (req, res) => {
   });
 });
 
-/** "Who are they seeing?": Reception (the default; reception sends on anyone else, e.g. welders), then staff at the site. */
+/** "Who are they seeing?": Reception (the default), then the site's app users and employees. */
 function hostChoices(staff, host) {
-  const hostOptions = ['Reception', ...staff].map((n) => ({ value: n, label: n }));
-  return { hostOptions, hostValue: staff.includes(host) ? host : 'Reception' };
+  const hostOptions = [{ value: 'Reception', label: 'Reception' }, ...staff.map((s) => ({ value: s.name, label: s.trade ? `${s.name} · ${s.trade}` : s.name }))];
+  return { hostOptions, hostValue: staff.some((s) => s.name === host) ? host : 'Reception' };
 }
 
 async function renderForm(req, res, { status = 200, values, errors = {} }) {
@@ -93,7 +93,7 @@ router.post('/visitors', signsIn, async (req, res) => {
   const { data, errors } = check(visitorSchema, req.body);
   const allErrors = { ...errors };
   if (data?.purpose === 'Other' && !data.other_purpose) allErrors.other_purpose = 'Say why they are here';
-  if (data?.host && data.host !== 'Reception' && !(await visitors.staffAt(req.site.id)).includes(data.host)) {
+  if (data?.host && data.host !== 'Reception' && !(await visitors.staffAt(req.site.id)).some((s) => s.name === data.host)) {
     allErrors.host = 'Choose someone from the list, or Reception';
   }
   if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors });

@@ -23,7 +23,7 @@
 
     <div class="jt-fields">
       <%- include('partials/field', { name: 'host', label: 'Who are they seeing?', type: 'select', searchable: true, options: hostOptions, value: hostValue, error: errors.host,
-            hint: 'Reception, or a staff member. Anyone else (e.g. a welder): choose Reception.', attrs: 'x-ref="host"' }) %>
+            hint: 'Type a name or trade to find them. Not on the list? Choose Reception.', attrs: 'x-ref="host"' }) %>
       <%- include('partials/field', { name: 'company', label: 'Company', value: values.company, error: errors.company, attrs: 'x-ref="company"' }) %>
       <%- include('partials/field', { name: 'id_no', label: 'ID number', value: values.id_no, error: errors.id_no, inputmode: 'numeric', attrs: 'x-ref="id_no"' }) %>
       <%- include('partials/field', { name: 'vehicle_reg', label: 'Their vehicle', value: values.vehicle_reg, error: errors.vehicle_reg, placeholder: 'KDA 123A', attrs: '@blur="tidyReg($el)" x-ref="vehicle_reg"' }) %>

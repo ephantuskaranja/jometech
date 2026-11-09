@@ -136,3 +136,22 @@ test('“Who are they seeing?” is Reception (the default) or a staff member at
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('visitors').where({ name: 'Joseph Mutua' }).first()).host, 'Test reception');
 });
+
+test('permanent employees at the site are on the “Who are they seeing?” list, with their trade; casuals are not', async () => {
+  const by = await db('users').where({ name: 'Test reception' }).first('id'); // so the test cleanup removes the employee
+  await db('employees').insert([
+    { number: 'EMP-T-V01', name: 'Test Welder Kamau', trade: 'Welder', category: 'permanent', site_id: hq.id, created_by: by.id },
+    { number: 'EMP-T-V04', name: 'Test Casual Mwangi', trade: 'Helper', category: 'casual', site_id: hq.id, created_by: by.id },
+    { number: 'EMP-T-V02', name: 'Test Painter Away', trade: 'Painter', category: 'permanent', site_id: siteB.id, created_by: by.id },
+    { number: 'EMP-T-V03', name: 'Test Fitter Gone', trade: 'Fitter', category: 'permanent', site_id: hq.id, is_active: false, created_by: by.id },
+  ]);
+  const form = (await gate.get('/visitors/new')).text;
+  assert.match(form, /<option value="Test Welder Kamau">Test Welder Kamau · Welder<\/option>/);
+  assert.doesNotMatch(form, /Test Painter Away/, 'works at another site');
+  assert.doesNotMatch(form, /Test Fitter Gone/, 'no longer working here');
+  assert.doesNotMatch(form, /Test Casual Mwangi/, 'casuals change too often to list');
+  assert.match(form, /<option value="Reception" selected>/, 'Reception is still the default');
+  const res = await post(gate, '/visitors', visitor({ phone: '0700 000 510', name: 'Esther Njeri', host: 'Test Welder Kamau' }));
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await db('visitors').where({ name: 'Esther Njeri' }).first()).host, 'Test Welder Kamau');
+});

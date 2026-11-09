@@ -109,9 +109,16 @@ export function lastVisit(phone) {
 }
 
 /** Names for the "who are they seeing?" suggestions: staff at the site. */
-export function staffAt(siteId) {
-  return db('users').join('user_sites', 'user_sites.user_id', 'users.id')
-    .where({ 'user_sites.site_id': siteId, 'users.is_active': true }).orderBy('users.name').pluck('users.name');
+export async function staffAt(siteId) {
+  const users = await db('users').join('user_sites', 'user_sites.user_id', 'users.id')
+    .where({ 'user_sites.site_id': siteId, 'users.is_active': true }).pluck('users.name');
+  // Permanent employees (with their trade, so the gate can tell them apart). Casuals come and go
+  // too often to list: visitors for them go to Reception.
+  const employees = await db('employees').where({ site_id: siteId, is_active: true, category: 'permanent' }).select('name', 'trade');
+  const byName = new Map();
+  for (const e of employees) byName.set(e.name.toLowerCase(), { name: e.name, trade: e.trade });
+  for (const name of users) if (!byName.has(name.toLowerCase())) byName.set(name.toLowerCase(), { name, trade: null });
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Still on site from an earlier day: they were never cleared out. */
