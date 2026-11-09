@@ -24,7 +24,7 @@ after(cleanup);
 
 async function checkInAtHq(reg) {
   const csrf = csrfFrom((await hq.get('/check-in/new')).text);
-  const res = await hq.post('/check-in').type('form').send({ _csrf: csrf, vehicle_mode: 'existing', vehicle_id: await vehicleId(reg) });
+  const res = await hq.post('/check-in').type('form').send({ _csrf: csrf, purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: await vehicleId(reg) });
   assert.equal(res.status, 302, res.text);
   return Number(/\/check-in\/(\d+)/.exec(res.headers.location)[1]);
 }

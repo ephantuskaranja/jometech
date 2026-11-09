@@ -48,35 +48,35 @@ test('supervisors manage staff; only managers see and set the daily rate; sales 
   assert.match(res.text, /Enter their name/);
   assert.doesNotMatch(res.text, /Daily rate/, 'no pay box for supervisors');
 
-  res = await post(supervisor, '/employees', { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901', daily_rate: '5,000' });
+  res = await post(supervisor, '/employees', { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '77901', daily_rate: '5,000' });
   assert.equal(res.status, 302, res.text);
   const e = await db('employees').where({ name: 'Test Welder Otieno' }).first();
   assert.match(e.number, /^EMP-\d{4}$/);
   assert.equal(e.daily_rate, null, 'a supervisor can’t set pay');
 
-  await post(manager, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901, 902', daily_rate: '1,800' });
+  await post(manager, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '77901, 77902', daily_rate: '1,800' });
   const after = await db('employees').where({ id: e.id }).first();
   assert.equal(Number(after.daily_rate), 1800);
-  assert.deepEqual(await db('employee_clock_ids').where({ employee_id: e.id }).orderBy('clock_id').pluck('clock_id'), ['901', '902']);
+  assert.deepEqual(await db('employee_clock_ids').where({ employee_id: e.id }).orderBy('clock_id').pluck('clock_id'), ['77901', '77902']);
   assert.match((await manager.get('/employees')).text, /1,800\.00/);
   const forSupervisor = (await supervisor.get(`/employees/${e.id}`)).text;
   assert.doesNotMatch(forSupervisor, /1,800/, 'not on the page');
   assert.doesNotMatch(forSupervisor, /Daily rate/, 'not even in the history');
 
   // A supervisor's edit leaves the rate alone.
-  await post(supervisor, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '901, 902' });
+  await post(supervisor, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '77901, 77902' });
   assert.equal(Number((await db('employees').where({ id: e.id }).first()).daily_rate), 1800);
 
-  res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: home.id, clock_ids: '902' });
+  res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: home.id, clock_ids: '77902' });
   assert.equal(res.status, 422);
-  assert.match(res.text, /Clock ID 902 is already Test Welder Otieno’s/);
+  assert.match(res.text, /Clock ID 77902 is already Test Welder Otieno’s/);
 });
 
 test('the export is imported; the same file twice adds nothing; unknown clock IDs are listed', async () => {
   const file = await exportFile([
-    ['Test Welder', 'Otieno', '901', '07:10'], ['Test Welder', 'Otieno', '901', '13:00'], ['Test Welder', 'Otieno', '901', '13:30'], ['Test Welder', 'Otieno', '901', '17:05'],
-    ['Test Kelvin', 'Mbuthia', '961', '07:30'], ['Test Kelvin', 'Mbuthia', '967', '13:01'],
-    ['TEST GEORGE', 'ANDAYE', '962', '07:39', 'TEST-B'], ['TEST GEORGE', 'ANDAYE', '962', '07:41', 'TEST-B'],
+    ['Test Welder', 'Otieno', '77901', '07:10'], ['Test Welder', 'Otieno', '77901', '13:00'], ['Test Welder', 'Otieno', '77901', '13:30'], ['Test Welder', 'Otieno', '77901', '17:05'],
+    ['Test Kelvin', 'Mbuthia', '77961', '07:30'], ['Test Kelvin', 'Mbuthia', '77967', '13:01'],
+    ['TEST GEORGE', 'ANDAYE', '77962', '07:39', 'TEST-B'], ['TEST GEORGE', 'ANDAYE', '77962', '07:41', 'TEST-B'],
   ]);
   let res = await upload(supervisor, file);
   assert.deepEqual(res.body, { go: '/attendance/import' });
@@ -84,7 +84,7 @@ test('the export is imported; the same file twice adds nothing; unknown clock ID
   assert.match(page, /8 new punches imported/);
   assert.match(page, /TEST-HQ/);
   assert.match(page, /Test Kelvin Mbuthia/);
-  assert.match(page, /Same name as clock ID 967/, 'two IDs, one name');
+  assert.match(page, /Same name as clock ID 77967/, 'two IDs, one name');
 
   await upload(supervisor, file);
   assert.match((await supervisor.get('/attendance/import')).text, /0 new punches imported.*8 were already in/s);
@@ -104,13 +104,13 @@ test('unknown clock IDs become employees in one go: one person per name, at the 
   const csrf = csrfFrom((await supervisor.get('/attendance/import')).text);
   const res = await supervisor.post('/attendance/clock-ids').type('form').send({
     _csrf: csrf,
-    clock_id: ['961', '967', '962'], clock_name: ['Test Kelvin Mbuthia', 'Test Kelvin Mbuthia', 'TEST GEORGE ANDAYE'],
+    clock_id: ['77961', '77967', '77962'], clock_name: ['Test Kelvin Mbuthia', 'Test Kelvin Mbuthia', 'TEST GEORGE ANDAYE'],
     site_id: [home.id, home.id, siteB.id], choice: ['new', 'new', 'new'],
   });
   assert.equal(res.status, 302);
   const kelvin = await db('employees').where({ name: 'Test Kelvin Mbuthia' }).select('id');
   assert.equal(kelvin.length, 1, 'one person with both IDs');
-  assert.deepEqual(await db('employee_clock_ids').where({ employee_id: kelvin[0].id }).orderBy('clock_id').pluck('clock_id'), ['961', '967']);
+  assert.deepEqual(await db('employee_clock_ids').where({ employee_id: kelvin[0].id }).orderBy('clock_id').pluck('clock_id'), ['77961', '77967']);
   const george = await db('employees').where({ name: 'Test George Andaye' }).first();
   assert.ok(george, 'capitals tidied');
   assert.equal(george.site_id, siteB.id, 'at the machine’s site');

@@ -25,6 +25,7 @@ const odometer = optionalReading();
 
 const checkinSchema = z.object({
   vehicle_mode: z.enum(['existing', 'new']).catch('existing'),
+  purpose: z.enum(checkins.PURPOSES.map((p) => p.value), { message: 'Choose why the vehicle came in' }),
   vehicle_id: optionalId(),
   contact_id: optionalId(),
   brought_by_phone: optionalPhone(),
@@ -46,7 +47,7 @@ const newVehicleSchema = z.object({
 });
 
 const blank = {
-  vehicle_mode: 'existing', vehicle_id: '', contact_id: '', brought_by_phone: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
+  vehicle_mode: 'existing', purpose: '', vehicle_id: '', contact_id: '', brought_by_phone: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
   reg_no: '', chassis_no: '', issue_tag: '', customer_id: '', type: 'truck', make: '', model: '',
 };
 
@@ -89,6 +90,7 @@ async function renderForm(res, { status = 200, values, rows = [], errors = {}, e
     ownerOption: owner ? [{ value: owner.id, label: `${owner.name} (${owner.number})` }] : [],
     presets: await checkins.itemPresets(),
     fuelLevels: checkins.FUEL_LEVELS,
+    purposes: checkins.PURPOSES,
     types: VEHICLE_TYPES,
     categories: customers.CATEGORIES,
   });
@@ -109,7 +111,7 @@ router.get('/check-in', view, async (req, res) => {
     arriving: tab === 'in' ? await movements.arriving(req.site.id) : [],
     hasOtherSites: (await movements.otherSites(req.site.id)).length > 0,
     inCount: await checkins.countInWorkshop(req.site.id),
-    vehicleLabel, daysIn: checkins.daysIn,
+    vehicleLabel, daysIn: checkins.daysIn, purposeLabel: checkins.purposeLabel,
     canCheckIn: req.user.can('checkin.manage'),
   });
 });
@@ -173,6 +175,7 @@ router.get('/check-in/:id', view, async (req, res) => {
     vehicleLabel, typeLabel,
     status: checkins.STATUSES[checkin.status],
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
+    purpose: checkins.purposeLabel(checkin.purpose),
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
     canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,

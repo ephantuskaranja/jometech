@@ -81,6 +81,7 @@ test('the Excel download has a sheet per section', async () => {
   const values = (name) => book.getWorksheet(name).getSheetValues().flat().map(String);
   assert.ok(values('Jobs completed').includes('JOB-2026-8885'));
   assert.ok(values('Issued to jobs').includes('Test Summary U-bolt'));
+  assert.ok(book.getWorksheet('Check-ins by purpose'), 'check-ins counted by purpose');
 });
 
 test('periods: weeks start on Monday; chosen dates are put in order and stop at today', () => {

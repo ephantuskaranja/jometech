@@ -114,8 +114,8 @@ function workbook(s, { p, site, today }) {
     stores.lowStock.map((i) => ({ ...i, on_hand: Number(i.on_hand_qty), reorder: Number(i.reorder_level) })));
   sheet(book, 'Orders waiting', [['Order', 'number'], ['Supplier', 'supplier_name', 28], ['Value (KES)', 'total', 16, MONEY], ['Waiting since', 'since', 20]],
     stores.ordersWaiting.map((o) => ({ ...o, total: o.total === null ? null : Number(o.total), since: fmt.dateTime(o.waitingSince) })));
-  sheet(book, 'Vehicles', [['What', 'what', 14], ['When', 'when', 20], ['Number', 'number'], ['Vehicle', 'vehicle'], ['Customer / sites', 'detail', 34]], [
-    ...front.checkedIn.map((k) => ({ what: 'Checked in', when: fmt.dateTime(k.at), number: k.number, vehicle: k.vehicle, detail: k.customer_name })),
+  sheet(book, 'Vehicles', [['What', 'what', 14], ['When', 'when', 20], ['Number', 'number'], ['Vehicle', 'vehicle'], ['Customer / sites', 'detail', 34], ['Purpose', 'purpose', 18]], [
+    ...front.checkedIn.map((k) => ({ what: 'Checked in', when: fmt.dateTime(k.at), number: k.number, vehicle: k.vehicle, detail: k.customer_name, purpose: k.purpose ?? '' })),
     ...front.checkedOut.map((k) => ({ what: 'Checked out', when: fmt.dateTime(k.at), number: k.number, vehicle: k.vehicle, detail: k.customer_name })),
     ...front.movements.map((m) => ({ what: 'Moved', when: fmt.dateTime(m.sent_at), number: m.number, vehicle: m.vehicle, detail: `${m.from_site} → ${m.to_site}` })),
   ]);
@@ -124,6 +124,7 @@ function workbook(s, { p, site, today }) {
     ...front.proformas.accepted.map((r) => ({ ...r, what: 'Accepted' })),
     ...front.proformas.declined.map((r) => ({ ...r, what: 'Declined' })),
   ].map((r) => ({ ...r, when: fmt.dateTime(r.at), total: Number(r.total) })));
+  sheet(book, 'Check-ins by purpose', [['Purpose', 'purpose', 24], ['Vehicles checked in', 'n', 20]], front.byPurpose);
   sheet(book, 'Enquiries', [['Work type', 'work_type', 30], ['New enquiries', 'n', 14]], front.enquiries.byWorkType)
     .addRows([[], ['Won in the period', front.enquiries.won], ['Lost in the period', front.enquiries.lost]]);
   sheet(book, 'Invoices', [['Invoice', 'number'], ['Issued', 'when', 20], ['Job', 'job_number'], ['Customer', 'customer_name', 28], ['Total incl. VAT (KES)', 'total', 20, MONEY], ['Note', 'note', 12]],

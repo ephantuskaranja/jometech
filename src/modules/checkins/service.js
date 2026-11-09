@@ -18,6 +18,17 @@ export const FUEL_LEVELS = [
 ];
 export const fuelLabel = (q) => FUEL_LEVELS.find((f) => f.value === q)?.label ?? null;
 
+/** Why the vehicle came in. A fixed list (not the job types): many visits are not workshop jobs. */
+export const PURPOSES = [
+  { value: 'fabrication', label: 'Fabrication' },
+  { value: 'repairs', label: 'Repairs' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'customer', label: 'Customer visit' },
+  { value: 'meeting', label: 'Official meeting' },
+  { value: 'other', label: 'Other' },
+];
+export const purposeLabel = (value) => PURPOSES.find((p) => p.value === value)?.label ?? null;
+
 export const STATUSES = {
   in_workshop: { label: 'In the workshop', tone: 'info' },
   released: { label: 'Waiting at the gate', tone: 'warn' },
@@ -70,6 +81,7 @@ export async function createCheckin(input, actor) {
       number,
       site_id: actor.site.id,
       vehicle_id: vehicleId,
+      purpose: input.purpose,
       customer_id: customerId,
       contact_id: input.contact_id ?? null,
       // Anyone else who brought it: kept here, not added to a customer's contacts.
@@ -270,7 +282,7 @@ export async function listCheckins(siteId, status = 'on_site') {
     .modify((q) => (out ? q.where('checkins.status', 'checked_out') : q.whereIn('checkins.status', ON_SITE)))
     .orderBy(out ? 'checkins.checked_out_at' : 'checkins.checked_in_at', 'desc')
     .limit(out ? 100 : 200)
-    .select('checkins.id', 'checkins.number', 'checkins.status', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
+    .select('checkins.id', 'checkins.number', 'checkins.status', 'checkins.purpose', 'checkins.checked_in_at', 'checkins.checked_out_at', 'checkins.driver_signed_at', 'checkins.not_signed_reason',
       'move_to.name as moving_to',
       'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name',
       // Not a saved contact: the name typed at check-in, else the one given when signing.

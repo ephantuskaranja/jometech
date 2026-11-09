@@ -174,7 +174,7 @@ test('a vehicle added later links its check-in; a later check-in links too; the 
   assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, null);
 
   // It arrives: the check-in finds the job.
-  res = await post(supervisor, '/check-in', { vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job' });
+  res = await post(supervisor, '/check-in', { purpose: 'fabrication', vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job' });
   assert.equal(res.status, 302, res.text);
   const checkin = await db('checkins').where({ vehicle_id: vehicle.id, status: 'in_workshop' }).first();
   assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, checkin.id);

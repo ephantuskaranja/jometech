@@ -242,7 +242,7 @@
 <section class="card mb-3 jt-report-section">
   <%- head('Vehicles in and out', front.checkedIn.length + front.checkedOut.length + front.movements.length, `${front.checkedIn.length} in · ${front.checkedOut.length} out · ${front.movements.length} moved`) %>
   <% const vehicles = [
-    ...front.checkedIn.map((k) => ({ what: 'Checked in', at: k.at, href: `/check-in/${k.id}`, number: k.number, vehicle: k.vehicle, plate: k.plate, detail: k.customer_name })),
+    ...front.checkedIn.map((k) => ({ what: 'Checked in', purpose: k.purpose, at: k.at, href: `/check-in/${k.id}`, number: k.number, vehicle: k.vehicle, plate: k.plate, detail: k.customer_name })),
     ...front.checkedOut.map((k) => ({ what: 'Checked out', at: k.at, href: `/check-in/${k.id}`, number: k.number, vehicle: k.vehicle, plate: k.plate, detail: k.customer_name })),
     ...front.movements.map((m) => ({ what: 'Moved', at: m.sent_at, href: `/check-in/${m.checkin_id}`, number: m.number, vehicle: m.vehicle, plate: m.plate, detail: `${m.from_site} → ${m.to_site}` })),
   ].sort((a, b) => new Date(a.at) - new Date(b.at)); %>
@@ -253,7 +253,7 @@
         <% vehicles.forEach((v) => { %>
           <tr>
             <td class="text-nowrap small"><%= p.from === p.to ? fmt.time(v.at) : fmt.dateTime(v.at) %></td>
-            <td><%= v.what %></td>
+            <td><%= v.what %><% if (v.purpose) { %><span class="jt-sub"><%= v.purpose %></span><% } %></td>
             <td><%- vehicleCell(v) %></td>
             <td class="d-none d-md-table-cell"><%= v.detail %></td>
             <td class="d-none d-md-table-cell"><a class="font-monospace small" href="<%= v.href %>"><%= v.number %></a></td>
@@ -284,6 +284,20 @@
             <td class="d-none d-md-table-cell"><%= r.customer_name %></td>
             <td class="text-end jt-num"><%= fmt.money(r.total) %></td>
           </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+
+<section class="card mb-3 jt-report-section">
+  <%- head('Check-ins by purpose', front.checkedIn.length, 'Why vehicles came in') %>
+  <% if (!front.byPurpose.length) { %><%- none('No vehicles checked in during this period.') %><% } else { %>
+    <div class="table-responsive"><table class="table jt-table mb-0">
+      <thead><tr><th>Purpose</th><th class="text-end">Vehicles</th></tr></thead>
+      <tbody>
+        <% front.byPurpose.forEach((p) => { %>
+          <tr><td><%= p.purpose %></td><td class="text-end jt-num"><%= p.n %></td></tr>
         <% }) %>
       </tbody>
     </table></div>

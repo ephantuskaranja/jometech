@@ -23,6 +23,7 @@
       <div class="card-header"><h2 class="h6 mb-0">Vehicle and owner</h2></div>
       <div class="card-body">
         <dl class="jt-kv">
+          <div><dt>Purpose of visit</dt><dd><%= purpose ?? '—' %></dd></div>
           <div><dt>Owner</dt><dd><a href="/customers/<%= checkin.customer_id %>"><%= checkin.customer_name %></a> <span class="text-body-tertiary small"><%= checkin.customer_number %></span></dd></div>
           <div><dt>Brought in by</dt><dd>
             <% if (checkin.contact_name) { %>

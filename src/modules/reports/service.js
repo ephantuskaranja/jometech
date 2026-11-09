@@ -2,6 +2,7 @@ import { db } from '../../core/db.js';
 import { dayStart, isDay, localDay, nextDay } from '../../core/dates.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
 import { forPeriod as moneyFor } from '../invoices/service.js';
+import { PURPOSES, purposeLabel } from '../checkins/service.js';
 
 // Period summary for admins and managers: what happened between two days, at one
 // site or all. "Now" figures (overdue jobs, low stock, orders waiting) are today's
@@ -170,8 +171,13 @@ async function frontOffice(p, siteId) {
     .whereNot('k.status', 'cancelled')
     .join('vehicles as v', 'v.id', 'k.vehicle_id').join('customers as c', 'c.id', 'k.customer_id')
     .orderBy(`k.${column}`)
-    .select('k.id', 'k.number', `k.${column} as at`, 'c.name as customer_name', ...VEHICLE)
-    .then((rows) => rows.map(withVehicle));
+    .select('k.id', 'k.number', 'k.purpose', `k.${column} as at`, 'c.name as customer_name', ...VEHICLE)
+    .then((rows) => rows.map((r) => ({ ...withVehicle(r), purpose: purposeLabel(r.purpose) })));
+  const checkedIn = await checkins('checked_in_at');
+  // Check-ins per purpose, in the list's order; those from before purposes were asked come last.
+  const byPurpose = [...PURPOSES.map((p) => p.label), null]
+    .map((label) => ({ purpose: label ?? 'Not recorded', n: checkedIn.filter((k) => k.purpose === label).length }))
+    .filter((p) => p.n);
 
   const movements = await inPeriod(db('vehicle_movements as m'), 'm.sent_at', p)
     .modify((q) => siteId && q.where((w) => w.where('m.from_site_id', siteId).orWhere('m.to_site_id', siteId)))
@@ -195,7 +201,8 @@ async function frontOffice(p, siteId) {
   const closedCount = (status) => num(closed.find((c) => c.status === status)?.n ?? 0);
 
   return {
-    checkedIn: await checkins('checked_in_at'),
+    checkedIn,
+    byPurpose,
     checkedOut: await checkins('checked_out_at'),
     movements: movements.map(withVehicle),
     proformas: {

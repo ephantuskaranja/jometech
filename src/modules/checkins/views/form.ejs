@@ -24,6 +24,13 @@
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <input type="hidden" name="vehicle_mode" :value="mode">
 
+  <%# ---------- Why it came in ---------- %>
+  <section class="card mb-4">
+    <div class="card-body">
+      <%- include('partials/choices', { name: 'purpose', label: 'Purpose of visit', required: true, options: purposes, value: values.purpose, error: errors.purpose, columns: 3 }) %>
+    </div>
+  </section>
+
   <%# ---------- Vehicle ---------- %>
   <section class="card mb-4">
     <div class="card-header d-flex align-items-center gap-3 flex-wrap">
