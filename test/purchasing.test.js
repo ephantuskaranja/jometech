@@ -98,6 +98,10 @@ test('an order needs a supplier and an item; a plate needs its size in whole pie
   assert.match(res.text, /Choose the supplier/);
   assert.match(res.text, /Add at least one item/);
 
+  res = await post(store, '/purchase-orders', { ...order(line(bolt, { quantity: '1' })), order_date: '2026-11-10', expected_on: '2026-11-09' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Delivery can’t be before the order date/);
+
   res = await post(store, '/purchase-orders', order(line({ id: '', name: 'Not an item' }, { quantity: '2' })));
   assert.match(res.text, /Line 1: choose an item from the list/);
   assert.match(res.text, /Not an item/, 'what was typed stays');

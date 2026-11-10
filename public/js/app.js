@@ -431,12 +431,12 @@ document.addEventListener('alpine:init', () => {
 
   // Purchase order form (purchasing/views/form.ejs): find an item by typing its name; plates ask for a size.
   // The sums here are only for showing; the server works out what is saved.
-  Alpine.data('purchaseOrderForm', ({ rows = [], items = [] } = {}) => {
+  Alpine.data('purchaseOrderForm', ({ rows = [], items = [], orderDate = '' } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
     const row = (r = {}) => ({ key: next++, item_id: '', item_name: '', quantity: '', length: '', width: '', size_unit: 'ft', for: '', price: '', ...r });
     return {
-      rows: rows.map(row), items,
+      rows: rows.map(row), items, orderDate,
       itemOf(r) { return this.items.find((i) => String(i.id) === String(r.item_id)) ?? null; },
       isArea(r) { return this.itemOf(r)?.priced_by === 'area'; },
       unitOf(r) { return this.itemOf(r)?.unit ?? ''; },

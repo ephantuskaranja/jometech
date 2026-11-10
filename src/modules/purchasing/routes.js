@@ -25,7 +25,8 @@ const orderSchema = z.object({
   order_date: day('Check the date'),
   expected_on: z.string().trim().optional().refine((v) => !v || isDay(v), 'Check the date').transform((v) => v || null),
   notes: optionalText(2000),
-});
+}).refine((v) => !v.expected_on || !isDay(v.order_date) || v.expected_on >= v.order_date,
+  { path: ['expected_on'], message: 'Delivery can’t be before the order date' });
 
 const number = (v) => Number(String(v ?? '').replace(/[,\s]/g, ''));
 const decimals = (n, places) => Math.abs(n * 10 ** places - Math.round(n * 10 ** places)) < 1e-6;

@@ -6,7 +6,7 @@
 }) %>
 
 <form method="post" action="<%= order ? `/purchase-orders/${order.id}` : '/purchase-orders' %>" novalidate
-      x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items }) %>)">
+      x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items, orderDate: values.order_date }) %>)">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
   <section class="card mb-4">
@@ -15,8 +15,11 @@
             options: supplierOption, value: values.supplier_id, error: errors.supplier_id, blank: 'Type the supplier’s name',
             hint: 'Not found? Type the name and choose “Add new supplier”.', attrs: 'data-tom-create="supplier"' }) %>
       <div class="jt-fields">
-        <%- include('partials/field', { name: 'order_date', label: 'Date', type: 'date', value: values.order_date, error: errors.order_date, required: true }) %>
-        <%- include('partials/field', { name: 'expected_on', label: 'Expected delivery', type: 'date', value: values.expected_on, error: errors.expected_on, hint: 'Optional.' }) %>
+        <%# The delivery date picker starts at the order date (the server checks it too). %>
+        <%- include('partials/field', { name: 'order_date', label: 'Date', type: 'date', value: values.order_date, error: errors.order_date, required: true,
+              attrs: 'x-model="orderDate"' }) %>
+        <%- include('partials/field', { name: 'expected_on', label: 'Expected delivery', type: 'date', value: values.expected_on, error: errors.expected_on, hint: 'Optional. On or after the order date.',
+              attrs: ':min="orderDate"' }) %>
       </div>
     </div>
   </section>
