@@ -19,5 +19,11 @@
   <section class="jt-dash-section" aria-label="<%= s.title %>">
     <h2 class="jt-dash-title"><i class="bi bi-<%= s.icon %>"></i><%= s.title %></h2>
     <%- include('partials/kpis', { items: s.items }) %>
+    <% if (s.byPurpose?.length) { %>
+      <%# Today's visitors by why they came. %>
+      <p class="jt-purpose-strip"><span class="text-body-secondary">Today by purpose:</span>
+        <% s.byPurpose.forEach((p) => { %><span class="jt-purpose-chip"><%= p.purpose %> <strong><%= p.n %></strong></span><% }) %>
+      </p>
+    <% } %>
   </section>
 <% }) %>

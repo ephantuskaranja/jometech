@@ -32,14 +32,14 @@ test('a guard with two sites chooses one at login and keeps it until logout', as
   res = await gate.post('/choose-site').type('form').send({ _csrf: csrfFrom(page.text), site_id: hq.id });
   assert.equal(res.status, 302);
 
-  assert.equal((await gate.get('/')).headers.location, '/visitors', 'the gate starts on the register');
+  assert.match((await gate.get('/').expect(200)).text, /Visitors at HQ/, 'the gate starts on its dashboard');
   assert.match((await gate.get('/visitors')).text, /Chosen when you logged in/);
   await post(gate, '/account/site', { site_id: siteB.id });
   assert.match((await gate.get('/visitors')).text, /Visitors at HQ/, 'the site can’t be switched');
 });
 
 test('a receptionist with one site goes straight in; a guard with no site can’t log in', async () => {
-  assert.equal((await reception.get('/')).headers.location, '/visitors');
+  assert.match((await reception.get('/').expect(200)).text, /Visitors at HQ/);
   await makeUser(84, ['gate'], { siteIds: [] });
   const agent = (await import('supertest')).default.agent(app);
   const login = await agent.get('/login');
@@ -220,15 +220,17 @@ test('a phone used before under another name is a question: the guard confirms a
   assert.equal(res.status, 302, res.text);
 });
 
-test('the register opens with today’s numbers; the cards filter the list; the gate sees vehicles to release', async () => {
+test('the dashboard shows today’s visitor numbers; the cards filter the register; the gate sees vehicles to release', async () => {
   await post(gate, '/visitors', visitor({ phone: '0700 000 540', name: 'Card Waiting Person' }));
-  let page = (await gate.get('/visitors')).text;
+  let page = (await gate.get('/')).text;
   for (const label of ['On site now', 'Waiting for reception', 'Confirmed', 'Cleared out today', 'Vehicles to release']) assert.match(page, new RegExp(label));
   page = (await gate.get('/visitors?only=confirmed')).text;
   assert.doesNotMatch(page, /Card Waiting Person/, 'not received yet');
   assert.match(page, /Only those confirmed by reception/);
   assert.match((await gate.get('/visitors?only=waiting')).text, /Card Waiting Person/);
-  const atReception = (await reception.get('/visitors')).text;
+  assert.match(page, /Sign a visitor in/);
+  assert.doesNotMatch((await gate.get('/visitors')).text, /jt-kpis/, 'the register is just the register');
+  const atReception = (await reception.get('/')).text;
   assert.doesNotMatch(atReception, /Vehicles to release/, 'reception doesn’t release vehicles');
   assert.match(atReception, /Received today/);
   assert.match(atReception, /Today by purpose:[\s\S]*Delivery/, 'today’s visitors by why they came');
@@ -247,5 +249,5 @@ test('a new guard with two sites sets their password first, then chooses the sit
   const choose = await agent.get('/choose-site');
   assert.equal(choose.status, 200, 'then the site page opens');
   res = await agent.post('/choose-site').type('form').send({ _csrf: csrfFrom(choose.text), site_id: hq.id });
-  assert.equal((await agent.get('/')).headers.location, '/visitors');
+  assert.equal((await agent.get('/')).status, 200, 'then the dashboard');
 });

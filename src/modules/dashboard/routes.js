@@ -12,8 +12,6 @@ function greeting(now) {
 }
 
 router.get('/', async (req, res) => {
-  // Gate and Reception only use the visitor register, which has their numbers at the top: start there.
-  if (req.user.siteAtLogin && !req.user.isAdmin) return res.redirect('/visitors');
   const now = new Date();
   res.render('dashboard/views/index', {
     title: 'Dashboard',

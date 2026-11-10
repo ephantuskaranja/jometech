@@ -19,13 +19,6 @@
   actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
 }) %>
 
-<%- include('partials/kpis', { items: kpis }) %>
-<% if (byPurpose.length) { %>
-  <%# Today's visitors by why they came. %>
-  <p class="jt-purpose-strip"><span class="text-body-secondary">Today by purpose:</span>
-    <% byPurpose.forEach((p) => { %><span class="jt-purpose-chip"><%= p.purpose %> <strong><%= p.n %></strong></span><% }) %>
-  </p>
-<% } %>
 
 <section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); if (!f || el.dataset.find.includes(f)) return true; const d = f.replace(/\D/g, ''); return d.length >= 3 && d.length === f.replace(/\s/g, '').length && (el.dataset.tail.includes(d) || d.endsWith(el.dataset.tail)); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
   <nav class="nav nav-tabs jt-tabs">

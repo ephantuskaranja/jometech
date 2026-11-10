@@ -7,7 +7,6 @@ import { normalizePhone } from '../../core/phone.js';
 import { check, httpError, optionalText, phoneField, optionalIdNo } from '../../core/validate.js';
 import { history } from '../../core/audit.js';
 import * as visitors from './service.js';
-import { waitingAtGate } from '../checkins/release.js';
 
 // Visitor register: Gate signs in and clears out, Reception confirms "received".
 // Everyone works on their current site (Gate and Reception: chosen at login).
@@ -55,23 +54,11 @@ router.get('/visitors', view, async (req, res) => {
   const only = tab === 'now' && ['waiting', 'confirmed'].includes(req.query.only) ? req.query.only : null;
   let list = tab === 'now' ? await visitors.onSite(req.site.id) : await visitors.register(req.site.id, { day, q });
   if (only) list = list.filter((v) => v.status === (only === 'waiting' ? 'arrived' : 'received'));
-  const counts = await visitors.counts(req.site.id);
-  const vehicles = req.user.can('checkin.gate') ? (await waitingAtGate(req.site.id)).length : null;
   res.render('visitors/views/index', {
     title: 'Visitors',
     tab, day, q, today: localDay(), only,
     list,
-    onSiteCount: counts.onSite,
-    byPurpose: counts.byPurpose,
-    kpis: [
-      { label: 'On site now', value: counts.onSite, foot: 'signed in, not yet out', icon: 'people', href: '/visitors', active: tab === 'now' && !only },
-      { label: 'Waiting for reception', value: counts.waiting, foot: 'not yet received', icon: 'hourglass-split', href: '/visitors?only=waiting', tone: 'warn', active: only === 'waiting' },
-      { label: 'Confirmed', value: counts.confirmed, foot: 'received, ready to go', icon: 'check2-circle', href: '/visitors?only=confirmed', active: only === 'confirmed' },
-      { label: 'Cleared out today', value: counts.cleared, foot: 'left the site', icon: 'box-arrow-right', href: '/visitors?show=register', active: tab === 'register' && !q && day === localDay() },
-      ...(vehicles === null ? [] : [{ label: 'Vehicles to release', value: vehicles, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' }]),
-      // Reception's card in place of the gate's vehicles.
-      ...(req.user.can('visitors.receive') && vehicles === null ? [{ label: 'Received today', value: counts.received, foot: 'confirmed at reception', icon: 'person-check', href: '/visitors?show=register' }] : []),
-    ],
+    onSiteCount: tab === 'now' && !only ? list.length : (await visitors.onSite(req.site.id)).length,
     statuses: visitors.STATUSES,
     overdue: visitors.overdue,
     canSignIn: req.user.can('visitors.gate') || req.user.can('visitors.receive'),

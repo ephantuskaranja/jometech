@@ -10,6 +10,7 @@ import * as invoices from '../invoices/service.js';
 import * as orders from '../purchasing/service.js';
 import { stockTotals } from '../stock/service.js';
 import { counts as visitorCounts } from '../visitors/service.js';
+import { waitingAtGate } from '../checkins/release.js';
 
 // The dashboard: one section per area the person works in (from their permissions),
 // each a strip of numbers that open the list behind them. Workshop, visitors and
@@ -102,14 +103,24 @@ async function people(user, site, siteIds) {
   return items.length ? { title: 'People', icon: 'person-badge', items } : null;
 }
 
+/** Visitors today at the site. The gate also sees vehicles to release; reception, those received today and why people came. */
 async function visitors(user, site) {
   if (!can(user, 'visitors.view', 'visitors.gate', 'visitors.receive')) return null;
   const c = await visitorCounts(site.id);
-  return { title: `Visitors at ${site.name}`, icon: 'person-badge', items: [
+  const atGate = can(user, 'checkin.gate', 'visitors.gate');
+  const items = [
     { label: 'On site now', value: c.onSite, foot: 'signed in, not yet out', icon: 'people', href: '/visitors' },
     { label: 'Waiting for reception', value: c.waiting, foot: 'not yet received', icon: 'hourglass-split', href: '/visitors?only=waiting', tone: 'warn' },
+    { label: 'Confirmed', value: c.confirmed, foot: 'received, ready to go', icon: 'check2-circle', href: '/visitors?only=confirmed' },
     { label: 'Cleared out today', value: c.cleared, foot: 'left the site', icon: 'box-arrow-right', href: '/visitors?show=register' },
-  ] };
+  ];
+  if (can(user, 'checkin.gate')) {
+    items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' });
+  }
+  if (can(user, 'visitors.receive') && !atGate) {
+    items.push({ label: 'Received today', value: c.received, foot: 'confirmed at reception', icon: 'person-check', href: '/visitors?show=register' });
+  }
+  return { title: `Visitors at ${site.name}`, icon: 'person-badge', items, byPurpose: c.byPurpose };
 }
 
 /** The sections this person sees, in the order they appear. */
@@ -130,6 +141,7 @@ export async function sectionsFor(user, site) {
 /** Buttons for the things this person starts most often. */
 export function quickActions(user) {
   return [
+    can(user, 'visitors.gate', 'visitors.receive') && { label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: !can(user, 'checkin.manage') },
     can(user, 'checkin.manage') && { label: 'Check in a vehicle', href: '/check-in/new', icon: 'truck', primary: true },
     can(user, 'enquiries.manage') && { label: 'New enquiry', href: '/enquiries/new', icon: 'inbox' },
     can(user, 'quotations.manage') && { label: 'New proforma', href: '/proformas/new', icon: 'file-earmark-plus' },
