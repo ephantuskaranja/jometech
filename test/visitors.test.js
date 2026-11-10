@@ -233,3 +233,19 @@ test('the register opens with today’s numbers; the cards filter the list; the 
   assert.match(atReception, /Received today/);
   assert.match(atReception, /Today by purpose:[\s\S]*Delivery/, 'today’s visitors by why they came');
 });
+
+test('a new guard with two sites sets their password first, then chooses the site (no back and forth)', async () => {
+  const phone = await makeUser(29, ['gate'], { siteIds: [hq.id, siteB.id] });
+  await db('users').where({ phone: '+254700000029' }).update({ must_change_password: true });
+  const agent = await loginAs(app, phone);
+  assert.equal((await agent.get('/')).headers.location, '/account/password');
+  const form = await agent.get('/account/password');
+  assert.equal(form.status, 200, 'the password page opens');
+  let res = await agent.post('/account/password').type('form').send({ _csrf: csrfFrom(form.text), current: PASSWORD, password: 'a-new-pass-29', confirm: 'a-new-pass-29' });
+  assert.equal(res.status, 302);
+  assert.equal((await agent.get('/')).headers.location, '/choose-site');
+  const choose = await agent.get('/choose-site');
+  assert.equal(choose.status, 200, 'then the site page opens');
+  res = await agent.post('/choose-site').type('form').send({ _csrf: csrfFrom(choose.text), site_id: hq.id });
+  assert.equal((await agent.get('/')).headers.location, '/visitors');
+});

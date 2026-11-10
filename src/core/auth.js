@@ -121,8 +121,9 @@ export function requireLogin(req, res, next) {
     return res.redirect(`/login${nextUrl}`);
   }
   // A new or reset account must choose its own password before anything else.
-  if (req.user.must_change_password && !['/account/password', '/logout'].includes(req.path)) {
-    return res.redirect('/account/password');
+  // (Password first, then the site: checking both on the same page sent people back and forth.)
+  if (req.user.must_change_password) {
+    return ['/account/password', '/logout'].includes(req.path) ? next() : res.redirect('/account/password');
   }
   // Gate and Reception with more than one site say where they are before anything else.
   if (req.session.chooseSite && !['/choose-site', '/logout'].includes(req.path)) {
