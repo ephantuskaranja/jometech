@@ -138,6 +138,7 @@ test('with no prices, like the paper order; a plate is sized in feet or mm', asy
   assert.match(print, /Test Tononoka Rolling Mills/);
   assert.match(print, /Test Plate 4 mm, 12 × 4 ft/);
   assert.match(print, /Test Plate 4 mm, 2600 × 1220 mm/);
+  assert.doesNotMatch(print, /po-blank|<tr[^>]*>(\s*<td><\/td>)+\s*<\/tr>/, 'no empty lines under the items');
   assert.match(print, /9 pcs/);
   assert.match(print, /eTIMS receipt/);
   assert.match(print, /is-draft/, 'not approved: marked as a draft');

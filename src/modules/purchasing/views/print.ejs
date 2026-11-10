@@ -9,7 +9,6 @@
   const cancelled = order.status === 'cancelled';
   const anyPrice = order.lines.some((l) => l.unit_price !== null);
   const trim = (v) => fmt.money(v).replace(/\.00$/, '');
-  const rows = Math.max(0, 5 - order.lines.length);
 %>
 <!doctype html>
 <html lang="en">
@@ -73,7 +72,6 @@
             <td class="money"><%= l.amount === null ? '' : trim(l.amount) %></td>
           </tr>
         <% }) %>
-        <% for (let i = 0; i < rows; i++) { %><tr class="po-blank"><td></td><td></td><td></td><td></td><td></td><td></td></tr><% } %>
       </tbody>
       <% if (anyPrice) { %>
         <tfoot><tr><th colspan="5" class="money">Total excluding VAT</th><th class="money"><%= trim(order.total) %></th></tr></tfoot>

@@ -100,7 +100,6 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .po-lines .qty { width: 20mm; white-space: nowrap; }
 .po-lines .money { width: 28mm; text-align: right; white-space: nowrap; }
 .po-lines td { height: 9mm; vertical-align: middle; }
-.po-blank td { height: 9mm; }
 
 /* ---------- Job card (jobs/views/print.ejs): our own design, one A4 page, partly filled in by hand ---------- */
 .job-card { position: relative; font-size: 10pt; }
