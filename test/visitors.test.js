@@ -219,3 +219,14 @@ test('a phone used before under another name is a question: the guard confirms a
   res = await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'Kevin Mwangi', confirm_phone: '1' }));
   assert.equal(res.status, 302, res.text);
 });
+
+test('the register opens with today’s numbers; the cards filter the list; the gate sees vehicles to release', async () => {
+  await post(gate, '/visitors', visitor({ phone: '0700 000 540', name: 'Card Waiting Person' }));
+  let page = (await gate.get('/visitors')).text;
+  for (const label of ['On site now', 'Waiting for reception', 'Confirmed', 'Cleared out today', 'Vehicles to release']) assert.match(page, new RegExp(label));
+  page = (await gate.get('/visitors?only=confirmed')).text;
+  assert.doesNotMatch(page, /Card Waiting Person/, 'not received yet');
+  assert.match(page, /Only those confirmed by reception/);
+  assert.match((await gate.get('/visitors?only=waiting')).text, /Card Waiting Person/);
+  assert.doesNotMatch((await reception.get('/visitors')).text, /Vehicles to release/, 'reception doesn’t release vehicles');
+});

@@ -19,9 +19,11 @@
   actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
 }) %>
 
+<%- include('partials/kpis', { items: kpis }) %>
+
 <section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); if (!f || el.dataset.find.includes(f)) return true; const d = f.replace(/\D/g, ''); return d.length >= 3 && d.length === f.replace(/\s/g, '').length && (el.dataset.tail.includes(d) || d.endsWith(el.dataset.tail)); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
   <nav class="nav nav-tabs jt-tabs">
-    <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= tab === 'now' ? list.length : onSiteCount %></span></a>
+    <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= onSiteCount %></span></a>
     <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
   </nav>
 
@@ -33,17 +35,18 @@
       <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i>Show</button>
       <% if (q) { %><a class="btn btn-link" href="/visitors?show=register">Clear search</a><% } %>
     </form>
-  <% } else if (list.length) { %>
+  <% } else if (list.length || only) { %>
     <%# Finds as you type, to clear someone out quickly. %>
     <div class="jt-toolbar">
       <input class="form-control" type="search" x-model="find" placeholder="Find a visitor: name, phone, company, vehicle or pass" aria-label="Find a visitor" autocomplete="off" style="max-width: 26rem">
+      <% if (only) { %><span class="small text-body-secondary">Only <%= only === 'waiting' ? 'those waiting for reception' : 'those confirmed by reception' %> · <a href="/visitors">Show everyone</a></span><% } %>
       <i class="bi bi-lightning-charge text-body-tertiary" aria-hidden="true" title="Finds as you type"></i>
     </div>
   <% } %>
 
   <% if (list.length === 0) { %>
     <%- include('partials/empty', tab === 'now'
-          ? { icon: 'person-badge', heading: 'Nobody on site', text: 'Visitors appear here when the gate signs them in, until they are cleared out.', action: canSignIn ? { label: 'Sign a visitor in', href: '/visitors/new' } : null }
+          ? (only ? { icon: 'check2-all', heading: only === 'waiting' ? 'Nobody waiting for reception' : 'Nobody confirmed and waiting to leave', text: 'The cards above show where everyone else is.', action: { label: 'Show everyone on site', href: '/visitors' } } : { icon: 'person-badge', heading: 'Nobody on site', text: 'Visitors appear here when the gate signs them in, until they are cleared out.', action: canSignIn ? { label: 'Sign a visitor in', href: '/visitors/new' } : null })
           : { icon: 'search', heading: q ? 'No visitors found' : 'No visitors that day', text: q ? 'Try part of the name, or the phone number.' : 'Pick another day, or search.' }) %>
   <% } else { %>
     <% const actions = (v) => { %>

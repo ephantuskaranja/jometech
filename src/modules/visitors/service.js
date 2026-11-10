@@ -96,6 +96,18 @@ export function onSite(siteId) {
     .orderBy('v.arrived_at').select(COLUMNS);
 }
 
+/** The numbers at the top of the register: today at the site. */
+export async function counts(siteId) {
+  const today = localDay();
+  const [row] = await db('visitors').where({ site_id: siteId }).select(
+    db.raw("SUM(status = 'arrived') AS waiting"),
+    db.raw("SUM(status = 'received') AS confirmed"),
+    db.raw('SUM(status = ? AND cleared_at >= ? AND cleared_at < ?) AS cleared', ['cleared', dayStart(today), dayStart(nextDay(today))]),
+  );
+  const n = (v) => Number(v ?? 0);
+  return { waiting: n(row.waiting), confirmed: n(row.confirmed), onSite: n(row.waiting) + n(row.confirmed), cleared: n(row.cleared) };
+}
+
 /** A day's register (default today), or a search across all days when `q` is given. */
 export function register(siteId, { day = localDay(), q = '' } = {}) {
   const query = withNames(db('visitors as v')).where({ 'v.site_id': siteId });
