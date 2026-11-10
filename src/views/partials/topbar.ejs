@@ -3,7 +3,8 @@
     <i class="bi bi-list"></i>
   </button>
 
-  <%# Global search: suggestions as you type (/api/search); Enter opens /search. %>
+  <%# Global search: suggestions as you type (/api/search); Enter opens /search. Hidden from those who can't use it. %>
+  <% if (canSearch) { %>
   <form class="jt-search" role="search" id="global-search-form" action="/search" method="get"
         x-data="globalSearch" @submit="go($event)" @click.outside="open = false" @keydown.escape="open = false">
     <i class="bi bi-search" aria-hidden="true"></i>
@@ -27,6 +28,7 @@
       </template>
     </div>
   </form>
+  <% } %>
 
   <div class="jt-topbar-end">
     <%# Current site. A dropdown only when the user works at more than one. %>

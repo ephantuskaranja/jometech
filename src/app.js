@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { logger } from './core/logger.js';
 import { dbIsUp } from './core/db.js';
 import { navFor, isActive } from './core/nav.js';
+import { VIEW_CUSTOMERS } from './core/access.js';
 import { formatPhone } from './core/phone.js';
 import { fmt } from './core/format.js';
 import { sessionMiddleware, csrfProtection, generateCsrfToken } from './core/session.js';
@@ -127,6 +128,8 @@ export function createApp() {
   app.use(attachUser);
   app.use((req, res, next) => {
     res.locals.nav = req.user ? navFor(req.user) : [];
+    // The top-bar search box: only for those the search routes let in (not Gate or Reception).
+    res.locals.canSearch = Boolean(req.user && VIEW_CUSTOMERS.some((p) => req.user.can(p)));
     res.locals.csrfToken = generateCsrfToken(req);
     // One-off message after a redirect ("Password changed."), shown once.
     res.locals.flash = req.session.flash ?? null;

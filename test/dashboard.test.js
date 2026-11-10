@@ -12,6 +12,8 @@ before(async () => {
   as.sales = await loginAs(app, await makeUser(17, ['sales']));
   as.supervisor = await loginAs(app, await makeUser(18, ['supervisor']));
   as.technician = await loginAs(app, await makeUser(19, ['technician']));
+  as.gate = await loginAs(app, await makeUser(20, ['gate']));
+  as.reception = await loginAs(app, await makeUser(21, ['reception']));
 });
 after(cleanup);
 
@@ -53,4 +55,10 @@ test('a technician sees their workshop’s jobs', async () => {
   const html = await page('technician');
   assert.match(html, /Active jobs/);
   assert.doesNotMatch(html, /Sales|Stores|People/);
+});
+
+test('the top-bar search box shows only to those who can search (not Gate or Reception)', async () => {
+  for (const who of ['manager', 'sales', 'supervisor', 'storekeeper']) assert.match(await page(who), /id="global-search"/, who);
+  for (const who of ['gate', 'reception']) assert.doesNotMatch(await page(who), /id="global-search"/, who);
+  await as.gate.get('/api/search?q=KAA').expect(403);
 });
