@@ -41,6 +41,9 @@ import { router as privacyRoutes, revealUrl } from './modules/privacy/routes.js'
 
 const root = path.resolve(import.meta.dirname, '..');
 
+/** Changes on every start (every deploy): the ?v= on CSS and JS links. */
+const assetVersion = Date.now().toString(36);
+
 export function createApp() {
   const app = express();
 
@@ -74,7 +77,7 @@ export function createApp() {
   app.use((req, res, next) => {
     Object.assign(res.locals, {
       appName: config.appName, title: config.appName, path: req.path,
-      isActive, formatPhone, fmt, revealUrl, nav: [], user: null, site: null, siteLocked: false, flash: null, csrfToken: '',
+      isActive, formatPhone, fmt, revealUrl, assetVersion, nav: [], user: null, site: null, siteLocked: false, flash: null, csrfToken: '',
     });
     next();
   });
@@ -88,10 +91,23 @@ export function createApp() {
   }));
 
   // ---- Static files (before sessions, so images and CSS don't touch the database) ----
+  // Pages link CSS and JS as "/css/app.css?v=…" (assetVersion: new on every start, so on every
+  // deploy). A versioned file can be kept by the browser for a year: a new deploy changes the
+  // link. Font files (linked from inside the font CSS, so unversioned) keep 30 days; anything
+  // else is checked with the server each time (a quick 304 when unchanged).
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && /^\/(css|js|vendor|img)\//.test(req.path)) {
+      if (req.query.v) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      else if (/\.(woff2?|ttf)$/.test(req.path)) res.setHeader('Cache-Control', 'public, max-age=2592000');
+      else res.setHeader('Cache-Control', 'no-cache');
+    }
+    next();
+  });
   // Our own files, then front-end libraries served straight from node_modules
   // (no copying, no build step; `npm update` updates them).
-  app.use(express.static(path.join(root, 'public')));
-  const vendor = (url, dir) => app.use(url, express.static(path.join(root, 'node_modules', dir)));
+  const statics = { cacheControl: false }; // the headers above decide
+  app.use(express.static(path.join(root, 'public'), statics));
+  const vendor = (url, dir) => app.use(url, express.static(path.join(root, 'node_modules', dir), statics));
   vendor('/vendor/bootstrap', 'bootstrap/dist');
   vendor('/vendor/bootstrap-icons', 'bootstrap-icons/font');
   vendor('/vendor/alpinejs', 'alpinejs/dist');

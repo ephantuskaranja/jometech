@@ -1,4 +1,5 @@
 import { db } from '../../core/db.js';
+import { countTabs } from '../../core/count-tabs.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { localDay } from '../../core/dates.js';
@@ -186,13 +187,7 @@ export async function listEnquiries({ tab = 'follow', q = '' } = {}) {
 
 export async function countByTab() {
   const today = localDay();
-  const counts = {};
-  for (const tab of TABS) {
-    const q = db('enquiries as e');
-    tabFilter(q, tab, today);
-    counts[tab] = Number((await q.count({ n: '*' }))[0].n);
-  }
-  return counts;
+  return countTabs(TABS, (tab) => { const q = db('enquiries as e'); tabFilter(q, tab, today); return q; });
 }
 
 /** For the form's vehicle dropdown once a customer is chosen. */

@@ -141,11 +141,11 @@ export async function sectionsFor(user, site) {
 /** Buttons for the things this person starts most often. */
 export function quickActions(user) {
   return [
-    can(user, 'visitors.gate', 'visitors.receive') && { label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: !can(user, 'checkin.manage') },
     can(user, 'checkin.manage') && { label: 'Check in a vehicle', href: '/check-in/new', icon: 'truck', primary: true },
     can(user, 'enquiries.manage') && { label: 'New enquiry', href: '/enquiries/new', icon: 'inbox' },
     can(user, 'quotations.manage') && { label: 'New proforma', href: '/proformas/new', icon: 'file-earmark-plus' },
     can(user, 'purchasing.manage') && { label: 'New purchase order', href: '/purchase-orders/new', icon: 'cart-plus' },
     can(user, 'attendance.manage') && { label: 'Mark attendance', href: '/attendance', icon: 'calendar-check' },
+    can(user, 'visitors.gate', 'visitors.receive') && { label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: !can(user, 'checkin.manage', 'enquiries.manage', 'quotations.manage', 'purchasing.manage', 'attendance.manage') },
   ].filter(Boolean).slice(0, 3);
 }

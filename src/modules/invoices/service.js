@@ -1,4 +1,5 @@
 import { db } from '../../core/db.js';
+import { countTabs } from '../../core/count-tabs.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { httpError } from '../../core/validate.js';
@@ -337,13 +338,7 @@ export async function listInvoices({ tab = 'unpaid', q = '' } = {}) {
 }
 
 export async function countByTab() {
-  const counts = {};
-  for (const tab of TABS) {
-    const q = db('invoices as i');
-    tabFilter(q, tab);
-    counts[tab] = Number((await q.count({ n: '*' }))[0].n);
-  }
-  return counts;
+  return countTabs(TABS, (tab) => { const q = db('invoices as i'); tabFilter(q, tab); return q; });
 }
 
 /** For the period summary: invoices issued and payments received between two moments. */

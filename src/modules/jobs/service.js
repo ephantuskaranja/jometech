@@ -1,4 +1,5 @@
 import { db } from '../../core/db.js';
+import { countTabs } from '../../core/count-tabs.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { compact, vehicleLabel } from '../../core/vehicle-format.js';
@@ -375,13 +376,7 @@ export async function listJobs({ siteId, searchSiteIds = [siteId], tab = 'active
 }
 
 export async function countByTab(siteId) {
-  const counts = {};
-  for (const tab of TABS) {
-    const q = db('jobs as j').where('j.site_id', siteId);
-    tabFilter(q, tab);
-    counts[tab] = Number((await q.count({ n: '*' }))[0].n);
-  }
-  return counts;
+  return countTabs(TABS, (tab) => { const q = db('jobs as j').where('j.site_id', siteId); tabFilter(q, tab); return q; });
 }
 
 /** Accepted proformas with no job yet, for the jobs page. Prices stay on the proforma. */

@@ -1,4 +1,5 @@
 import { db } from '../../core/db.js';
+import { countTabs } from '../../core/count-tabs.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { config } from '../../config.js';
@@ -197,13 +198,7 @@ export async function listProformas({ tab = 'sent', q = '' } = {}) {
 }
 
 export async function countByTab() {
-  const counts = {};
-  for (const tab of TABS) {
-    const q = db('proformas as p');
-    tabFilter(q, tab);
-    counts[tab] = Number((await q.count({ n: '*' }))[0].n);
-  }
-  return counts;
+  return countTabs(TABS, (tab) => { const q = db('proformas as p'); tabFilter(q, tab); return q; });
 }
 
 /** Proformas made for one enquiry (its page lists them). */
