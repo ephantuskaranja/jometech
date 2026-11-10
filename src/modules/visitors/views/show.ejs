@@ -34,7 +34,7 @@
       <div class="card-body">
         <dl class="jt-kv">
           <div><dt>Signed in</dt><dd><%= fmt.dateTime(visitor.arrived_at) %><span class="d-block small text-body-secondary"><%= visitor.arrived_by_name ?? '' %></span></dd></div>
-          <div><dt>Received</dt><dd><% if (visitor.received_at) { %><%= fmt.dateTime(visitor.received_at) %><span class="d-block small text-body-secondary"><%= visitor.received_by_name ?? '' %></span><% } else if (visitor.status === 'cleared') { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } else { %>Not yet<% } %></dd></div>
+          <div><dt>Received</dt><dd><% if (visitor.received_at) { %><%= fmt.dateTime(visitor.received_at) %><span class="d-block small text-body-secondary"><%= visitor.received_by_name ?? '' %></span><% } else if (visitor.override_reason) { %><%- include('partials/pill', { text: 'Cleared without reception', tone: 'warn' }) %><span class="d-block small text-body-secondary"><%= visitor.override_reason %></span><% } else if (visitor.status === 'cleared') { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } else { %>Not yet<% } %></dd></div>
           <div><dt>Cleared out</dt><dd><% if (visitor.cleared_at) { %><%= fmt.dateTime(visitor.cleared_at) %><span class="d-block small text-body-secondary"><%= visitor.cleared_by_name ?? '' %></span><% } else { %>Not yet<% } %></dd></div>
         </dl>
         <% if (visitor.status !== 'cleared' && (canReceive || canClear)) { %>
@@ -43,9 +43,22 @@
               <form method="post" action="/visitors/<%= visitor.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="visitor">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>
             <% } %>
-            <% if (canClear) { %>
+            <% if (canClear && visitor.status === 'received') { %>
               <form method="post" action="/visitors/<%= visitor.id %>/clear"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="visitor">
                 <button class="btn btn-outline-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out</button></form>
+            <% } else if (canClear && !canReceive) { %>
+              <div class="d-grid gap-2 w-100" x-data="{ over: false }">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <button class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-hourglass-split"></i>Waiting for reception to confirm</button>
+                  <button class="btn btn-link btn-sm" type="button" x-show="!over" @click="over = true; $nextTick(() => $refs.why.focus())">Reception not available?</button>
+                </div>
+                <form method="post" action="/visitors/<%= visitor.id %>/clear" class="d-grid gap-2" x-show="over" x-cloak style="max-width: 28rem">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="visitor">
+                  <%- include('partials/field', { name: 'override_reason', label: 'Why couldn’t reception confirm?', placeholder: 'e.g. Reception closed, nobody to call', required: true,
+                        hint: 'The visitor is cleared out and marked “Cleared without reception”, with this reason.', attrs: 'x-ref="why" maxlength="255"' }) %>
+                  <div class="d-flex gap-2"><button class="btn btn-outline-danger" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out anyway</button><button class="btn btn-link" type="button" @click="over = false">Back</button></div>
+                </form>
+              </div>
             <% } %>
           </div>
         <% } %>

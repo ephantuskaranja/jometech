@@ -88,13 +88,44 @@ test('gate signs in, reception receives, gate clears out', async () => {
   assert.match(page, /cleared the visitor out/);
 });
 
-test('cleared without being received is flagged', async () => {
-  await post(gate, '/visitors', visitor({ name: 'Peter Kamau', phone: '0700 000 502' }));
+test('the gate can’t clear out a visitor reception hasn’t received: they show as pending confirmation', async () => {
+  await post(gate, '/visitors', visitor({ name: 'Peter Kamau', phone: '0700 000 502', company: 'Kamau Motors' }));
   const v = await db('visitors').where({ phone: '+254700000502' }).first();
+  let page = (await gate.get('/visitors')).text;
+  assert.match(page, /Pending confirmation/);
+  assert.match(page, /Waiting for reception/, 'no Clear out button yet');
+  assert.match(page, /data-find="[^"]*peter kamau[^"]*kamau motors/, 'found by the live search');
+
+  const res = await post(gate, `/visitors/${v.id}/clear`);
+  assert.equal(res.status, 302);
+  assert.equal((await db('visitors').where({ id: v.id }).first()).status, 'arrived', 'still on site');
+  assert.match((await gate.get(res.headers.location)).text, /hasn’t been received at reception yet/);
+
+  await post(reception, `/visitors/${v.id}/receive`);
+  page = (await gate.get('/visitors')).text;
+  assert.match(page, /by Test reception/, 'who received them, on the list');
   await post(gate, `/visitors/${v.id}/clear`);
-  assert.match((await gate.get('/visitors?show=register')).text, /Never received/);
+  assert.equal((await db('visitors').where({ id: v.id }).first()).status, 'cleared');
+  assert.match((await gate.get('/visitors?show=register')).text, /Registered/);
+});
+
+test('with nobody at reception, the guard can clear a visitor out with a reason, and it shows', async () => {
+  await post(gate, '/visitors', visitor({ name: 'Mercy Atieno', phone: '0700 000 520' }));
+  const v = await db('visitors').where({ phone: '+254700000520' }).first();
+  assert.match((await gate.get('/visitors')).text, /Reception not available\?/);
+
+  await post(gate, `/visitors/${v.id}/clear`, { override_reason: ' ' });
+  assert.equal((await db('visitors').where({ id: v.id }).first()).status, 'arrived', 'a reason is needed');
+
+  await post(gate, `/visitors/${v.id}/clear`, { override_reason: 'Reception closed after 5pm' });
+  const done = await db('visitors').where({ id: v.id }).first();
+  assert.equal(done.status, 'cleared');
+  assert.equal(done.received_at, null, 'not marked as received');
+  assert.equal(done.override_reason, 'Reception closed after 5pm');
+  assert.match((await gate.get('/visitors?show=register')).text, /Cleared without reception[\s\S]*Reception closed after 5pm/);
+  assert.match((await gate.get(`/visitors/${v.id}`)).text, /Cleared without reception/);
   const entry = await db('audit_log').where({ entity: 'visitor', entity_id: v.id, action: 'visitor_cleared' }).first();
-  assert.match(entry.summary, /never received/);
+  assert.match(entry.summary, /without reception confirming: Reception closed after 5pm/);
 });
 
 test('reception signing in a walk-in receives them at once', async () => {

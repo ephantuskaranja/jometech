@@ -1,18 +1,26 @@
 <%#
   Visitor register for the current site. "On site now" is the working view for
-  Gate (Clear out) and Reception (Received); "Register" shows a day, or a search.
+  Gate (Clear out, once reception has received the visitor) and Reception (Received);
+  "Registered" shows a day, or a search. A table on wide screens, cards on phones.
+%>
+<%
+  const todayLabel = fmt.date(new Date());
+  // A time on its own when it was today (and we're looking at one day), else with the date.
+  const at = (t) => (t ? ((tab === 'register' && q) || fmt.date(t) !== todayLabel ? fmt.dateTime(t) : fmt.time(t)) : null);
+  const by = (name) => (name ? `by ${name}` : '');
+  const findText = (v) => [v.name, v.phone, fmt.phone(v.phone), v.company, v.vehicle_reg, v.pass_no, v.host, v.number].filter(Boolean).join(' ').toLowerCase();
 %>
 <%- include('partials/page-header', {
   crumb: ['Workshop', 'Visitors'],
   heading: tab === 'now' ? `Visitors at ${site.name}` : 'Visitor register',
-  sub: tab === 'now' ? 'Everyone signed in and not yet cleared out, longest here first.' : `Who came to ${site.name}: one day at a time, or search all days.`,
+  sub: tab === 'now' ? 'Everyone signed in and not yet cleared out, longest here first. Reception confirms each visitor before the gate clears them out.' : `Who came to ${site.name}: one day at a time, or search all days.`,
   actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
 }) %>
 
-<section class="card">
+<section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); return !f || el.dataset.find.includes(f); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
   <nav class="nav nav-tabs jt-tabs">
     <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= tab === 'now' ? list.length : onSiteCount %></span></a>
-    <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Register</a>
+    <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
   </nav>
 
   <% if (tab === 'register') { %>
@@ -23,6 +31,12 @@
       <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i>Show</button>
       <% if (q) { %><a class="btn btn-link" href="/visitors?show=register">Clear search</a><% } %>
     </form>
+  <% } else if (list.length) { %>
+    <%# Finds as you type, to clear someone out quickly. %>
+    <div class="jt-toolbar">
+      <input class="form-control" type="search" x-model="find" placeholder="Find a visitor: name, phone, company, vehicle or pass" aria-label="Find a visitor" autocomplete="off" style="max-width: 26rem">
+      <i class="bi bi-lightning-charge text-body-tertiary" aria-hidden="true" title="Finds as you type"></i>
+    </div>
   <% } %>
 
   <% if (list.length === 0) { %>
@@ -30,9 +44,70 @@
           ? { icon: 'person-badge', heading: 'Nobody on site', text: 'Visitors appear here when the gate signs them in, until they are cleared out.', action: canSignIn ? { label: 'Sign a visitor in', href: '/visitors/new' } : null }
           : { icon: 'search', heading: q ? 'No visitors found' : 'No visitors that day', text: q ? 'Try part of the name, or the phone number.' : 'Pick another day, or search.' }) %>
   <% } else { %>
-    <ul class="list-group list-group-flush jt-visitors">
+    <% const actions = (v) => { %>
+      <% if (v.status !== 'cleared' && (canReceive || canClear)) { %>
+        <div class="jt-visitor-actions">
+          <% if (canReceive && v.status === 'arrived') { %>
+            <form method="post" action="/visitors/<%= v.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>
+          <% } %>
+          <% if (canClear && v.status === 'received') { %>
+            <form method="post" action="/visitors/<%= v.id %>/clear"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out</button></form>
+          <% } else if (canClear && !canReceive) { %>
+            <%# Nobody at reception to confirm: the guard may clear them out anyway, with a reason that stays on the record. %>
+            <div class="d-grid gap-1 text-start" x-data="{ over: false }">
+              <button class="btn btn-outline-secondary btn-sm" type="button" disabled title="Reception confirms the visitor first"><i class="bi bi-hourglass-split"></i>Waiting for reception</button>
+              <button class="btn btn-link btn-sm p-0 small" type="button" x-show="!over" @click="over = true; $nextTick(() => $refs.why.focus())">Reception not available?</button>
+              <form method="post" action="/visitors/<%= v.id %>/clear" class="d-grid gap-1" x-show="over" x-cloak>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input class="form-control form-control-sm" name="override_reason" x-ref="why" required minlength="3" maxlength="255" placeholder="Why? e.g. Reception closed" aria-label="Why reception couldn’t confirm">
+                <div class="d-flex gap-1"><button class="btn btn-outline-danger btn-sm" type="submit">Clear out anyway</button><button class="btn btn-link btn-sm" type="button" @click="over = false">Back</button></div>
+              </form>
+            </div>
+          <% } %>
+        </div>
+      <% } %>
+    <% } %>
+
+    <%# Wide screens: a table %>
+    <div class="table-responsive d-none d-lg-block">
+      <table class="table jt-table jt-visitor-table mb-0">
+        <thead><tr><th>Visitor</th><th>Seeing · why</th><th>In</th><th>Received</th><th>Out</th><th class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+          <% list.forEach((v) => { const late = overdue(v, today); %>
+            <tr class="<%= late ? 'is-overdue' : '' %>" data-find="<%= findText(v) %>" x-show="hit($el)">
+              <td>
+                <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
+                <span class="jt-sub"><%= [fmt.phone(v.phone), v.company].filter(Boolean).join(' · ') %></span>
+                <% if (v.vehicle_reg || v.pass_no || late) { %>
+                  <span class="d-flex flex-wrap gap-2 mt-1 align-items-center small">
+                    <% if (v.vehicle_reg) { %><%- include('partials/plate', { reg: v.vehicle_reg }) %><% } %>
+                    <% if (v.pass_no) { %><span class="text-body-secondary">Pass <%= v.pass_no %></span><% } %>
+                    <% if (late) { %><%- include('partials/pill', { text: `On site since ${fmt.date(v.arrived_at)}`, tone: 'bad' }) %><% } %>
+                  </span>
+                <% } %>
+              </td>
+              <td><%= v.host ?? '—' %><span class="jt-sub"><%= v.purpose %></span></td>
+              <td class="text-nowrap"><%= at(v.arrived_at) %><span class="jt-sub"><%= by(v.arrived_by_name) %></span></td>
+              <td class="text-nowrap">
+                <% if (v.received_at) { %><%= at(v.received_at) %><span class="jt-sub"><%= by(v.received_by_name) %></span>
+                <% } else if (v.override_reason) { %><%- include('partials/pill', { text: 'Cleared without reception', tone: 'warn' }) %><span class="jt-sub text-wrap"><%= v.override_reason %></span>
+                <% } else if (v.status === 'cleared') { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %>
+                <% } else { %><%- include('partials/pill', { text: statuses.arrived.label, tone: statuses.arrived.tone }) %><% } %>
+              </td>
+              <td class="text-nowrap"><% if (v.cleared_at) { %><%= at(v.cleared_at) %><span class="jt-sub"><%= by(v.cleared_by_name) %></span><% } else { %>—<% } %></td>
+              <td class="text-end"><% actions(v) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <%# Phones and tablets: cards %>
+    <ul class="list-group list-group-flush jt-visitors d-lg-none">
       <% list.forEach((v) => { const late = overdue(v, today); const st = statuses[v.status]; %>
-        <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>">
+        <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>" data-find="<%= findText(v) %>" x-show="hit($el)">
           <div class="jt-visitor-main">
             <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
             <div class="small text-body-secondary">
@@ -41,28 +116,22 @@
             <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
               <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
               <% if (late) { %><%- include('partials/pill', { text: `Still on site since ${fmt.date(v.arrived_at)}`, tone: 'bad' }) %><% } %>
-              <% if (v.status === 'cleared' && !v.received_at) { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } %>
+              <% if (v.override_reason) { %><%- include('partials/pill', { text: 'Cleared without reception', tone: 'warn' }) %>
+              <% } else if (v.status === 'cleared' && !v.received_at) { %><%- include('partials/pill', { text: 'Never received', tone: 'warn' }) %><% } %>
               <% if (v.vehicle_reg) { %><%- include('partials/plate', { reg: v.vehicle_reg }) %><% } %>
               <% if (v.pass_no) { %><span class="text-body-secondary">Pass <%= v.pass_no %></span><% } %>
-              <span class="text-body-secondary">
-                In <%= fmt.time(v.arrived_at) %><%= tab === 'register' && q ? `, ${fmt.date(v.arrived_at)}` : '' %><%= v.received_at ? ` · received ${fmt.time(v.received_at)}` : '' %><%= v.cleared_at ? ` · out ${fmt.time(v.cleared_at)}` : '' %>
-              </span>
+            </div>
+            <div class="small text-body-secondary mt-1">
+              <div>In <%= at(v.arrived_at) %> <%= by(v.arrived_by_name) %></div>
+              <% if (v.received_at) { %><div>Received <%= at(v.received_at) %> <%= by(v.received_by_name) %></div><% } %>
+              <% if (v.override_reason) { %><div>Not confirmed by reception: <%= v.override_reason %></div><% } %>
+              <% if (v.cleared_at) { %><div>Out <%= at(v.cleared_at) %> <%= by(v.cleared_by_name) %></div><% } %>
             </div>
           </div>
-          <% if (v.status !== 'cleared' && (canReceive || canClear)) { %>
-            <div class="jt-visitor-actions">
-              <% if (canReceive && v.status === 'arrived') { %>
-                <form method="post" action="/visitors/<%= v.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>
-              <% } %>
-              <% if (canClear) { %>
-                <form method="post" action="/visitors/<%= v.id %>/clear"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-outline-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Clear out</button></form>
-              <% } %>
-            </div>
-          <% } %>
+          <% actions(v) %>
         </li>
       <% }) %>
     </ul>
+    <p class="card-body small text-body-secondary mb-0" x-show="none" x-cloak>No visitor on site matches “<span x-text="find"></span>”.</p>
   <% } %>
 </section>

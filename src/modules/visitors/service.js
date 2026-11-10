@@ -14,7 +14,7 @@ import { httpError } from '../../core/validate.js';
 export const PURPOSES = ['Delivery', 'Customer', 'Collecting a vehicle', 'Supplier', 'Job enquiry', 'Interview', 'Official visit', 'Other'];
 
 export const STATUSES = {
-  arrived: { label: 'Signed in', tone: 'warn' },
+  arrived: { label: 'Pending confirmation', tone: 'warn' }, // signed in at the gate, not yet received by reception
   received: { label: 'Received', tone: 'info' },
   cleared: { label: 'Cleared', tone: 'ok' },
 };
@@ -62,13 +62,25 @@ export async function markReceived(id, actor) {
   });
 }
 
-/** The gate signs the visitor out. */
-export async function clearOut(id, actor) {
+/**
+ * The gate signs the visitor out, once reception has received them: nobody idles on site
+ * without having been seen (visitors signed in at reception are received at once).
+ * When nobody at reception can confirm, the guard may override with a reason (`override`),
+ * which stays on the visit for everyone to see.
+ */
+export async function clearOut(id, actor, { override = null } = {}) {
   return db.transaction(async (trx) => {
     const v = await lockVisitor(trx, id);
     if (v.status === 'cleared') throw httpError(409, `${v.name} has already been cleared out.`);
-    await trx('visitors').where({ id }).update({ status: 'cleared', cleared_at: trx.fn.now(), cleared_by: actor.user.id });
-    const note = v.status === 'arrived' ? ', never received at reception' : '';
+    const reason = override?.trim() || null;
+    if (v.status === 'arrived' && !reason) throw httpError(409, `${v.name} hasn’t been received at reception yet. Reception confirms them first, then the gate clears them out.`);
+    if (reason && reason.length < 3) throw httpError(422, 'Say why reception couldn’t confirm the visitor.');
+    const overridden = v.status === 'arrived';
+    await trx('visitors').where({ id }).update({
+      status: 'cleared', cleared_at: trx.fn.now(), cleared_by: actor.user.id,
+      override_reason: overridden ? reason.slice(0, 255) : null,
+    });
+    const note = overridden ? ` without reception confirming: ${reason}` : '';
     await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_cleared', summary: `${v.name} cleared out (${v.number})${note}` });
     return v;
   });

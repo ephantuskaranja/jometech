@@ -126,10 +126,16 @@ router.post('/visitors/:id/receive', reception, async (req, res) => {
 
 router.post('/visitors/:id/clear', gate, async (req, res) => {
   const visitor = await loadVisitor(req);
-  await visitors.clearOut(visitor.id, req);
-  req.session.flash = visitor.status === 'arrived'
-    ? { type: 'warning', text: `${visitor.name} cleared out. Reception never confirmed receiving them.` }
-    : { type: 'success', text: `${visitor.name} cleared out.` };
+  const override = String(req.body.override_reason ?? '').trim();
+  try {
+    await visitors.clearOut(visitor.id, req, { override: override || null });
+    req.session.flash = visitor.status === 'arrived'
+      ? { type: 'warning', text: `${visitor.name} cleared out without reception confirming. This shows on the register.` }
+      : { type: 'success', text: `${visitor.name} cleared out.` };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
   res.redirect(req.body.back === 'visitor' ? `/visitors/${visitor.id}` : '/visitors');
 });
 
