@@ -25,8 +25,8 @@
           <div class="form-text" x-show="pricedBy === 'area'" x-cloak>Name it by type and thickness, not size. The size is entered on each order.</div>
         </div>
         <div>
-          <%- include('partials/field', { name: 'category', label: 'Category', value: values.category, error: errors.category, required: true, placeholder: 'Choose or type a new one', attrs: 'list="item-categories" autocomplete="off"' }) %>
-          <datalist id="item-categories"><% categories.forEach((c) => { %><option value="<%= c.name %>"><% }) %></datalist>
+          <%- include('partials/field', { name: 'category', label: 'Category', type: 'select', value: values.category, error: errors.category, required: true,
+                blank: 'Choose a category', options: categories.map((c) => c.name), hint: 'Missing one? Add it under Items → Categories.' }) %>
         </div>
       </div>
 

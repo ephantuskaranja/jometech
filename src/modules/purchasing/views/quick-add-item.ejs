@@ -19,8 +19,10 @@
         </div>
         <div class="jt-field">
           <label class="form-label" for="qai-category">Category<span class="jt-req" aria-hidden="true">*</span></label>
-          <input class="form-control" id="qai-category" x-model="category" :class="errors.category && 'is-invalid'" list="qai-categories" autocomplete="off" placeholder="Choose or type a new one">
-          <datalist id="qai-categories"><% categories.forEach((c) => { %><option value="<%= c.name %>"><% }) %></datalist>
+          <select class="form-select" id="qai-category" x-model="category" :class="errors.category && 'is-invalid'">
+            <option value="">Choose a category</option>
+            <% categories.forEach((c) => { %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+          </select>
           <div class="invalid-feedback" x-text="errors.category"></div>
         </div>
         <div class="jt-field" x-show="priced_by === 'unit'">

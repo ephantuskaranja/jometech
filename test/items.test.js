@@ -53,7 +53,7 @@ test('an item needs a name and a category; a plate its thickness; anything else 
   let res = await post(storekeeper, '/items', { name: '', category: '', priced_by: 'area' });
   assert.equal(res.status, 422);
   assert.match(res.text, /Give the item a name/);
-  assert.match(res.text, /Choose or type a category/);
+  assert.match(res.text, /Choose a category/);
   assert.match(res.text, /Enter the thickness/);
   res = await post(storekeeper, '/items', { name: 'Test bolt', category: 'Other', priced_by: 'unit', unit: '' });
   assert.equal(res.status, 422);
@@ -86,13 +86,18 @@ test('a plate is priced per sq ft and gets a code; the calculator works for any 
 });
 
 test('a piece item has a price per unit and no calculator', async () => {
+  const typed = await post(storekeeper, '/items', { name: 'Test U-bolt 20 mm', category: 'Test Axle bits', priced_by: 'unit', unit: 'Pc' });
+  assert.equal(typed.status, 422, 'a category not on the list is refused (added under Items → Categories)');
+  assert.match(typed.text, /Choose a category from the list/);
+  assert.equal(await db('item_categories').where({ name: 'Test Axle bits' }).first(), undefined);
+  await post(storekeeper, '/items/categories', { name: 'Test Axle bits' });
+
   const res = await post(storekeeper, '/items', { name: 'Test U-bolt 20 mm', category: 'Test Axle bits', priced_by: 'unit', unit: 'Pc', thickness_mm: '9', current_price: '1,250.50', reorder_level: '20' });
   assert.equal(res.status, 302, res.text);
   const id = idOf(res.headers.location);
   const item = await db('items').where({ id }).first();
   assert.equal(item.thickness_mm, null, 'thickness only applies to plates');
   assert.equal(Number(item.current_price), 1250.5);
-  assert.ok(await db('item_categories').where({ name: 'Test Axle bits' }).first(), 'a new category joins the list');
   assert.doesNotMatch((await storekeeper.get(`/items/${id}`)).text, /What does a sheet come to/);
   await storekeeper.get(`/api/items/${id}/sheet?length=1&width=1&unit=ft`).expect(422);
 });

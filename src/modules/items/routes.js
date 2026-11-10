@@ -15,7 +15,7 @@ const manage = canAny('inventory.manage');
 
 const itemSchema = z.object({
   name: z.string().trim().min(2, 'Give the item a name').max(120, 'Use 120 characters or fewer').transform((v) => v.replace(/\s+/g, ' ')),
-  category: z.string().trim().min(2, 'Choose or type a category').max(60, 'Use 60 characters or fewer'),
+  category: z.string().trim().min(1, 'Choose a category').max(60, 'Use 60 characters or fewer'),
   priced_by: z.enum(['unit', 'area']).catch('unit'),
   unit: optionalText(20),
   thickness_mm: optionalAmount(200),

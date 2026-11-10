@@ -22,10 +22,11 @@ async function checkName(trx, name, exceptId = null) {
   }
 }
 
-/** The category's id; a name not on the list is added to it. */
+/** The category's id. Only names on the list (Items → Categories) are accepted, so no typo duplicates. */
 async function categoryId(trx, name) {
-  await trx('item_categories').insert({ name }).onConflict('name').ignore();
-  return (await trx('item_categories').where({ name }).first('id')).id;
+  const found = await trx('item_categories').where({ name }).first('id');
+  if (!found) throw err(422, 'Choose a category from the list', 'category');
+  return found.id;
 }
 
 /** What the history shows: names and plain numbers, not ids. */

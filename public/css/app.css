@@ -508,6 +508,9 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 /* ---------- Production steps ---------- */
 /* Editing the list (job-types/views/form.ejs) */
 .jt-step-row { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) repeat(3, 2.375rem); gap: .25rem; align-items: center; }
+.jt-cat-add { display: flex; gap: .75rem; align-items: flex-start; max-width: 32rem; }
+.jt-cat-add > div { flex: 1; }
+.jt-cat-add > .btn { margin-top: 1.78rem; } /* level with the input, under its label */
 .jt-step-row .jt-icon-btn:disabled { opacity: .25; }
 /* On a job (jobs/views/show.ejs) */
 .jt-job-steps .list-group-item { display: flex; align-items: center; gap: .625rem; padding-block: .5rem; }

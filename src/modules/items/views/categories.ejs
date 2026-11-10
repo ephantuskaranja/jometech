@@ -1,0 +1,49 @@
+<%# Items → Categories: the list the item form picks from, in the order it shows. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Items', href: '/items' }, 'Categories'],
+  heading: 'Item categories',
+  sub: 'The list the item form picks from, in this order. Open one to rename it, merge a duplicate into another, or delete it.',
+}) %>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <form method="post" action="/items/categories" novalidate class="jt-cat-add">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <%- include('partials/field', { name: 'name', label: 'New category', value: values.name, error: errors.name, placeholder: 'e.g. Bearings & seals', attrs: 'maxlength="60" autocomplete="off"' }) %>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i>Add</button>
+    </form>
+    <% if (existingId) { %><div class="form-text"><a href="/items/categories/<%= existingId %>">Open that category</a></div><% } %>
+  </div>
+</section>
+
+<section class="card">
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', { icon: 'tags', heading: 'No categories yet', text: 'Add the first one above, e.g. Plates.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Category</th><th class="text-end">Items</th><th class="text-end"><span class="visually-hidden">Order</span></th></tr></thead>
+        <tbody>
+          <% list.forEach((c, i) => { %>
+            <tr id="cat-<%= c.id %>">
+              <td><a class="jt-row-link" href="/items/categories/<%= c.id %>"><%= c.name %></a></td>
+              <td class="text-end jt-num">
+                <a href="/items?<%= new URLSearchParams({ category: c.id, status: 'all' }) %>"><%= c.item_count %></a>
+                <% if (c.item_count > c.active_count) { %><small class="text-body-secondary d-block"><%= c.item_count - c.active_count %> switched off</small><% } %>
+              </td>
+              <td class="text-end text-nowrap">
+                <% [['up', 'arrow-up', i === 0], ['down', 'arrow-down', i === list.length - 1]].forEach(([dir, icon, off]) => { %>
+                  <form method="post" action="/items/categories/<%= c.id %>/move" class="d-inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="direction" value="<%= dir %>">
+                    <button class="btn jt-icon-btn" type="submit"<%= off ? ' disabled' : '' %> aria-label="Move <%= c.name %> <%= dir %>"><i class="bi bi-<%= icon %>"></i></button>
+                  </form>
+                <% }) %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

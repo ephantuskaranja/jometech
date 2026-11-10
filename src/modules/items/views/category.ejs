@@ -1,0 +1,62 @@
+<%# One item category: rename it, merge it into another, or delete it when empty. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Items', href: '/items' }, { label: 'Categories', href: '/items/categories' }, category.name],
+  heading: category.name,
+  sub: `${category.item_count} item${category.item_count === 1 ? '' : 's'} in this category.`,
+  actions: category.item_count ? [{ label: 'See its items', href: `/items?category=${category.id}&status=all`, icon: 'box' }] : [],
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <form method="post" action="/items/categories/<%= category.id %>" novalidate>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Rename</h2></div>
+        <div class="card-body d-grid gap-3">
+          <div>
+            <%- include('partials/field', { name: 'name', label: 'Name', value: values.name, error: errors.name, required: true, hint: 'Its items follow the new name.', attrs: 'maxlength="60" autocomplete="off"' }) %>
+            <% if (existingId) { %><div class="form-text"><a href="/items/categories/<%= existingId %>">Open that category</a>, or merge this one into it below.</div><% } %>
+          </div>
+          <div><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save name</button></div>
+        </div>
+      </section>
+    </form>
+
+    <% if (others.length && category.item_count) { %>
+      <form method="post" action="/items/categories/<%= category.id %>/merge" novalidate
+            x-data @submit="if (!confirm(<%= JSON.stringify(`Move every item in “${category.name}” into the chosen category, and remove “${category.name}”?`) %>)) $event.preventDefault()">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <section class="card">
+          <div class="card-header"><h2 class="h6 mb-0">Merge into another category</h2></div>
+          <div class="card-body d-grid gap-3">
+            <p class="small mb-0">For a duplicate (e.g. “Paints” and “Paint”): its <%= category.item_count %> item<%= category.item_count === 1 ? '' : 's' %> move to the category you choose, then “<%= category.name %>” is removed. Each item’s history shows the move.</p>
+            <%- include('partials/field', { name: 'into', label: 'Move its items into', type: 'select', value: '', error: errors.into, required: true,
+                  blank: 'Choose a category', options: others.map((c) => ({ value: c.id, label: `${c.name} (${c.item_count})` })) }) %>
+            <div><button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-left-right"></i>Merge</button></div>
+          </div>
+        </section>
+      </form>
+    <% } %>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Don’t need it?</h2></div>
+      <div class="card-body d-grid gap-2">
+        <% if (category.item_count) { %>
+          <p class="small mb-0">It still has items, so it can’t be deleted. Merge it into another category instead.</p>
+        <% } else { %>
+          <p class="small mb-0">It has no items, so it can be deleted.</p>
+          <form method="post" action="/items/categories/<%= category.id %>/delete" x-data @submit="if (!confirm(<%= JSON.stringify(`Delete “${category.name}”?`) %>)) $event.preventDefault()">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i>Delete this category</button>
+          </form>
+        <% } %>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name' } }) %></div>
+    </section>
+  </div>
+</div>
