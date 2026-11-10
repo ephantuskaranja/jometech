@@ -120,6 +120,24 @@ export function lastVisit(phone) {
     .first('name', 'id_no', 'company', 'vehicle_reg', 'host', 'purpose', 'arrived_at');
 }
 
+const sameName = (a, b) => String(a ?? '').trim().replace(/\s+/g, ' ').toLowerCase() === String(b ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/**
+ * One ID number, one person: the last visit with this ID under another name, if any.
+ * (The register keeps a row per visit, so the same person's ID repeats; another name doesn't.)
+ */
+export async function idTakenBy(idNo, name) {
+  if (!idNo) return null;
+  const rows = await db('visitors').where({ id_no: idNo }).orderBy('arrived_at', 'desc').limit(20).select('name', 'arrived_at');
+  return rows.find((r) => !sameName(r.name, name)) ?? null;
+}
+
+/** The phone's last visit under another name: shared phones happen (drivers), so it's a question, not a block. */
+export async function phoneUsedBy(phone, name) {
+  const last = await db('visitors').where({ phone }).orderBy('arrived_at', 'desc').first('name', 'arrived_at');
+  return last && !sameName(last.name, name) ? last : null;
+}
+
 /** Names for the "who are they seeing?" suggestions: staff at the site. */
 export async function staffAt(siteId) {
   const users = await db('users').join('user_sites', 'user_sites.user_id', 'users.id')

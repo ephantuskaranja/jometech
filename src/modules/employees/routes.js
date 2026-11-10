@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { isDay } from '../../core/dates.js';
-import { check, httpError, optionalAmount, optionalPhone, optionalText } from '../../core/validate.js';
+import { check, httpError, optionalAmount, optionalPhone, optionalText, optionalIdNo } from '../../core/validate.js';
 import * as employees from './service.js';
 import { recentFor, STATUSES as ATTENDANCE } from '../attendance/service.js';
 
@@ -16,7 +16,7 @@ const seesPay = (req) => req.user.can('payroll.manage') || req.user.can('payroll
 const employeeSchema = z.object({
   name: z.string().trim().min(2, 'Enter their name').max(100, 'Use 100 characters or fewer').transform((v) => v.replace(/\s+/g, ' ')),
   phone: optionalPhone(),
-  id_no: optionalText(20),
+  id_no: optionalIdNo(),
   trade: optionalText(40),
   site_id: z.coerce.number({ message: 'Choose a site' }).int().positive('Choose a site'),
   category: z.enum(Object.keys(employees.CATEGORIES)).catch('casual'),

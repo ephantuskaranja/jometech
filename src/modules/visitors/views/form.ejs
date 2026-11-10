@@ -13,6 +13,13 @@
             placeholder: '0712 345 678', autocomplete: 'off', attrs: '@blur="lookup($el.value)" x-ref="phone"' }) %>
       <%- include('partials/field', { name: 'name', label: 'Full name', value: values.name, error: errors.name, required: true, autocomplete: 'off', attrs: 'x-ref="name"' }) %>
     </div>
+    <% if (phoneOwner) { %>
+      <%# The phone was used before under another name: shared phones are fine, once the guard says so. %>
+      <label class="form-check">
+        <input class="form-check-input" type="checkbox" name="confirm_phone" value="1">
+        <span class="form-check-label">Yes, <%= values.name %> is a different person from <%= phoneOwner.name %>, using the same phone</span>
+      </label>
+    <% } %>
     <div class="jt-info-box" x-show="returning" x-cloak><i class="bi bi-arrow-repeat"></i><span x-text="returning"></span></div>
 
     <div class="jt-choices-compact"><%- include('partials/choices', { name: 'purpose', label: 'Why are they here?', required: true, columns: 4, model: 'purpose',

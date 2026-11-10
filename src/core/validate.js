@@ -27,6 +27,14 @@ export function check(schema, input) {
 export const optionalText = (max = 255) =>
   z.string().trim().max(max, `Use ${max} characters or fewer`).optional().transform((v) => v || null);
 
+/** ID or passport number, one format: no spaces or dashes, capitals ("29 967-996" → "29967996"). */
+export const tidyIdNo = (v) => (v ? String(v).replace(/[\s./-]/g, '').toUpperCase() : v);
+
+/** Optional ID / passport number, '' → null, stored tidied. */
+export const optionalIdNo = () =>
+  optionalText(30).transform((v) => v && tidyIdNo(v))
+    .refine((v) => v === null || /^[A-Z0-9]{5,20}$/.test(v), 'Use the digits (and letters, for a passport) on the ID, e.g. 29967996');
+
 /** Optional email, '' → null. */
 export const optionalEmail = () =>
   optionalText(120).refine((v) => v === null || z.email().safeParse(v).success, 'Check the email address')

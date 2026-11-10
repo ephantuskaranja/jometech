@@ -30,6 +30,15 @@ async function checkClockIds(trx, ids, exceptEmployeeId = null) {
   if (taken) throw err(422, `Clock ID ${taken.clock_id} is already ${taken.name}’s`, 'clock_ids');
 }
 
+/** One ID number, one person. */
+async function checkIdNo(trx, idNo, exceptEmployeeId = null) {
+  if (!idNo) return;
+  const q = trx('employees').where({ id_no: idNo });
+  if (exceptEmployeeId) q.whereNot('id', exceptEmployeeId);
+  const taken = await q.first('number', 'name');
+  if (taken) throw err(422, `ID number ${idNo} is already ${taken.name}’s (${taken.number})`, 'id_no');
+}
+
 async function writeClockIds(trx, employeeId, ids) {
   await trx('employee_clock_ids').where({ employee_id: employeeId }).delete();
   if (ids.length) await trx('employee_clock_ids').insert(ids.map((clock_id) => ({ clock_id, employee_id: employeeId })));
@@ -49,6 +58,7 @@ export async function createEmployee(input, actor, { withRate = false } = {}, ou
   return run(async (trx) => {
     await checkSite(trx, input.site_id);
     await checkClockIds(trx, input.clock_ids ?? []);
+    await checkIdNo(trx, input.id_no);
     const number = await nextNumber(trx, 'employee');
     const [id] = await trx('employees').insert({ ...pick(input, { withRate }), number, created_by: actor.user.id });
     await writeClockIds(trx, id, input.clock_ids ?? []);
@@ -74,6 +84,7 @@ export async function updateEmployee(id, input, actor, { withRate = false } = {}
     if (!before) throw httpError(404, 'That employee doesn’t exist.');
     if (Number(input.site_id) !== before.site_id) await checkSite(trx, input.site_id);
     await checkClockIds(trx, input.clock_ids ?? [], id);
+    await checkIdNo(trx, input.id_no, id);
     const beforeIds = await trx('employee_clock_ids').where({ employee_id: id }).orderBy('clock_id').pluck('clock_id');
     const changes = pick(input, { withRate });
     await trx('employees').where({ id }).update(changes);

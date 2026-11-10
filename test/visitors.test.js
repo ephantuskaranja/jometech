@@ -186,3 +186,27 @@ test('permanent employees at the site are on the “Who are they seeing?” list
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('visitors').where({ name: 'Esther Njeri' }).first()).host, 'Test Welder Kamau');
 });
+
+test('ID numbers are kept in one format, and one ID number belongs to one person', async () => {
+  let res = await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'Lucy Wairimu', id_no: '77 053-001' }));
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await db('visitors').where({ phone: '+254700000530' }).first()).id_no, '77053001');
+
+  res = await post(gate, '/visitors', visitor({ phone: '0700 000 531', name: 'Brian Otieno', id_no: '77053001' }));
+  assert.equal(res.status, 422, 'someone else’s ID number');
+  assert.match(res.text, /This ID number is Lucy Wairimu’s/);
+
+  res = await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'lucy  wairimu', id_no: '77053001' }));
+  assert.equal(res.status, 302, 'the same person again (any spacing or capitals) is fine');
+  res = await post(gate, '/visitors', visitor({ phone: '0700 000 532', name: 'Tom', id_no: '12' }));
+  assert.match(res.text, /Use the digits/);
+});
+
+test('a phone used before under another name is a question: the guard confirms a different person', async () => {
+  let res = await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'Kevin Mwangi' }));
+  assert.equal(res.status, 422);
+  assert.match(res.text, /This phone was used by (Lucy Wairimu|lucy  wairimu)/);
+  assert.match(res.text, /name="confirm_phone"/);
+  res = await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'Kevin Mwangi', confirm_phone: '1' }));
+  assert.equal(res.status, 302, res.text);
+});

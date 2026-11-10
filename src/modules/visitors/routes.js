@@ -4,7 +4,7 @@ import { canAny } from '../../core/auth.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { formatReg } from '../../core/vehicle-format.js';
 import { normalizePhone } from '../../core/phone.js';
-import { check, httpError, optionalText, phoneField } from '../../core/validate.js';
+import { check, httpError, optionalText, phoneField, optionalIdNo } from '../../core/validate.js';
 import { history } from '../../core/audit.js';
 import * as visitors from './service.js';
 
@@ -24,7 +24,7 @@ const visitorSchema = z.object({
   other_purpose: optionalText(60),
   host: optionalText(100), // "Reception" or a staff member; checked against the list in validHost()
   company: optionalText(120),
-  id_no: optionalText(20),
+  id_no: optionalIdNo(),
   vehicle_reg: optionalText(20).transform((v) => v && formatReg(v)),
   pass_no: optionalText(20),
   people: z.union([z.literal(''), z.coerce.number().int().min(1, 'At least 1').max(50, 'Check the number')]).optional()
@@ -69,11 +69,11 @@ function hostChoices(staff, host) {
   return { hostOptions, hostValue: staff.some((s) => s.name === host) ? host : 'Reception' };
 }
 
-async function renderForm(req, res, { status = 200, values, errors = {} }) {
+async function renderForm(req, res, { status = 200, values, errors = {}, phoneOwner = null }) {
   const staff = await visitors.staffAt(req.site.id);
   res.status(status).render('visitors/views/form', {
     title: 'Sign a visitor in',
-    values, errors,
+    values, errors, phoneOwner,
     purposes: visitors.PURPOSES,
     ...hostChoices(staff, values.host),
     // Reception signing in a walk-in: they are already at reception.
@@ -96,7 +96,17 @@ router.post('/visitors', signsIn, async (req, res) => {
   if (data?.host && data.host !== 'Reception' && !(await visitors.staffAt(req.site.id)).some((s) => s.name === data.host)) {
     allErrors.host = 'Choose someone from the list, or Reception';
   }
-  if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors });
+  let phoneOwner = null;
+  if (data) {
+    const fmt = res.locals.fmt;
+    const idOwner = await visitors.idTakenBy(data.id_no, data.name);
+    if (idOwner) allErrors.id_no = `This ID number is ${idOwner.name}’s (last visit ${fmt.date(idOwner.arrived_at)}). Check the number on the ID.`;
+    phoneOwner = await visitors.phoneUsedBy(data.phone, data.name);
+    if (phoneOwner && req.body.confirm_phone !== '1') {
+      allErrors.phone = `This phone was used by ${phoneOwner.name} (last visit ${fmt.date(phoneOwner.arrived_at)}). Is this a different person?`;
+    } else phoneOwner = null;
+  }
+  if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors, phoneOwner });
 
   const purpose = data.purpose === 'Other' ? data.other_purpose : data.purpose;
   const atReception = req.user.can('visitors.receive') && (req.body.at_reception === '1' || !req.user.can('visitors.gate'));

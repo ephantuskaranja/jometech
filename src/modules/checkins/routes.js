@@ -5,7 +5,7 @@ import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
 import { history } from '../../core/audit.js';
 import { formatChassis, formatReg, vehicleLabel } from '../../core/vehicle-format.js';
-import { check, httpError, optionalId, optionalPhone, optionalReading, optionalText } from '../../core/validate.js';
+import { check, httpError, optionalId, optionalPhone, optionalReading, optionalText, optionalIdNo } from '../../core/validate.js';
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
 import * as release from './release.js';
@@ -204,7 +204,7 @@ const allow = canAny('invoices.manage'); // managers and admins: they see what i
 const releaseSchema = z.object({
   collector_name: z.string().trim().min(2, 'Type the full name').max(100, 'Use 100 characters or fewer'),
   collector_phone: optionalPhone(),
-  collector_id_no: optionalText(20),
+  collector_id_no: optionalIdNo(),
   signature: z.string().min(1, 'Sign in the box above').max(400_000, 'The signature is too large. Clear it and sign again.'),
 });
 
@@ -324,7 +324,7 @@ router.get('/check-in/:id/print', view, async (req, res) => {
 const signSchema = z.object({
   driver_name: z.string().trim().min(2, 'Type your full name').max(100, 'Use 100 characters or fewer'),
   driver_phone: optionalPhone(),
-  driver_id_no: optionalText(20),
+  driver_id_no: optionalIdNo(),
   signature: z.string().min(1, 'Sign in the box above').max(400_000, 'The signature is too large. Clear it and sign again.'),
 });
 

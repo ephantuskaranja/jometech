@@ -70,6 +70,13 @@ test('supervisors manage staff; only managers see and set the daily rate; sales 
   res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: home.id, clock_ids: '77902' });
   assert.equal(res.status, 422);
   assert.match(res.text, /Clock ID 77902 is already Test Welder Otieno’s/);
+
+  // One ID number, one person: tidied first, so the spacing doesn't matter.
+  await post(supervisor, `/employees/${e.id}`, { name: 'Test Welder Otieno', site_id: home.id, trade: 'Welder', clock_ids: '77901, 77902', id_no: '77 900 001' });
+  assert.equal((await db('employees').where({ id: e.id }).first()).id_no, '77900001');
+  res = await post(supervisor, '/employees', { name: 'Test Someone Else', site_id: home.id, id_no: '77900001' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /ID number 77900001 is already Test Welder Otieno’s/);
 });
 
 test('the export is imported; the same file twice adds nothing; unknown clock IDs are listed', async () => {
