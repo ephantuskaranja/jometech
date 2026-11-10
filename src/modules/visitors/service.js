@@ -103,9 +103,14 @@ export async function counts(siteId) {
     db.raw("SUM(status = 'arrived') AS waiting"),
     db.raw("SUM(status = 'received') AS confirmed"),
     db.raw('SUM(status = ? AND cleared_at >= ? AND cleared_at < ?) AS cleared', ['cleared', dayStart(today), dayStart(nextDay(today))]),
+    db.raw('SUM(received_at >= ? AND received_at < ?) AS received', [dayStart(today), dayStart(nextDay(today))]),
   );
+  // Today's visitors by why they came, most first.
+  const byPurpose = await db('visitors').where({ site_id: siteId }).where('arrived_at', '>=', dayStart(today)).where('arrived_at', '<', dayStart(nextDay(today)))
+    .groupBy('purpose').orderBy('n', 'desc').select('purpose', db.raw('COUNT(*) AS n'));
   const n = (v) => Number(v ?? 0);
-  return { waiting: n(row.waiting), confirmed: n(row.confirmed), onSite: n(row.waiting) + n(row.confirmed), cleared: n(row.cleared) };
+  return { waiting: n(row.waiting), confirmed: n(row.confirmed), onSite: n(row.waiting) + n(row.confirmed), cleared: n(row.cleared), received: n(row.received),
+    byPurpose: byPurpose.map((p) => ({ purpose: p.purpose, n: n(p.n) })) };
 }
 
 /** A day's register (default today), or a search across all days when `q` is given. */

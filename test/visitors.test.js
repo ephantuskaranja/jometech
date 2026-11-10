@@ -228,5 +228,8 @@ test('the register opens with today’s numbers; the cards filter the list; the 
   assert.doesNotMatch(page, /Card Waiting Person/, 'not received yet');
   assert.match(page, /Only those confirmed by reception/);
   assert.match((await gate.get('/visitors?only=waiting')).text, /Card Waiting Person/);
-  assert.doesNotMatch((await reception.get('/visitors')).text, /Vehicles to release/, 'reception doesn’t release vehicles');
+  const atReception = (await reception.get('/visitors')).text;
+  assert.doesNotMatch(atReception, /Vehicles to release/, 'reception doesn’t release vehicles');
+  assert.match(atReception, /Received today/);
+  assert.match(atReception, /Today by purpose:[\s\S]*Delivery/, 'today’s visitors by why they came');
 });

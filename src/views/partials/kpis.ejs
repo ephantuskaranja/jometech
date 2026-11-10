@@ -1,10 +1,10 @@
 <%#
   A strip of number cards. Each can be a link (a shortcut to the list behind the number).
   include('partials/kpis', { items: [{ label, value, foot, icon, href, tone: 'warn' | 'info' | null, active }] })
-  tone: shown only when the value isn't 0, to draw the eye to what needs doing.
+  tone: shown only when the value isn't 0 (a word, e.g. "Not yet", always shows it), to draw the eye to what needs doing.
 %>
 <div class="jt-kpis mb-4">
-  <% items.forEach((k) => { const tone = k.tone && Number(k.value) > 0 ? ` is-${k.tone}` : ''; const tag = k.href ? 'a' : 'div'; %>
+  <% items.forEach((k) => { const tone = k.tone && (typeof k.value !== 'number' || k.value > 0) ? ` is-${k.tone}` : ''; const tag = k.href ? 'a' : 'div'; %>
     <<%= tag %> class="card jt-kpi<%= k.href ? ' jt-kpi-link' : '' %><%= tone %><%= k.active ? ' is-active' : '' %>"<% if (k.href) { %> href="<%= k.href %>"<%- k.active ? ' aria-current="true"' : '' %><% } %>>
       <span class="jt-kpi-label"><i class="bi bi-<%= k.icon %>"></i><%= k.label %></span>
       <span class="jt-kpi-value"><%= k.value %></span>
