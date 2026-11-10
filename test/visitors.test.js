@@ -200,6 +200,15 @@ test('ID numbers are kept in one format, and one ID number belongs to one person
   assert.equal(res.status, 302, 'the same person again (any spacing or capitals) is fine');
   res = await post(gate, '/visitors', visitor({ phone: '0700 000 532', name: 'Tom', id_no: '12' }));
   assert.match(res.text, /Use the digits/);
+
+  // The returning-visitor fill-in never gives out the ID number: its last 4 only.
+  const last = (await gate.get('/api/visitors/last?phone=0700000530').expect(200)).body;
+  assert.equal(last.id_no, undefined);
+  assert.equal(last.id_end, '3001');
+  assert.doesNotMatch(JSON.stringify(last), /77053001/);
+  // Left blank, the ID on file is kept for the new visit.
+  await post(gate, '/visitors', visitor({ phone: '0700 000 530', name: 'Lucy Wairimu', id_no: '' }));
+  assert.equal((await db('visitors').where({ phone: '+254700000530' }).orderBy('id', 'desc').first()).id_no, '77053001');
 });
 
 test('a phone used before under another name is a question: the guard confirms a different person', async () => {

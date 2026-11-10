@@ -627,10 +627,13 @@ document.addEventListener('alpine:init', () => {
       const last = await getJson(`/api/visitors/last?phone=${encodeURIComponent(phone)}`).catch(() => null);
       if (!last) { this.returning = ''; return; }
       // Fill only empty boxes: never overwrite what the guard already typed.
-      for (const key of ['name', 'company', 'id_no', 'vehicle_reg']) {
+      for (const key of ['name', 'company', 'vehicle_reg']) {
         const el = this.$refs[key];
         if (el && !el.value && last[key]) el.value = last[key];
       }
+      // The ID number itself never comes back (privacy): left blank, the one on file is kept.
+      const id = this.$refs.id_no;
+      if (id) id.placeholder = last.id_end ? `On file: ****${last.id_end}. Leave blank to keep it` : '';
       // Who they saw last time, if still on the staff list and the guard hasn't changed it from "Reception".
       const host = this.$refs.host?.tomselect;
       if (host && last.host && host.getValue() === 'Reception' && host.options[last.host]) host.setValue(last.host, true);

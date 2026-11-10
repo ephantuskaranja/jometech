@@ -132,6 +132,12 @@ export async function idTakenBy(idNo, name) {
   return rows.find((r) => !sameName(r.name, name)) ?? null;
 }
 
+/** The ID number from this person's last visit (same phone, same name), or null. */
+export async function idOnFile(phone, name) {
+  const last = await db('visitors').where({ phone }).whereNotNull('id_no').orderBy('arrived_at', 'desc').first('name', 'id_no');
+  return last && sameName(last.name, name) ? last.id_no : null;
+}
+
 /** The phone's last visit under another name: shared phones happen (drivers), so it's a question, not a block. */
 export async function phoneUsedBy(phone, name) {
   const last = await db('visitors').where({ phone }).orderBy('arrived_at', 'desc').first('name', 'arrived_at');

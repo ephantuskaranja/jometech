@@ -108,6 +108,8 @@ router.post('/visitors', signsIn, async (req, res) => {
   }
   if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors, phoneOwner });
 
+  // ID left blank for a returning visitor (same phone, same name): keep the one on file.
+  if (!data.id_no) data.id_no = await visitors.idOnFile(data.phone, data.name);
   const purpose = data.purpose === 'Other' ? data.other_purpose : data.purpose;
   const atReception = req.user.can('visitors.receive') && (req.body.at_reception === '1' || !req.user.can('visitors.gate'));
   const { number } = await visitors.signIn(req.site.id, { ...data, purpose }, req, { atReception });
@@ -153,5 +155,8 @@ router.post('/visitors/:id/clear', gate, async (req, res) => {
 router.get('/api/visitors/last', signsIn, async (req, res) => {
   const phone = normalizePhone(String(req.query.phone ?? ''));
   const last = phone ? await visitors.lastVisit(phone) : null;
-  res.json(last ?? null);
+  if (!last) return res.json(null);
+  // Never the ID number itself: anyone at the gate could type a phone and read it. Its last 4 only.
+  const { id_no: idNo, ...rest } = last;
+  res.json({ ...rest, id_end: idNo ? idNo.slice(-4) : null });
 });
