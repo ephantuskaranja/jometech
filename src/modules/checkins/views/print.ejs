@@ -91,7 +91,7 @@
         <div class="sig-name">
           <span class="label">Confirmed by:</span> <%= checkin.driver_name ?? '' %>
           <% if (checkin.driver_phone || checkin.driver_id_no) { %>
-            <div class="muted small"><%= [checkin.driver_phone && fmt.phone(checkin.driver_phone), checkin.driver_id_no && `ID ${checkin.driver_id_no}`].filter(Boolean).join(' · ') %></div>
+            <div class="muted small"><%= [checkin.driver_phone && fmt.phone(checkin.driver_phone), checkin.driver_id_no && `ID ${fmt.mask(checkin.driver_id_no)}`].filter(Boolean).join(' · ') %></div>
           <% } %>
         </div>
         <div class="sig-box">

@@ -3,7 +3,7 @@
 <%- include('partials/page-header', {
   crumb: [{ label: 'Visitors', href: '/visitors' }, visitor.number],
   heading: visitor.name,
-  sub: [fmt.phone(visitor.phone), visitor.company].filter(Boolean).join(' · '),
+  sub: visitor.company ?? '',
 }) %>
 
 <div class="row g-4">
@@ -18,7 +18,8 @@
         <dl class="jt-kv">
           <div><dt>Why</dt><dd><%= visitor.purpose %></dd></div>
           <div><dt>Seeing</dt><dd><%= visitor.host ?? '—' %></dd></div>
-          <div><dt>ID number</dt><dd><%= visitor.id_no ?? '—' %></dd></div>
+          <div><dt>Phone</dt><dd><%- include('partials/masked', { value: visitor.phone, kind: 'phone', reveal: revealUrl('visitor', visitor.id, 'phone') }) %></dd></div>
+          <div><dt>ID number</dt><dd><%- include('partials/masked', { value: visitor.id_no, reveal: revealUrl('visitor', visitor.id, 'id_no') }) %></dd></div>
           <div><dt>Vehicle</dt><dd><% if (visitor.vehicle_reg) { %><%- include('partials/plate', { reg: visitor.vehicle_reg }) %><% } else { %>—<% } %></dd></div>
           <div><dt>Gate pass</dt><dd><%= visitor.pass_no ?? '—' %></dd></div>
           <div><dt>People</dt><dd><%= visitor.people %></dd></div>

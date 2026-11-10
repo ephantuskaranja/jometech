@@ -93,7 +93,7 @@
         <div class="sig-name">
           <span class="label">Collected by:</span> <%= record.collector_name %>
           <% if (record.collector_phone || record.collector_id_no) { %>
-            <div class="muted small"><%= [record.collector_phone && fmt.phone(record.collector_phone), record.collector_id_no && `ID ${record.collector_id_no}`].filter(Boolean).join(' · ') %></div>
+            <div class="muted small"><%= [record.collector_phone && fmt.phone(record.collector_phone), record.collector_id_no && `ID ${fmt.mask(record.collector_id_no)}`].filter(Boolean).join(' · ') %></div>
           <% } %>
         </div>
         <div class="sig-box">

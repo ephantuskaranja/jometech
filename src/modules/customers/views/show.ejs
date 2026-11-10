@@ -41,7 +41,7 @@
         <div class="card-body">
           <dl class="jt-kv">
             <div><dt>Customer number</dt><dd class="font-monospace"><%= customer.number %></dd></div>
-            <div><dt>KRA PIN</dt><dd class="font-monospace"><%= customer.kra_pin ?? '—' %></dd></div>
+            <div><dt>KRA PIN</dt><dd><%- include('partials/masked', { value: customer.kra_pin, reveal: revealUrl('customer', customer.id, 'kra_pin') }) %></dd></div>
             <div><dt>Address</dt><dd><%= customer.address ?? '—' %></dd></div>
             <div><dt>Payment terms</dt><dd><%= creditLabel(customer.credit_days) %></dd></div>
             <div><dt>Added</dt><dd><%= fmt.date(customer.created_at) %></dd></div>

@@ -8,7 +8,9 @@
   // A time on its own when it was today (and we're looking at one day), else with the date.
   const at = (t) => (t ? ((tab === 'register' && q) || fmt.date(t) !== todayLabel ? fmt.dateTime(t) : fmt.time(t)) : null);
   const by = (name) => (name ? `by ${name}` : '');
-  const findText = (v) => [v.name, v.phone, fmt.phone(v.phone), v.company, v.vehicle_reg, v.pass_no, v.host, v.number].filter(Boolean).join(' ').toLowerCase();
+  // Phones are masked on the list, so only their last 6 digits go in the page (data-tail): the live search still finds by them.
+  const findText = (v) => [v.name, v.company, v.vehicle_reg, v.pass_no, v.host, v.number].filter(Boolean).join(' ').toLowerCase();
+  const tail = (v) => String(v.phone ?? '').replace(/\D/g, '').slice(-6);
 %>
 <%- include('partials/page-header', {
   crumb: ['Workshop', 'Visitors'],
@@ -17,7 +19,7 @@
   actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
 }) %>
 
-<section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); return !f || el.dataset.find.includes(f); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
+<section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); if (!f || el.dataset.find.includes(f)) return true; const d = f.replace(/\D/g, ''); return d.length >= 3 && d.length === f.replace(/\s/g, '').length && (el.dataset.tail.includes(d) || d.endsWith(el.dataset.tail)); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
   <nav class="nav nav-tabs jt-tabs">
     <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= tab === 'now' ? list.length : onSiteCount %></span></a>
     <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
@@ -76,10 +78,10 @@
         <thead><tr><th>Visitor</th><th>Seeing · why</th><th>In</th><th>Received</th><th>Out</th><th class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
           <% list.forEach((v) => { const late = overdue(v, today); %>
-            <tr class="<%= late ? 'is-overdue' : '' %>" data-find="<%= findText(v) %>" x-show="hit($el)">
+            <tr class="<%= late ? 'is-overdue' : '' %>" data-find="<%= findText(v) %>" data-tail="<%= tail(v) %>" x-show="hit($el)">
               <td>
                 <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
-                <span class="jt-sub"><%= [fmt.phone(v.phone), v.company].filter(Boolean).join(' · ') %></span>
+                <span class="jt-sub"><%= [fmt.mask(v.phone, 'phone'), v.company].filter(Boolean).join(' · ') %></span>
                 <% if (v.vehicle_reg || v.pass_no || late) { %>
                   <span class="d-flex flex-wrap gap-2 mt-1 align-items-center small">
                     <% if (v.vehicle_reg) { %><%- include('partials/plate', { reg: v.vehicle_reg }) %><% } %>
@@ -107,11 +109,11 @@
     <%# Phones and tablets: cards %>
     <ul class="list-group list-group-flush jt-visitors d-lg-none">
       <% list.forEach((v) => { const late = overdue(v, today); const st = statuses[v.status]; %>
-        <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>" data-find="<%= findText(v) %>" x-show="hit($el)">
+        <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>" data-find="<%= findText(v) %>" data-tail="<%= tail(v) %>" x-show="hit($el)">
           <div class="jt-visitor-main">
             <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
             <div class="small text-body-secondary">
-              <%= [fmt.phone(v.phone), v.company, v.purpose, v.host && `seeing ${v.host}`].filter(Boolean).join(' · ') %>
+              <%= [fmt.mask(v.phone, 'phone'), v.company, v.purpose, v.host && `seeing ${v.host}`].filter(Boolean).join(' · ') %>
             </div>
             <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
               <%- include('partials/pill', { text: st.label, tone: st.tone }) %>

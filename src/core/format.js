@@ -20,4 +20,11 @@ export const fmt = {
   time: (d) => (d ? new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz }) : ''),
   /** +254712345678 → "0712 345 678" */
   phone: formatPhone,
+  /** Personal details shown masked: ID or PIN → "****7996"; phone → "0712 ••• 678" */
+  mask: (value, kind = 'id') => {
+    if (!value) return '';
+    const v = String(value);
+    if (kind === 'phone') { const p = formatPhone(v); return p.length > 7 ? `${p.slice(0, 4)} ••• ${p.slice(-3)}` : '••••'; }
+    return `****${v.length > 4 ? v.slice(-4) : ''}`;
+  },
 };

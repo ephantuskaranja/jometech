@@ -37,6 +37,7 @@ import { router as stockRoutes } from './modules/stock/routes.js';
 import { router as issueRoutes } from './modules/issues/routes.js';
 import { router as siteRoutes } from './modules/sites/routes.js';
 import { router as reportRoutes } from './modules/reports/routes.js';
+import { router as privacyRoutes, revealUrl } from './modules/privacy/routes.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -73,7 +74,7 @@ export function createApp() {
   app.use((req, res, next) => {
     Object.assign(res.locals, {
       appName: config.appName, title: config.appName, path: req.path,
-      isActive, formatPhone, fmt, nav: [], user: null, site: null, siteLocked: false, flash: null, csrfToken: '',
+      isActive, formatPhone, fmt, revealUrl, nav: [], user: null, site: null, siteLocked: false, flash: null, csrfToken: '',
     });
     next();
   });
@@ -146,6 +147,7 @@ export function createApp() {
   app.use(issueRoutes);
   app.use(siteRoutes);
   app.use(reportRoutes);
+  app.use(privacyRoutes);
 
   // ---- 404 and errors ----
   app.use((req, res) => {

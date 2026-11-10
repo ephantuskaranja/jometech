@@ -26,7 +26,7 @@
           </div>
           <dl class="jt-kv mb-0">
             <div><dt>Collected by</dt><dd><strong><%= v.collector_name %></strong>
-              <span class="d-block small"><%= [v.collector_phone && fmt.phone(v.collector_phone), v.collector_id_no && `ID ${v.collector_id_no}`].filter(Boolean).join(' · ') || 'No phone or ID given' %></span></dd></div>
+              <span class="d-block small"><% if (!v.collector_phone && !v.collector_id_no) { %>No phone or ID given<% } %><%= v.collector_phone ? fmt.phone(v.collector_phone) : '' %><% if (v.collector_id_no) { %><%= v.collector_phone ? ' · ' : '' %>ID <%- include('partials/masked', { value: v.collector_id_no, reveal: revealUrl('release', v.id, 'collector_id_no') }) %><% } %></span></dd></div>
             <% if (v.chassis_no) { %><div><dt>Chassis</dt><dd class="font-monospace"><%= v.chassis_no %></dd></div><% } %>
             <div><dt>Release note</dt><dd class="font-monospace"><%= v.release_number %></dd></div>
             <div><dt>Released</dt><dd><%= fmt.dateTime(v.released_at) %><span class="d-block small text-body-secondary">by <%= v.released_by_name ?? 'a removed user' %></span></dd></div>

@@ -52,8 +52,8 @@
           <div><dt>Employed as</dt><dd><%= categories[employee.category] %></dd></div>
           <div><dt>Clock ID</dt><dd class="font-monospace"><%= employee.clock_ids.join(', ') || '—' %></dd></div>
           <% if (canSeePay) { %><div><dt>Daily rate</dt><dd class="jt-num"><%= employee.daily_rate === null ? '—' : `KES ${fmt.money(employee.daily_rate)}` %></dd></div><% } %>
-          <div><dt>ID number</dt><dd class="font-monospace"><%= employee.id_no ?? '—' %></dd></div>
-          <div><dt>M-Pesa</dt><dd class="font-monospace"><%= employee.mpesa_phone ? fmt.phone(employee.mpesa_phone) : '—' %></dd></div>
+          <div><dt>ID number</dt><dd><%- include('partials/masked', { value: employee.id_no, reveal: revealUrl('employee', employee.id, 'id_no') }) %></dd></div>
+          <div><dt>M-Pesa</dt><dd><%- include('partials/masked', { value: employee.mpesa_phone, kind: 'phone', reveal: revealUrl('employee', employee.id, 'mpesa_phone') }) %></dd></div>
           <div><dt>Joined</dt><dd><%= employee.joined_on ? fmt.date(`${employee.joined_on}T12:00:00Z`) : '—' %></dd></div>
           <% if (!employee.is_active && employee.left_on) { %><div><dt>Left</dt><dd><%= fmt.date(`${employee.left_on}T12:00:00Z`) %></dd></div><% } %>
           <div><dt>Emergency contact</dt><dd><%= employee.emergency_name ?? '—' %><% if (employee.emergency_phone) { %><span class="d-block small font-monospace"><%= fmt.phone(employee.emergency_phone) %></span><% } %></dd></div>

@@ -45,7 +45,7 @@
         <dl class="jt-kv">
           <div><dt>Contact person</dt><dd><%= supplier.contact_person ?? '—' %></dd></div>
           <div><dt>Email</dt><dd><%= supplier.email ?? '—' %></dd></div>
-          <div><dt>KRA PIN</dt><dd class="font-monospace"><%= supplier.kra_pin ?? '—' %></dd></div>
+          <div><dt>KRA PIN</dt><dd><%- include('partials/masked', { value: supplier.kra_pin, reveal: revealUrl('supplier', supplier.id, 'kra_pin') }) %></dd></div>
           <div><dt>Address</dt><dd><%= supplier.address ?? '—' %></dd></div>
           <div><dt>Payment terms</dt><dd><%= supplier.payment_terms ?? '—' %></dd></div>
           <div><dt>Supplies</dt><dd><%= supplier.materials ?? '—' %></dd></div>

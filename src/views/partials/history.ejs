@@ -77,7 +77,10 @@
     job_cancelled: 'cancelled it',
     job_moved: 'received the vehicle at another site',
     vehicle_arrived: 'checked the vehicle in',
+    revealed: 'viewed a hidden detail',
   };
+  // Personal details stay masked in the history too.
+  const masked = { id_no: 'id', kra_pin: 'id', driver_id_no: 'id', collector_id_no: 'id', mpesa_phone: 'phone' };
   const show = (v) => {
     if (v === null || v === undefined || v === '') return '—';
     if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
@@ -96,7 +99,8 @@
         <div><strong><%= e.by ?? 'System' %></strong> <%= phrases[e.action] ?? e.action.replaceAll('_', ' ') %></div>
         <% if (changes.length) { %>
           <ul class="jt-changes">
-            <% changes.forEach(([field, [before, after]]) => { %>
+            <% changes.forEach(([field, [rawBefore, rawAfter]]) => {
+                 const [before, after] = masked[field] ? [rawBefore, rawAfter].map((v) => (v ? fmt.mask(v, masked[field]) : v)) : [rawBefore, rawAfter]; %>
               <li>
                 <span class="jt-changes-field"><%= fieldLabels[field] ?? field.replaceAll('_', ' ') %></span>
                 <% if (e.action === 'create') { %><%= show(after) %>

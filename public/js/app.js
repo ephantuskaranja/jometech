@@ -619,6 +619,20 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // A masked personal detail (partials/masked.ejs): Show asks the server for it (which records
+  // the look in the history), and it hides itself again after 20 seconds.
+  Alpine.data('hiddenDetail', (url) => ({
+    shown: null, timer: null,
+    async toggle() {
+      if (this.shown) return this.hide();
+      const res = await fetch(url, { method: 'POST', headers: { Accept: 'application/json', 'x-csrf-token': csrfToken() } }).catch(() => null);
+      if (!res?.ok) return;
+      this.shown = (await res.json()).value;
+      this.timer = setTimeout(() => this.hide(), 20_000);
+    },
+    hide() { clearTimeout(this.timer); this.shown = null; },
+  }));
+
   // Visitor sign-in (visitors/views/form.ejs): a known phone number fills in the rest.
   Alpine.data('visitorForm', ({ purpose = '' } = {}) => ({
     purpose, returning: '',

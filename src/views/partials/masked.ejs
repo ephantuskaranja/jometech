@@ -1,0 +1,19 @@
+<%#
+  A personal detail shown masked ("****7996"), with Show for the full value.
+  include('partials/masked', { value, kind: 'id' | 'phone', reveal: revealUrl('visitor', v.id, 'id_no') })
+
+  value    the stored value (only its masked form goes into the page)
+  reveal   where Show asks for it (each look is written to the history); leave out for masked only
+  The full value hides itself again after 20 seconds.
+%>
+<% if (!value) { %>—<% } else { %>
+  <span class="jt-masked" x-data="hiddenDetail('<%= locals.reveal ?? '' %>')">
+    <span class="font-monospace" x-show="!shown"><%= fmt.mask(value, locals.kind) %></span>
+    <span class="font-monospace" x-show="shown" x-text="shown" x-cloak></span>
+    <% if (locals.reveal) { %>
+      <button class="btn btn-link btn-sm p-0 jt-noprint" type="button" @click="toggle()" :aria-pressed="Boolean(shown)">
+        <i class="bi" :class="shown ? 'bi-eye-slash' : 'bi-eye'"></i><span x-text="shown ? 'Hide' : 'Show'">Show</span>
+      </button>
+    <% } %>
+  </span>
+<% } %>

@@ -216,7 +216,7 @@
           <img class="jt-signature mb-2" src="/check-in/<%= checkin.id %>/signature.png" alt="Signature of <%= checkin.driver_name %>" width="400" height="120">
           <div class="fw-semibold"><%= checkin.driver_name %></div>
           <div class="small text-body-secondary">
-            <%= [checkin.driver_phone && fmt.phone(checkin.driver_phone), checkin.driver_id_no && `ID ${checkin.driver_id_no}`].filter(Boolean).join(' · ') %>
+            <%= checkin.driver_phone ? fmt.phone(checkin.driver_phone) : '' %><% if (checkin.driver_id_no) { %><%= checkin.driver_phone ? ' · ' : '' %>ID <%- include('partials/masked', { value: checkin.driver_id_no, reveal: revealUrl('checkin', checkin.id, 'driver_id_no') }) %><% } %>
             <span class="d-block">Signed <%= fmt.dateTime(checkin.driver_signed_at) %></span>
           </div>
         <% } else if (checkin.not_signed_reason) { %>
