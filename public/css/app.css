@@ -279,6 +279,13 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-me-head span { color: var(--bs-tertiary-color); font-size: .8rem; }
 
 .jt-flash { display: flex; align-items: center; gap: .625rem; }
+/* Success/info: float under the top bar and close themselves (the bar shows the time left). */
+.jt-toast { position: fixed; z-index: 1090; top: 4.5rem; right: 1.5rem; width: min(26rem, calc(100vw - 2rem)); margin: 0; overflow: hidden; box-shadow: 0 12px 32px -8px rgb(16 24 40 / .28); }
+.jt-toast::after { content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: currentColor; opacity: .35; transform-origin: left; animation: jt-toast-time 8s linear forwards; }
+.jt-toast:hover::after, .jt-toast:focus-within::after { animation-play-state: paused; }
+@keyframes jt-toast-time { to { transform: scaleX(0); } }
+@media (max-width: 575.98px) { .jt-toast { top: 4.25rem; right: 1rem; left: 1rem; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .jt-toast::after { opacity: 0; } }
 .jt-narrow { max-width: 30rem; }
 
 .jt-auth-body { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem 1rem; }

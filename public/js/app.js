@@ -9,6 +9,12 @@ document.addEventListener('keydown', (e) => {
   document.getElementById('global-search')?.focus();
 });
 
+// A success/info message closes itself when its time bar runs out (CSS: .jt-toast;
+// pointing at it or focusing it pauses the bar). Warnings and errors stay until closed.
+document.querySelectorAll('.jt-flash[data-autoclose]').forEach((el) => {
+  el.addEventListener('animationend', () => bootstrap.Alert.getOrCreateInstance(el).close(), { once: true });
+});
+
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 const getJson = (url) => fetch(url, { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : Promise.reject(r)));
 

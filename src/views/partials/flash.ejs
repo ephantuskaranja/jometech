@@ -1,6 +1,15 @@
-<% if (flash) { %>
-  <div class="alert alert-<%= flash.type === 'error' ? 'danger' : flash.type %> alert-dismissible jt-flash" role="status">
-    <i class="bi bi-<%= flash.type === 'success' ? 'check-circle' : 'info-circle' %>"></i>
+<%#
+  The message after saving. Success and info float over the page and close themselves
+  after 8 seconds (paused while pointed at or focused). Warnings and errors ask for
+  action, so they sit at the top of the page until closed.
+%>
+<% if (flash) {
+  const tone = flash.type === 'error' ? 'danger' : flash.type;
+  const toast = tone === 'success' || tone === 'info';
+  const icon = { success: 'check-circle', info: 'info-circle', warning: 'exclamation-triangle', danger: 'exclamation-octagon' }[tone] ?? 'info-circle';
+%>
+  <div class="alert alert-<%= tone %> alert-dismissible fade show jt-flash<%= toast ? ' jt-toast' : '' %>" role="<%= toast ? 'status' : 'alert' %>"<%- toast ? ' data-autoclose' : '' %>>
+    <i class="bi bi-<%= icon %>"></i>
     <span><%= flash.text %></span>
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>
