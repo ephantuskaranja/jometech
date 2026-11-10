@@ -5,6 +5,7 @@ logs/
 /storage/
 .DS_Store
 Thumbs.db
+.vscode/
 
 # Client source documents with personal data
 /docs/source/attendance/
