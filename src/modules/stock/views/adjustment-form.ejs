@@ -21,7 +21,6 @@
       <span class="small text-body-secondary" x-show="total !== 0" x-cloak x-text="`About KES ${total < 0 ? '−' : '+'}${money(Math.abs(total))} in stock value`"></span></div>
     <div class="card-body d-grid gap-3">
       <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
-      <datalist id="adj-items"><template x-for="i in items" :key="i.id"><option :value="i.name"></option></template></datalist>
       <template x-for="(row, i) in rows" :key="row.key">
         <div class="jt-po-line">
           <div>
@@ -33,7 +32,8 @@
               <input type="hidden" name="line_dir" :value="row.dir">
               <div class="flex-grow-1">
                 <label class="form-label" :for="`adj-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
-                <input class="form-control" :id="`adj-item-${row.key}`" name="line_item_name" list="adj-items" autocomplete="off" x-model="row.item_name" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+                <select class="form-select" :id="`adj-item-${row.key}`" x-init="$nextTick(() => picker($el, row))"></select>
+                <input type="hidden" name="line_item_name" :value="row.item_name">
                 <input type="hidden" name="line_item_id" :value="row.item_id">
               </div>
             </div>

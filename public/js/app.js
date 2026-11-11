@@ -139,6 +139,39 @@ function initSearchableSelects(root = document) {
 }
 initSearchableSelects();
 
+/**
+ * Item pickers on order, stock and issue lines: a Tom Select built from a list, for rows Alpine adds and removes.
+ * Only what is on the list can be chosen (a typo can't slip through as free text).
+ *   options()       [{ value, label, sub? }]: read again each time it opens, so an item added on one line shows on all
+ *   onChange(value) updates the row
+ *   create(name, done)  optional: offers "Add new item “…”"; call done({ value, label }) when saved, or done() if not
+ * Use: <select class="form-select" x-init="$nextTick(() => picker($el, row))"></select>
+ */
+function mountPicker(el, { options, value = '', onChange, create = null, placeholder = 'Type to search' }) {
+  if (!window.TomSelect || el.tomselect) return;
+  const config = {
+    options: options(), items: value ? [String(value)] : [],
+    valueField: 'value', labelField: 'label', searchField: ['label'],
+    maxOptions: 100, placeholder, allowEmptyOption: false,
+    render: {
+      option: (d, escape) => `<div class="jt-pick-option"><span>${escape(d.label)}</span>${d.sub ? `<small>${escape(d.sub)}</small>` : ''}</div>`,
+      item: (d, escape) => `<div>${escape(d.label)}</div>`,
+      no_results: () => '<div class="no-results">No matches. Check the spelling.</div>',
+    },
+    onDropdownOpen() { for (const o of options()) if (!this.options[o.value]) this.addOption(o); },
+    onChange: (v) => onChange(v),
+  };
+  if (create) {
+    Object.assign(config, {
+      create: (input, callback) => create(input.trim(), (opt) => callback(opt ? { ...opt, value: String(opt.value) } : undefined)),
+      createOnBlur: false,
+    });
+    config.render.option_create = (d, escape) => `<div class="create"><i class="bi bi-plus-lg"></i> Add new item “${escape(d.input)}”</div>`;
+  }
+  new window.TomSelect(el, config);
+}
+window.mountPicker = mountPicker;
+
 // ---------- Alpine components used by several pages ----------
 // Registered before Alpine starts (this file loads before Alpine's deferred script runs).
 document.addEventListener('alpine:init', () => {
@@ -441,9 +474,12 @@ document.addEventListener('alpine:init', () => {
       itemOf(r) { return this.items.find((i) => String(i.id) === String(r.item_id)) ?? null; },
       isArea(r) { return this.itemOf(r)?.priced_by === 'area'; },
       unitOf(r) { return this.itemOf(r)?.unit ?? ''; },
-      pick(r) {
-        const typed = r.item_name.trim().toLowerCase();
-        r.item_id = this.items.find((i) => i.name.toLowerCase() === typed)?.id ?? '';
+      picker(el, r) {
+        mountPicker(el, {
+          options: () => this.items.map((i) => ({ value: String(i.id), label: i.name })),
+          value: r.item_id,
+          onChange: (v) => { r.item_id = v; r.item_name = this.itemOf(r)?.name ?? ''; },
+        });
       },
       sizeOf(r) { return this.isArea(r) && num(r.length) && num(r.width) ? `${num(r.length)}x${num(r.width)}${r.size_unit}` : ''; },
       sizesHere(r) { return this.here.filter((b) => String(b.item_id) === String(r.item_id) && b.size_key); },
@@ -496,9 +532,14 @@ document.addEventListener('alpine:init', () => {
       isArea(r) { return this.itemOf(r)?.priced_by === 'area'; },
       unitOf(r) { return this.itemOf(r)?.unit ?? ''; },
       lastPrice(r) { return this.itemOf(r)?.current_price ?? null; },
-      pick(r) {
-        const typed = r.item_name.trim().toLowerCase();
-        r.item_id = this.items.find((i) => i.name.toLowerCase() === typed)?.id ?? '';
+      // The item box: pick from the list; data-can-add on the select offers "Add new item".
+      picker(el, r) {
+        mountPicker(el, {
+          options: () => this.items.map((i) => ({ value: String(i.id), label: i.name })),
+          value: r.item_id,
+          onChange: (v) => { r.item_id = v; r.item_name = this.itemOf(r)?.name ?? ''; },
+          create: 'canAdd' in el.dataset ? (name, done) => this.addItem(r, name, done) : null,
+        });
       },
       area(r) {
         const each = num(r.length) * num(r.width) / (r.size_unit === 'mm' ? 304.8 * 304.8 : 1);
@@ -517,11 +558,13 @@ document.addEventListener('alpine:init', () => {
         this.rows.splice(i, 1);
         if (!this.rows.length) this.rows.push(row());
       },
-      addItem(r) {
-        window.dispatchEvent(new CustomEvent('jt:quick-add-item', { detail: { name: r.item_name.trim(), done: (item) => {
+      addItem(r, name, picked) {
+        window.dispatchEvent(new CustomEvent('jt:quick-add-item', { detail: { name, done: (item) => {
+          if (!item) return picked?.(); // closed without saving
           this.items.push(item);
           r.item_name = item.name;
-          r.item_id = item.id;
+          r.item_id = String(item.id);
+          picked?.({ value: item.id, label: item.name });
         } } }));
       },
     };
@@ -558,10 +601,10 @@ document.addEventListener('alpine:init', () => {
       }
     },
     cancelled() {
-      // Tom Select waits to be told; the item window has nothing to undo.
+      // Closed without saving: the dropdown that asked (Tom Select) waits to be told.
       const done = this.done;
       this.done = null;
-      if (done && url === '/api/suppliers') done();
+      done?.();
     },
   });
   Alpine.data('quickAddSupplier', quickAdd({ url: '/api/suppliers', focus: '#qas-phone', fields: () => ({ name: '', phone: '' }) }));
@@ -629,35 +672,18 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('issueForm', ({ rows = [], stock = [] } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
-    const row = (r = {}) => ({ key: next++, balance_id: '', label: '', quantity: '', open: false, active: 0, ...r });
+    const row = (r = {}) => ({ key: next++, balance_id: '', label: '', quantity: '', ...r });
     return {
       rows: rows.map(row), stock,
       stockOf(r) { return this.stock.find((s) => String(s.id) === String(r.balance_id)) ?? null; },
-      pick(r) {
-        const typed = r.label.trim().toLowerCase();
-        r.balance_id = this.stock.find((s) => s.label.toLowerCase() === typed)?.id ?? '';
-      },
-      // The search list under each item box: every typed word somewhere in the name ("4 plate" finds "Plate 4 mm, 8 × 4 ft").
-      matches(r) {
-        const words = r.label.toLowerCase().split(/\s+/).filter(Boolean);
-        return this.stock.filter((s) => words.every((w) => s.label.toLowerCase().includes(w))).slice(0, 30);
-      },
-      choose(r, s) {
-        r.label = s.label;
-        r.balance_id = s.id;
-        r.open = false;
-      },
-      move(r, step) {
-        const n = this.matches(r).length;
-        if (!n) return;
-        if (!r.open) { r.open = true; return; }
-        r.active = (r.active + step + n) % n;
-      },
-      enter(r, e) {
-        const list = this.matches(r);
-        if (!r.open || !list.length) return;
-        e.preventDefault(); // choose, don't submit the form
-        this.choose(r, list[r.active] ?? list[0]);
+      // What is in stock here, by any words of the name in any order ("4 plate" finds "Plate 4 mm, 8 × 4 ft").
+      picker(el, r) {
+        mountPicker(el, {
+          options: () => this.stock.map((s) => ({ value: String(s.id), label: s.label, sub: `${s.available} ${s.unit}` })),
+          value: r.balance_id,
+          onChange: (v) => { r.balance_id = v; r.label = this.stockOf(r)?.label ?? ''; },
+          placeholder: 'Type to search, e.g. plate 4',
+        });
       },
       tooMany(r) { const s = this.stockOf(r); return Boolean(s) && num(r.quantity) > s.available; },
       cost(r) {

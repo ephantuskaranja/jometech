@@ -11,15 +11,14 @@
     <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Add to stock</h2><span class="small text-body-secondary" x-show="total > 0" x-cloak x-text="`KES ${money(total)}`"></span></div>
     <div class="card-body d-grid gap-3">
       <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
-      <datalist id="po-items"><template x-for="i in items" :key="i.id"><option :value="i.name"></option></template></datalist>
       <datalist id="line-units"><option value="Pc"><option value="Set"><option value="Pair"><option value="Length"><option value="m"><option value="kg"><option value="Litre"><option value="Box"></datalist>
       <template x-for="(row, i) in rows" :key="row.key">
         <div class="jt-po-line">
           <div>
             <label class="form-label" :for="`op-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
-            <input class="form-control" :id="`op-item-${row.key}`" name="line_item_name" list="po-items" autocomplete="off" x-model="row.item_name" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+            <select class="form-select" :id="`op-item-${row.key}`" x-init="$nextTick(() => picker($el, row))" data-can-add></select>
+            <input type="hidden" name="line_item_name" :value="row.item_name">
             <input type="hidden" name="line_item_id" :value="row.item_id">
-            <div class="form-text" x-show="row.item_name.trim() && !row.item_id">Not on the list. <a href="#" @click.prevent="addItem(row)">Add “<span x-text="row.item_name"></span>” as a new item</a></div>
           </div>
           <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
           <div class="jt-po-fields">
