@@ -1,0 +1,73 @@
+<%# Adjust stock: lines taken off or added, with a reason. Saved as waiting for approval; stock changes when approved. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Adjustments', href: '/inventory/adjustments' }, 'New'],
+  heading: 'Adjust stock',
+  sub: `At ${site.name}. Nothing changes until a manager or admin approves it.`,
+}) %>
+
+<form method="post" action="/inventory/adjustments" novalidate x-data="adjustmentForm(<%= JSON.stringify({ rows, items, here }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-body jt-fields">
+      <%- include('partials/field', { name: 'reason', label: 'Why', type: 'select', value: values.reason, error: errors.reason, required: true,
+            blank: 'Choose why', options: Object.entries(reasons).filter(([k]) => k !== 'count').map(([value, r]) => ({ value, label: `${r.label}: ${r.hint.toLowerCase()}` })) }) %>
+      <%- include('partials/field', { name: 'note', label: 'Note', value: values.note, error: errors.note, placeholder: 'e.g. Dropped off the forklift, two sheets bent', attrs: 'maxlength="500"', hint: 'Needed for “Other”. Helps the manager decide.' }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Items</h2>
+      <span class="small text-body-secondary" x-show="total !== 0" x-cloak x-text="`About KES ${total < 0 ? '−' : '+'}${money(Math.abs(total))} in stock value`"></span></div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <datalist id="adj-items"><template x-for="i in items" :key="i.id"><option :value="i.name"></option></template></datalist>
+      <template x-for="(row, i) in rows" :key="row.key">
+        <div class="jt-po-line">
+          <div>
+            <div class="d-flex align-items-end gap-2 flex-wrap">
+              <div class="jt-seg jt-adj-dir" role="group" :aria-label="`Line ${i + 1}: take off or add`">
+                <button type="button" :class="row.dir === 'off' && 'active'" @click="row.dir = 'off'"><i class="bi bi-dash-lg"></i>Take off</button>
+                <button type="button" :class="row.dir === 'on' && 'active'" @click="row.dir = 'on'"><i class="bi bi-plus-lg"></i>Add</button>
+              </div>
+              <input type="hidden" name="line_dir" :value="row.dir">
+              <div class="flex-grow-1">
+                <label class="form-label" :for="`adj-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
+                <input class="form-control" :id="`adj-item-${row.key}`" name="line_item_name" list="adj-items" autocomplete="off" x-model="row.item_name" @input="pick(row)" placeholder="Type to find, e.g. Plate 4 mm">
+                <input type="hidden" name="line_item_id" :value="row.item_id">
+              </div>
+            </div>
+            <div class="form-text" x-show="row.item_id && !isArea(row)" x-text="`Here now: ${qty(haveHere(row, ''))} ${unitOf(row)}`"></div>
+            <div class="form-text" x-show="isArea(row) && row.dir === 'off'" x-cloak>
+              <template x-if="sizesHere(row).length === 0"><span>None of this plate at this site.</span></template>
+              <template x-for="b in sizesHere(row)" :key="b.size_key">
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1 mt-1" :class="sizeOf(row) === b.size_key && 'active'" @click="useSize(row, b)" x-text="`${b.length} × ${b.width} ${b.size_unit}: ${qty(b.quantity)} here`"></button>
+              </template>
+            </div>
+          </div>
+          <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
+          <div class="jt-po-fields jt-adj-fields">
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`adj-l-${row.key}`">Length</label><input class="form-control text-end jt-num" :id="`adj-l-${row.key}`" name="line_length" inputmode="decimal" data-number="decimal" x-model="row.length"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`adj-w-${row.key}`">Width</label><input class="form-control text-end jt-num" :id="`adj-w-${row.key}`" name="line_width" inputmode="decimal" data-number="decimal" x-model="row.width"></div>
+            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`adj-u-${row.key}`">In</label><select class="form-select" :id="`adj-u-${row.key}`" name="line_size_unit" x-model="row.size_unit"><option value="ft">feet</option><option value="mm">mm</option></select></div>
+            <div><label class="form-label" :for="`adj-q-${row.key}`" x-text="isArea(row) ? 'Pieces' : `Qty${unitOf(row) ? ` (${unitOf(row)})` : ''}`"></label><input class="form-control text-end jt-num" :id="`adj-q-${row.key}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
+            <div x-show="needsCost(row)" x-cloak><label class="form-label" :for="`adj-c-${row.key}`" x-text="isArea(row) ? 'Cost per sq ft' : 'Cost per unit'"></label><input class="form-control text-end jt-num" :id="`adj-c-${row.key}`" name="line_cost" inputmode="decimal" data-number="decimal" x-model="row.cost"></div>
+          </div>
+          <div class="jt-po-sums small text-body-secondary">
+            <span x-show="needsCost(row)" x-cloak>No cost on record for this item yet: enter what one cost, excluding VAT.</span>
+            <span class="ms-auto fw-semibold text-body" x-show="value(row)" x-text="`About KES ${value(row) < 0 ? '−' : '+'}${money(Math.abs(value(row)))}`"></span>
+          </div>
+        </div>
+      </template>
+      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button></div>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-hourglass-split"></i>Saved as waiting for approval. Stock doesn’t change yet.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="/inventory/adjustments">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i>Send for approval</button>
+    </div>
+  </div>
+</form>

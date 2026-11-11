@@ -24,6 +24,7 @@ export const PERMISSIONS = [
   ['Stores', 'inventory.manage', 'Manage items, stock counts and transfers'],
   ['Stores', 'purchasing.manage', 'Raise purchase requests and orders, receive goods'],
   ['Stores', 'purchasing.approve', 'Approve purchase requests and orders'],
+  ['Stores', 'inventory.approve', 'Approve stock adjustments and counts'],
   ['People', 'attendance.manage', 'Mark attendance'],
   ['People', 'payroll.manage', 'Prepare payroll'],
   ['People', 'payroll.approve', 'Approve payroll'],

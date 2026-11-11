@@ -1,0 +1,92 @@
+<%# One stock adjustment: what changes, why, and approve / reject / cancel while it waits. %>
+<%
+  const pending = adj.status === 'pending';
+  const signed = (n) => `${Number(n) < 0 ? '−' : '+'}${fmt.money(Math.abs(Number(n)))}`;
+  // Before approval the value is an estimate at today's average (or the cost typed).
+  const estimate = (l) => {
+    const cost = l.current_avg === null ? (l.entered_cost === null ? null : Number(l.entered_cost)) : Number(l.current_avg);
+    return cost === null ? null : Number(l.stock_qty) * cost;
+  };
+  const total = adj.lines.reduce((sum, l) => sum + (pending ? (estimate(l) ?? 0) : Number(l.value ?? 0)), 0);
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Adjustments', href: '/inventory/adjustments' }, adj.number],
+  heading: adj.number,
+  sub: `${reasons[adj.reason].label} at ${adj.site_name}. Recorded ${fmt.dateTime(adj.created_at)}${adj.created_name ? ` by ${adj.created_name}` : ''}.`,
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">What changes</h2>
+        <%- include('partials/pill', { text: statuses[adj.status].label, tone: statuses[adj.status].tone }) %>
+      </div>
+      <% if (adj.note) { %><div class="card-body border-bottom small"><strong>Note:</strong> <%= adj.note %></div><% } %>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Item</th><th class="text-end">Change</th><th class="text-end"><%= pending ? 'About' : 'Cost each' %></th><th class="text-end">Value (KES)</th></tr></thead>
+          <tbody>
+            <% adj.lines.forEach((l) => { const v = pending ? estimate(l) : Number(l.value); %>
+              <tr>
+                <td><a href="/items/<%= l.item_id %>"><%= l.item_name %></a>
+                  <% if (l.size_key) { %><span class="jt-sub"><%= Number(l.length) %> × <%= Number(l.width) %> <%= l.size_unit %></span><% } %></td>
+                <td class="text-end jt-num text-nowrap <%= Number(l.quantity) < 0 ? 'text-danger-emphasis' : 'text-success-emphasis' %>">
+                  <%= Number(l.quantity) > 0 ? '+' : '−' %><%= fmt.qty(Math.abs(Number(l.quantity))) %> <%= l.size_key ? (Math.abs(Number(l.quantity)) === 1 ? 'piece' : 'pieces') : l.unit %>
+                  <% if (l.size_key) { %><span class="jt-sub"><%= fmt.qty(Math.abs(Number(l.stock_qty))) %> <%= l.unit %></span><% } %></td>
+                <td class="text-end jt-num text-nowrap"><%
+                  const each = pending ? (l.current_avg ?? l.entered_cost) : l.unit_cost; %><%= each === null ? '—' : fmt.money(each) %>
+                  <% if (pending && l.current_avg === null && l.entered_cost !== null) { %><span class="jt-sub">typed</span><% } %></td>
+                <td class="text-end jt-num text-nowrap"><%= v === null ? '—' : signed(v) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+          <tfoot><tr><th colspan="3" class="text-end"><%= pending ? 'About, at today’s average' : 'Change in stock value' %></th><th class="text-end jt-num text-nowrap"><%= signed(total) %></th></tr></tfoot>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <% if (pending && canApprove) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Approve?</h2></div>
+        <div class="card-body d-grid gap-3">
+          <p class="small mb-0">Approving changes stock at <%= adj.site_name %> now, at each item’s average cost today.</p>
+          <form method="post" action="/inventory/adjustments/<%= adj.id %>/approve" x-data @submit="if (!confirm(<%= JSON.stringify(`Approve ${adj.number} and change stock?`) %>)) $event.preventDefault()">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-primary w-100" type="submit"><i class="bi bi-check2"></i>Approve</button>
+          </form>
+          <form method="post" action="/inventory/adjustments/<%= adj.id %>/reject" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <label class="form-label mb-0" for="reject-note">Or reject it, saying why</label>
+            <input class="form-control" id="reject-note" name="note" maxlength="255" required placeholder="e.g. Count them again first">
+            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-x-lg"></i>Reject</button>
+          </form>
+        </div>
+      </section>
+    <% } else if (pending) { %>
+      <section class="card"><div class="card-body small"><i class="bi bi-hourglass-split"></i> Waiting for a manager or admin to approve it. Stock hasn’t changed yet.</div></section>
+    <% } else { %>
+      <section class="card"><div class="card-body small">
+        <%= statuses[adj.status].label %> <%= fmt.dateTime(adj.decided_at) %><%= adj.decided_name ? ` by ${adj.decided_name}` : '' %>.
+        <% if (adj.decision_note) { %><div class="mt-1"><strong>Why:</strong> <%= adj.decision_note %></div><% } %>
+      </div></section>
+    <% } %>
+    <% if (pending && canCancel) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Recorded by mistake?</h2></div>
+        <form method="post" action="/inventory/adjustments/<%= adj.id %>/cancel" class="card-body d-grid gap-2">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <label class="form-label mb-0" for="cancel-note">Cancel it, saying why</label>
+          <input class="form-control" id="cancel-note" name="note" maxlength="255" required placeholder="e.g. Wrong item">
+          <button class="btn btn-outline-secondary" type="submit">Cancel this adjustment</button>
+        </form>
+      </section>
+    <% } %>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries }) %></div>
+    </section>
+  </div>
+</div>

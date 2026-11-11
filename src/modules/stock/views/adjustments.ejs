@@ -1,0 +1,42 @@
+<%# Inventory → Adjustments: stock taken off or added, waiting for approval or decided. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, 'Adjustments'],
+  heading: 'Stock adjustments',
+  sub: 'Stock taken off or added outside deliveries and issues: damaged, lost, found. Stock changes only when a manager approves it.',
+  actions: canRecord ? [{ label: 'Adjust stock', href: '/inventory/adjustments/new', icon: 'plus-slash-minus', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <div class="jt-toolbar">
+    <nav class="jt-seg" aria-label="Show">
+      <% [['pending', `Waiting for approval (${pending})`], ['done', 'Decided'], ['all', 'All']].forEach(([key, label]) => { %>
+        <a href="?show=<%= key %>" class="<%= show === key ? 'active' : '' %>"<%- show === key ? ' aria-current="true"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> shown</span>
+  </div>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', show === 'pending'
+      ? { icon: 'check2-circle', heading: 'Nothing waiting', text: canApprove ? 'No adjustments are waiting for your approval.' : 'No adjustments are waiting for approval.' }
+      : { icon: 'plus-slash-minus', heading: 'No adjustments yet', text: 'When stock is damaged, lost or found, record it with Adjust stock.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Adjustment</th><th>Why</th><th class="d-none d-md-table-cell">Recorded</th><th class="text-end">Value (KES)</th><th>Status</th></tr></thead>
+        <tbody>
+          <% list.forEach((a) => { %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/inventory/adjustments/<%= a.id %>"><%= a.number %></a>
+                <span class="jt-sub"><%= a.site_name %> · <%= a.line_count %> line<%= Number(a.line_count) === 1 ? '' : 's' %></span></td>
+              <td><%= reasons[a.reason].label %><% if (a.note) { %><span class="jt-sub text-truncate" style="max-width: 18rem"><%= a.note %></span><% } %></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.dateTime(a.created_at) %><span class="jt-sub"><%= a.created_name ?? '' %></span></td>
+              <td class="text-end jt-num text-nowrap"><%= a.value === null ? '—' : `${Number(a.value) < 0 ? '−' : '+'}${fmt.money(Math.abs(Number(a.value)))}` %></td>
+              <td><%- include('partials/pill', { text: statuses[a.status].label, tone: statuses[a.status].tone }) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

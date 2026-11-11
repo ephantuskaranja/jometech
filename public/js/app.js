@@ -431,6 +431,46 @@ document.addEventListener('alpine:init', () => {
 
   // Purchase order form (purchasing/views/form.ejs): find an item by typing its name; plates ask for a size.
   // The sums here are only for showing; the server works out what is saved.
+  // Adjust stock: each line takes stock off or adds it. Plates being taken off pick a size that is on the racks here.
+  Alpine.data('adjustmentForm', ({ rows = [], items = [], here = [] } = {}) => {
+    let next = 0;
+    const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;
+    const row = (r = {}) => ({ key: next++, dir: 'off', item_id: '', item_name: '', quantity: '', length: '', width: '', size_unit: 'ft', cost: '', ...r });
+    return {
+      rows: rows.map(row), items, here,
+      itemOf(r) { return this.items.find((i) => String(i.id) === String(r.item_id)) ?? null; },
+      isArea(r) { return this.itemOf(r)?.priced_by === 'area'; },
+      unitOf(r) { return this.itemOf(r)?.unit ?? ''; },
+      pick(r) {
+        const typed = r.item_name.trim().toLowerCase();
+        r.item_id = this.items.find((i) => i.name.toLowerCase() === typed)?.id ?? '';
+      },
+      sizeOf(r) { return this.isArea(r) && num(r.length) && num(r.width) ? `${num(r.length)}x${num(r.width)}${r.size_unit}` : ''; },
+      sizesHere(r) { return this.here.filter((b) => String(b.item_id) === String(r.item_id) && b.size_key); },
+      haveHere(r, key) { return this.here.find((b) => String(b.item_id) === String(r.item_id) && b.size_key === key)?.quantity ?? 0; },
+      useSize(r, b) { Object.assign(r, { length: String(b.length), width: String(b.width), size_unit: b.size_unit }); },
+      needsCost(r) { return r.dir === 'on' && Boolean(this.itemOf(r)) && this.itemOf(r).avg_cost === null; },
+      stockQty(r) {
+        if (!this.isArea(r)) return num(r.quantity);
+        return num(r.length) * num(r.width) / (r.size_unit === 'mm' ? 304.8 * 304.8 : 1) * num(r.quantity);
+      },
+      value(r) {
+        const item = this.itemOf(r);
+        const cost = item?.avg_cost ?? num(r.cost);
+        if (!item || !cost) return 0;
+        return Math.round(this.stockQty(r) * cost * (r.dir === 'off' ? -1 : 1) * 100) / 100;
+      },
+      get total() { return this.rows.reduce((sum, r) => sum + this.value(r), 0); },
+      money: (n) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      qty: (n) => Number(n).toLocaleString('en-KE', { maximumFractionDigits: 3 }),
+      addRow() { this.rows.push(row()); },
+      removeRow(i) {
+        this.rows.splice(i, 1);
+        if (!this.rows.length) this.rows.push(row());
+      },
+    };
+  });
+
   // System → Backups: download and delete ask for the password again in one small window.
   Alpine.data('backupActions', () => ({
     action: { url: '', which: '', title: '', button: '', danger: false },

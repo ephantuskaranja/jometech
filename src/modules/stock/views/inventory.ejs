@@ -4,7 +4,10 @@
   crumb: ['Stores', 'Inventory'],
   heading: 'Inventory',
   sub: `Stock at ${site.name}. Plates show their sheets by size. Costs exclude VAT and include transport.`,
-  actions: canManage ? [{ label: 'Opening stock', href: '/inventory/opening', icon: 'stack' }] : [],
+  actions: [
+    ...(canAdjust ? [{ label: pendingAdjustments ? `Adjustments (${pendingAdjustments} waiting)` : 'Adjustments', href: '/inventory/adjustments', icon: 'list-check' }] : []),
+    ...(canManage ? [{ label: 'Opening stock', href: '/inventory/opening', icon: 'stack' }, { label: 'Adjust stock', href: '/inventory/adjustments/new', icon: 'plus-slash-minus', primary: true }] : []),
+  ],
 }) %>
 
 <section class="card">

@@ -5,6 +5,7 @@ import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalAmount, optionalText } from '../../core/validate.js';
 import * as stock from './service.js';
+import { pendingCount } from './adjustments.js';
 import { getOrder, itemOptions } from '../purchasing/service.js';
 import { listCategories } from '../items/service.js';
 import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
@@ -250,5 +251,7 @@ router.get('/inventory', seeStock, async (req, res) => {
     list: await stock.stockList({ siteId: req.site.id, q, lowOnly }),
     totals: await stock.stockTotals(),
     canManage: req.user.can('inventory.manage'),
+    canAdjust: req.user.can('inventory.manage') || req.user.can('inventory.approve'),
+    pendingAdjustments: await pendingCount(req.user.sites.map((s) => s.id)),
   });
 });
