@@ -1,0 +1,83 @@
+<%# One transfer: what was sent and, once received, what arrived. The receiving site confirms; the sender can cancel while in transit. %>
+<%
+  const size = (l) => (l.size_key ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '');
+  const unitOf = (l) => (l.size_key ? 'pcs' : l.unit);
+  const received = t.status === 'received';
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Transfers', href: '/inventory/transfers' }, t.number],
+  heading: t.number,
+  sub: `${t.from_name} → ${t.to_name}. Sent ${fmt.dateTime(t.sent_at)}${t.sent_name ? ` by ${t.sent_name}` : ''}${t.carried_by ? `, carried by ${t.carried_by}` : ''}.`,
+  actions: t.adjustment_number ? [{ label: `Shortfall ${t.adjustment_number}`, href: `/inventory/adjustments/${t.adjustment_id}`, icon: 'plus-slash-minus' }] : [],
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <form method="post" action="/inventory/transfers/<%= t.id %>/receive" novalidate<% if (canReceive) { %> x-data @submit="if (!confirm(<%= JSON.stringify(`Receive ${t.number} into stock at ${t.to_name}?`) %>)) $event.preventDefault()"<% } %>>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <section class="card">
+        <div class="card-header d-flex align-items-center gap-2">
+          <h2 class="h6 mb-0 me-auto"><%= canReceive ? 'What arrived?' : 'What was sent' %></h2>
+          <%- include('partials/pill', { text: statuses[t.status].label, tone: statuses[t.status].tone }) %>
+        </div>
+        <% if (t.note) { %><div class="card-body border-bottom small"><strong>Note:</strong> <%= t.note %></div><% } %>
+        <% if (canReceive) { %><div class="card-body border-bottom small"><i class="bi bi-info-circle"></i> Count what came off the truck. Anything missing goes to a manager as a loss to approve.</div><% } %>
+        <div class="table-responsive">
+          <table class="table jt-table mb-0">
+            <thead><tr><th>Item</th><th class="text-end">Sent</th><% if (canReceive || received) { %><th class="text-end">Arrived</th><% } %></tr></thead>
+            <tbody>
+              <% t.lines.forEach((l) => { const short = received && Number(l.received_qty) < Number(l.quantity); %>
+                <tr>
+                  <td><a href="/items/<%= l.item_id %>"><%= l.item_name %></a><% if (l.size_key) { %><span class="jt-sub"><%= size(l) %></span><% } %></td>
+                  <td class="text-end jt-num text-nowrap"><%= fmt.qty(l.quantity) %> <%= unitOf(l) %></td>
+                  <% if (canReceive) { %>
+                    <td class="text-end"><div class="jt-count-input">
+                      <input class="form-control text-end jt-num" name="received_<%= l.id %>" value="<%= fmt.qty(l.quantity) %>" inputmode="decimal" data-number="decimal" autocomplete="off" aria-label="Arrived: <%= l.item_name %> <%= size(l) %>">
+                      <span><%= unitOf(l) %></span></div></td>
+                  <% } else if (received) { %>
+                    <td class="text-end jt-num text-nowrap <%= short ? 'text-danger-emphasis' : '' %>"><%= fmt.qty(l.received_qty) %> <%= unitOf(l) %><% if (short) { %><span class="jt-sub"><%= fmt.qty(Number(l.quantity) - Number(l.received_qty)) %> short</span><% } %></td>
+                  <% } %>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+        <% if (canReceive) { %>
+          <div class="card-body border-top d-grid gap-3">
+            <%- include('partials/field', { name: 'note', label: 'Note', value: '', placeholder: 'e.g. One sheet fell off at the junction', hint: 'Optional. Say what happened if something is missing.', attrs: 'maxlength="500"' }) %>
+            <div><button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-down"></i>Receive into stock at <%= t.to_name %></button></div>
+          </div>
+        <% } %>
+      </section>
+    </form>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <% if (t.status === 'in_transit' && !canReceive) { %>
+      <section class="card"><div class="card-body small"><i class="bi bi-truck"></i> On its way. <%= t.to_name %> receives it when it arrives.</div></section>
+    <% } else if (received) { %>
+      <section class="card"><div class="card-body small">
+        Received <%= fmt.dateTime(t.received_at) %><%= t.received_name ? ` by ${t.received_name}` : '' %>.
+        <% if (t.receive_note) { %><div class="mt-1"><strong>Note:</strong> <%= t.receive_note %></div><% } %>
+        <% if (t.adjustment_number) { %><div class="mt-2">Something was short: <a href="/inventory/adjustments/<%= t.adjustment_id %>"><%= t.adjustment_number %></a> (<%= t.adjustment_status === 'pending' ? 'waiting for approval: until then the missing pieces still show in stock here' : t.adjustment_status %>).</div><% } %>
+      </div></section>
+    <% } else if (t.status === 'cancelled') { %>
+      <section class="card"><div class="card-body small">Cancelled: <%= t.cancel_reason %>. The stock went back to <%= t.from_name %>.</div></section>
+    <% } %>
+    <% if (canCancel) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Didn’t go?</h2></div>
+        <form method="post" action="/inventory/transfers/<%= t.id %>/cancel" class="card-body d-grid gap-2">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <label class="form-label mb-0" for="cancel-reason">Cancel it, saying why. The stock goes back to <%= t.from_name %>.</label>
+          <input class="form-control" id="cancel-reason" name="reason" maxlength="255" required placeholder="e.g. Truck didn’t leave">
+          <button class="btn btn-outline-secondary" type="submit">Cancel this transfer</button>
+        </form>
+      </section>
+    <% } %>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries }) %></div>
+    </section>
+  </div>
+</div>

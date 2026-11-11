@@ -22,27 +22,7 @@
       <% if (!stock.length) { %>
         <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>Nothing is in stock at <%= site.name %> yet. Receive goods, or enter opening stock, first.</span></div>
       <% } %>
-      <template x-for="(row, i) in rows" :key="row.key">
-        <div class="jt-po-line">
-          <div>
-            <label class="form-label" :for="`iss-${row.key}`" x-text="`Item ${i + 1}`"></label>
-            <%# Pick from what is in stock here: any words of the name, in any order. %>
-            <select class="form-select" :id="`iss-${row.key}`" x-init="$nextTick(() => picker($el, row))"></select>
-            <input type="hidden" name="line_label" :value="row.label">
-            <input type="hidden" name="line_balance_id" :value="row.balance_id">
-          </div>
-          <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
-          <div class="jt-po-fields">
-            <div><label class="form-label" :for="`iss-q-${row.key}`" x-text="stockOf(row) ? `Quantity (${stockOf(row).unit})` : 'Quantity'"></label><input class="form-control text-end jt-num" :id="`iss-q-${row.key}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
-          </div>
-          <div class="jt-po-sums small text-body-secondary">
-            <span x-show="stockOf(row)" x-text="stockOf(row) && `${stockOf(row).available} ${stockOf(row).unit} in stock`"></span>
-            <span class="text-danger" x-show="tooMany(row)">More than is in stock</span>
-            <span class="ms-auto fw-semibold text-body" x-show="cost(row)" x-text="`KES ${money(cost(row))}`"></span>
-          </div>
-        </div>
-      </template>
-      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button></div>
+      <%- include('issues/views/stock-lines') %>
     </div>
   </section>
 

@@ -6,6 +6,7 @@ import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalAmount, optionalText } from '../../core/validate.js';
 import * as stock from './service.js';
 import { pendingCount } from './adjustments.js';
+import { incomingCount } from './transfers.js';
 import { getOrder, itemOptions } from '../purchasing/service.js';
 import { listCategories } from '../items/service.js';
 import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
@@ -253,5 +254,6 @@ router.get('/inventory', seeStock, async (req, res) => {
     canManage: req.user.can('inventory.manage'),
     canAdjust: req.user.can('inventory.manage') || req.user.can('inventory.approve'),
     pendingAdjustments: await pendingCount(req.user.sites.map((s) => s.id)),
+    incomingTransfers: await incomingCount(req.user.sites.map((s) => s.id)),
   });
 });

@@ -1,0 +1,40 @@
+<%# Inventory → Transfers: what is on its way here, what we sent, and all of them. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, 'Transfers'],
+  heading: 'Stock transfers',
+  sub: 'Stock sent from one site to another. It is in transit until the other site receives it.',
+  actions: canSend ? [{ label: 'Send stock', href: '/inventory/transfers/new', icon: 'truck', primary: true }] : [],
+}) %>
+
+<section class="card">
+  <div class="jt-toolbar">
+    <nav class="jt-seg" aria-label="Show">
+      <% [['incoming', `To receive (${incoming})`], ['outgoing', 'Sent, on the way'], ['all', 'All']].forEach(([key, label]) => { %>
+        <a href="?show=<%= key %>" class="<%= show === key ? 'active' : '' %>"<%- show === key ? ' aria-current="true"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <span class="jt-count"><%= list.length %> shown</span>
+  </div>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', show === 'incoming'
+      ? { icon: 'truck', heading: 'Nothing on its way here', text: 'Stock sent to your site shows here until you receive it.' }
+      : { icon: 'truck', heading: 'No transfers here', text: 'Send stock to another site with Send stock.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Transfer</th><th>From → to</th><th class="d-none d-md-table-cell">Sent</th><th>Status</th></tr></thead>
+        <tbody>
+          <% list.forEach((t) => { %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/inventory/transfers/<%= t.id %>"><%= t.number %></a><span class="jt-sub"><%= t.line_count %> line<%= Number(t.line_count) === 1 ? '' : 's' %></span></td>
+              <td class="text-nowrap"><%= t.from_name %> → <%= t.to_name %><% if (t.carried_by) { %><span class="jt-sub">By <%= t.carried_by %></span><% } %></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.dateTime(t.sent_at) %><span class="jt-sub"><%= t.sent_name ?? '' %></span></td>
+              <td><%- include('partials/pill', { text: statuses[t.status].label, tone: statuses[t.status].tone }) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

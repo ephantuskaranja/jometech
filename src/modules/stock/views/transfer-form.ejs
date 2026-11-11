@@ -1,0 +1,43 @@
+<%# Send stock to another site: picked from what is in stock here. It is in transit until the other site receives it. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Transfers', href: '/inventory/transfers' }, 'Send'],
+  heading: 'Send stock to another site',
+  sub: `From ${site.name}. It leaves stock here now, and arrives in the other site’s stock when they receive it.`,
+}) %>
+
+<form method="post" action="/inventory/transfers" novalidate x-data="issueForm(<%= JSON.stringify({ rows, stock }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-body jt-fields">
+      <%- include('partials/field', { name: 'to_site_id', label: 'Going to', type: 'select', value: values.to_site_id, error: errors.to_site_id, required: true,
+            blank: sites.length ? 'Choose the site' : 'There is no other site', options: sites.map((s) => ({ value: s.id, label: s.name })) }) %>
+      <%- include('partials/field', { name: 'carried_by', label: 'Carried by', value: values.carried_by, error: errors.carried_by, placeholder: 'Driver or whoever takes it', hint: 'Optional.', attrs: 'maxlength="100"' }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">What is going</h2><span class="small text-body-secondary" x-show="total > 0" x-cloak x-text="`Worth KES ${money(total)}`"></span></div>
+    <div class="card-body d-grid gap-3">
+      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
+      <% if (!stock.length) { %>
+        <div class="jt-warn-box"><i class="bi bi-exclamation-triangle"></i><span>Nothing is in stock at <%= site.name %> to send.</span></div>
+      <% } %>
+      <%- include('issues/views/stock-lines') %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <%- include('partials/field', { name: 'note', label: 'Note', type: 'textarea', rows: 2, value: values.note, error: errors.note, hint: 'Optional. e.g. For the trailer job at Site B.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-truck"></i>Sending takes this out of stock at <%= site.name %> now.</span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="/inventory/transfers">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i>Send</button>
+    </div>
+  </div>
+</form>
