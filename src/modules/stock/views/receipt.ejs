@@ -72,6 +72,10 @@
           <div><dt>eTIMS receipt</dt><dd><%= receipt.invoice_ref ?? '—' %></dd></div>
           <div><dt>Delivery note</dt><dd><%= receipt.delivery_note ?? '—' %></dd></div>
           <div><dt>Received by</dt><dd><%= receipt.received_name ?? '—' %></dd></div>
+          <% if (receipt.arrival_number) { %>
+            <div><dt>At the gate</dt><dd><span class="font-monospace"><%= receipt.arrival_number %></span>, <%= fmt.dateTime(receipt.arrived_at) %>
+              <span class="d-block small text-body-secondary"><%= [receipt.driver_name, receipt.vehicle_reg].filter(Boolean).join(', ') %><%= receipt.arrival_logged_name ? `. Logged by ${receipt.arrival_logged_name}` : '' %></span></dd></div>
+          <% } %>
         </dl>
       </div>
     </section>

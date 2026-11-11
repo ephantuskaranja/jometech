@@ -1,8 +1,61 @@
 <%- include('partials/page-header', {
   crumb: ['Stores', 'Goods received'],
   heading: 'Goods received',
-  sub: 'Deliveries taken into stock. To receive one, open its purchase order.',
+  sub: 'Deliveries taken into stock. The gate logs a delivery in when the truck arrives; receive it from here or from its purchase order.',
 }) %>
+
+<%# Logged in at the gate, not yet received: one GRN per arrival. A no-order arrival is linked to an order first, or closed. %>
+<% if (waiting.length) { %>
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <h2 class="h6 mb-0 me-auto">At the gate, waiting for stores</h2>
+      <%- include('partials/pill', { text: String(waiting.length), tone: 'warn' }) %>
+    </div>
+    <ul class="list-group list-group-flush">
+      <% waiting.forEach((d) => { %>
+        <li class="list-group-item d-grid gap-2" x-data="{ step: '' }">
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+            <div class="me-auto">
+              <div class="fw-semibold"><%= d.supplier %></div>
+              <div class="small text-body-secondary"><span class="font-monospace"><%= d.number %></span> · <%= d.order_number ? d.order_number : 'No order' %> · arrived <%= fmt.dateTime(d.arrived_at) %><%= waiting.some((w) => w.site_id !== d.site_id) ? ` at ${d.site_name}` : '' %></div>
+              <div class="small text-body-secondary"><%= [d.delivery_note && `Delivery note ${d.delivery_note}`, d.driver_name, d.vehicle_reg].filter(Boolean).join(' · ') %><% if (d.note) { %><span class="d-block"><%= d.note %></span><% } %></div>
+            </div>
+            <% if (canReceive) { %>
+              <div class="d-flex gap-2 flex-wrap" x-show="!step">
+                <% if (d.order_id) { %>
+                  <a class="btn btn-success btn-sm" href="/purchase-orders/<%= d.order_id %>/receive?delivery=<%= d.id %>"><i class="bi bi-box-arrow-in-down"></i>Receive</a>
+                <% } else { %>
+                  <button type="button" class="btn btn-primary btn-sm" @click="step = 'link'"><i class="bi bi-link-45deg"></i>Match to an order</button>
+                <% } %>
+                <button type="button" class="btn btn-link btn-sm text-body-secondary" @click="step = 'close'">Not receiving it</button>
+              </div>
+            <% } %>
+          </div>
+          <% if (canReceive && !d.order_id) { %>
+            <form method="post" action="/deliveries/<%= d.id %>/link" class="d-grid gap-2" x-show="step === 'link'" x-cloak>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <label class="form-label mb-0" for="link-<%= d.id %>">Which open order is it for?</label>
+              <select class="form-select" id="link-<%= d.id %>" name="order_id" required>
+                <option value="">Choose the order</option>
+                <% (orders[d.site_id] ?? []).forEach((o) => { %><option value="<%= o.id %>"><%= o.number %> · <%= o.supplier_name %></option><% }) %>
+              </select>
+              <% if (!(orders[d.site_id] ?? []).length) { %><div class="form-text">No open orders at <%= d.site_name %>. Raise and approve one first, or close this.</div><% } %>
+              <div class="d-flex gap-2"><button class="btn btn-primary" type="submit">Match it</button><button class="btn btn-link" type="button" @click="step = ''">Back</button></div>
+            </form>
+          <% } %>
+          <% if (canReceive) { %>
+            <form method="post" action="/deliveries/<%= d.id %>/close" class="d-grid gap-2" x-show="step === 'close'" x-cloak>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <label class="form-label mb-0" for="close-<%= d.id %>">Why isn’t it being received?</label>
+              <input class="form-control" id="close-<%= d.id %>" name="reason" maxlength="255" required placeholder="e.g. Wrong thickness, sent back with the driver">
+              <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit">Close it</button><button class="btn btn-link" type="button" @click="step = ''">Back</button></div>
+            </form>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+<% } %>
 
 <section class="card">
   <form class="jt-toolbar" method="get" action="/goods-received">
@@ -15,7 +68,7 @@
   </form>
 
   <% if (list.length === 0) { %>
-    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the GRN or order number, or the supplier.' } : { icon: 'box-arrow-in-down', heading: 'Nothing received yet', text: 'Open an approved purchase order and choose “Receive goods” when the delivery arrives.' }) %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the GRN or order number, or the supplier.' } : { icon: 'box-arrow-in-down', heading: 'Nothing received yet', text: 'When the gate logs a delivery in, receive it from its purchase order.' }) %>
   <% } else { %>
     <div class="table-responsive">
       <table class="table jt-table">

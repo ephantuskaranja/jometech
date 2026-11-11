@@ -1,6 +1,6 @@
 <%#
   The gate: goods going out and coming in. The guard checks what is on the truck against what is listed,
-  then taps the button. Stores can't receive a transfer until it has been logged in here.
+  then taps the button. Stores can't receive a transfer, or a supplier's delivery, until it has been logged in here.
 %>
 <%
   const size = (l) => (l.size_key ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '');
@@ -49,16 +49,87 @@
   </section>
 <% } %>
 
+<%# A supplier's truck: logged against its open order, or as no order. Stores receive only what is logged here. %>
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="card" x-data="{ open: <%= Object.keys(errors).length > 0 %> }">
+      <div class="card-body d-grid gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-truck fs-3 text-body-secondary" aria-hidden="true"></i>
+          <div class="me-auto">
+            <div class="fw-semibold">Supplier delivery</div>
+            <div class="small text-body-secondary">A truck with goods we bought. Log it in before it goes to the store.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-lg w-100" x-show="!open" @click="open = true"><i class="bi bi-box-arrow-in-left"></i>Log a delivery in</button>
+        <form method="post" action="/gate/deliveries" class="d-grid gap-3" novalidate x-show="open" x-cloak
+              x-data="gateDelivery(<%= JSON.stringify({ orders, value: values.order_id }) %>)">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="order_id" :value="order_id">
+          <div>
+            <label class="form-label" for="dlv-order">Order on the delivery note</label>
+            <select class="form-select" id="dlv-order" x-init="$nextTick(() => picker($el))"></select>
+            <% if (errors.order_id) { %><div class="jt-error-text"><%= errors.order_id %></div><% } %>
+            <% if (!orders.length) { %><div class="form-text">No open orders at <%= site.name %> right now: choose No order.</div><% } %>
+          </div>
+          <div x-show="order" x-cloak>
+            <div class="small text-body-secondary mb-1">Still to come on <span x-text="order?.number"></span>. Check it against the truck.</div>
+            <ul class="jt-gate-lines mb-0">
+              <template x-for="(l, i) in (order ? order.lines : [])" :key="i">
+                <li><span><span x-text="l.name"></span> <small class="text-body-secondary" x-text="l.size"></small></span><strong class="jt-num" x-text="`${l.left} ${l.unit}`"></strong></li>
+              </template>
+            </ul>
+          </div>
+          <div x-show="noOrder" x-cloak>
+            <%- include('partials/field', { name: 'supplier_name', label: 'Who is it from?', value: values.supplier_name, error: errors.supplier_name, placeholder: 'e.g. Mabati Steel', attrs: 'maxlength="150"' }) %>
+          </div>
+          <div class="jt-fields">
+            <%- include('partials/field', { name: 'delivery_note', label: 'Delivery note no.', value: values.delivery_note, error: errors.delivery_note, attrs: 'maxlength="60"' }) %>
+            <%- include('partials/field', { name: 'vehicle_reg', label: 'Vehicle reg', value: values.vehicle_reg, error: errors.vehicle_reg, placeholder: 'e.g. KCB 123A', attrs: 'maxlength="20" autocapitalize="characters"' }) %>
+            <%- include('partials/field', { name: 'driver_name', label: 'Driver', value: values.driver_name, error: errors.driver_name, required: true, attrs: 'maxlength="100"' }) %>
+          </div>
+          <%- include('partials/field', { name: 'note', label: 'Note', value: values.note, error: errors.note, placeholder: 'Optional, e.g. two sheets bent', attrs: 'maxlength="255"' }) %>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-lg flex-grow-1" type="submit"><i class="bi bi-box-arrow-in-left"></i>Logged in at the gate</button>
+            <button class="btn btn-link" type="button" @click="open = false">Close</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Deliveries logged today (<%= today.length %>)</h2></div>
+      <% if (!today.length) { %>
+        <div class="card-body small text-body-secondary">None yet today.</div>
+      <% } else { %>
+        <ul class="list-group list-group-flush">
+          <% today.forEach((d) => { %>
+            <li class="list-group-item d-flex align-items-start gap-2">
+              <div class="me-auto">
+                <div class="fw-semibold"><%= d.supplier %></div>
+                <div class="small text-body-secondary"><span class="font-monospace"><%= d.number %></span> · <%= d.order_number ?? 'No order' %> · <%= fmt.time(d.arrived_at) %></div>
+                <div class="small text-body-secondary"><%= [d.driver_name, d.vehicle_reg].filter(Boolean).join(', ') %></div>
+              </div>
+              <%- include('partials/pill', { text: statuses[d.status].label, tone: statuses[d.status].tone }) %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-6 d-grid gap-3 align-content-start">
-    <h2 class="h6 text-uppercase text-body-secondary mb-0">Leaving (<%= leaving.length %>)</h2>
+    <h2 class="h6 text-uppercase text-body-secondary mb-0">Transfers leaving (<%= leaving.length %>)</h2>
     <% if (!leaving.length) { %>
       <section class="card"><%- include('partials/empty', { icon: 'box-arrow-right', heading: 'Nothing waiting to leave', text: 'Stock sent to another site shows here until it goes out of the gate.' }) %></section>
     <% } %>
     <% leaving.forEach(card) %>
   </div>
   <div class="col-lg-6 d-grid gap-3 align-content-start">
-    <h2 class="h6 text-uppercase text-body-secondary mb-0">On the way in (<%= arriving.length %>)</h2>
+    <h2 class="h6 text-uppercase text-body-secondary mb-0">Transfers on the way in (<%= arriving.length %>)</h2>
     <% if (!arriving.length) { %>
       <section class="card"><%- include('partials/empty', { icon: 'box-arrow-in-left', heading: 'Nothing on its way in', text: 'Stock sent here from another site shows once it has left their gate.' }) %></section>
     <% } %>

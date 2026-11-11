@@ -7,12 +7,13 @@ import { shareTransport } from '../src/modules/stock/service.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
-let store, manager, supervisor, plate, bolt, supplier;
+let store, manager, supervisor, gate, plate, bolt, supplier;
 
 before(async () => {
   store = await loginAs(app, await makeUser(45, ['storekeeper']));
   manager = await loginAs(app, await makeUser(46, ['manager']));
   supervisor = await loginAs(app, await makeUser(47, ['supervisor']));
+  gate = await loginAs(app, await makeUser(4, ['gate']));
   await post(store, '/items', { name: 'Test Plate 4 mm', category: 'Plates', priced_by: 'area', thickness_mm: '4', reorder_level: '100' });
   await post(store, '/items', { name: 'Test U-bolt', category: 'Other', priced_by: 'unit', unit: 'Pc' });
   plate = await item('Test Plate 4 mm');
@@ -26,6 +27,9 @@ after(async () => {
   const supplierIds = await db('suppliers').where('name', 'like', 'Test %').pluck('id');
   const orderIds = await db('purchase_orders').whereIn('supplier_id', supplierIds).pluck('id');
   const receiptIds = await db('goods_receipts').whereIn('order_id', orderIds).pluck('id');
+  const arrivalIds = await db('gate_deliveries').whereIn('order_id', orderIds).pluck('id');
+  await db('audit_log').where({ entity: 'gate_delivery' }).whereIn('entity_id', arrivalIds).delete();
+  await db('gate_deliveries').whereIn('id', arrivalIds).delete();
   await db('stock_movements').whereIn('item_id', itemIds).delete();
   await db('stock_balances').whereIn('item_id', itemIds).delete();
   await db('audit_log').where({ entity: 'goods_receipt' }).whereIn('entity_id', receiptIds).delete();
@@ -63,11 +67,16 @@ async function approvedOrder(...rows) {
 }
 const orderLines = (orderId) => db('purchase_order_lines').where({ order_id: orderId }).orderBy('sort_order');
 
-/** lines: [[quantity, price, rejected?], …], in the order's line order. */
+/** The gate logs the supplier's truck in against the order. */
+const arrive = (orderId) => post(gate, '/gate/deliveries', { order_id: String(orderId), driver_name: 'Test Driver', delivery_note: 'DN-T1' });
+const waitingArrival = (orderId) => db('gate_deliveries').where({ order_id: orderId, status: 'waiting' }).first();
+
+/** lines: [[quantity, price, rejected?], …], in the order's line order. Logs it in at the gate first if needed. */
 async function receive(orderId, lines, extra = {}) {
   const ids = (await orderLines(orderId)).map((l) => l.id);
+  if (!(await waitingArrival(orderId))) await arrive(orderId);
   return post(store, `/purchase-orders/${orderId}/receive`, {
-    received_on: localDay(), line_id: ids,
+    delivery_id: (await waitingArrival(orderId)).id, received_on: localDay(), line_id: ids,
     line_quantity: lines.map((l) => String(l[0])), line_price: lines.map((l) => String(l[1] ?? '')), line_rejected: lines.map((l) => String(l[2] ?? '')),
     ...extra,
   });
@@ -113,6 +122,10 @@ test('a price is needed for what arrived, and you can’t receive more than is l
 
 test('a plate goes in by sq ft and by sheet; the average follows each delivery; part deliveries are tracked', async () => {
   const id = await approvedOrder([plate, 9, 12, 4, 'ft']);
+  const notYet = await store.get(`/purchase-orders/${id}/receive`);
+  assert.equal(notYet.status, 409, 'nothing is received until the gate logs it in');
+  assert.match(notYet.text, /logged in at the gate yet/);
+  await arrive(id);
   // What's left is filled in, ready for "it all came".
   assert.match((await store.get(`/purchase-orders/${id}/receive`)).text, /&#34;quantity&#34;:&#34;9&#34;/);
 
@@ -204,6 +217,7 @@ test('a wrong delivery is reversed: stock, average, price and order all go back'
   await post(store, `/goods-received/${receiptId}/reverse`, { reason: '' });
   assert.equal((await db('goods_receipts').where({ id: receiptId }).first()).reversed_at, null, 'it needs a reason');
   await post(store, `/goods-received/${receiptId}/reverse`, { reason: 'Wrong price typed' });
+  assert.equal((await waitingArrival(id))?.receipt_id, null, 'its gate arrival waits to be received again');
   const after = await item(plate.name);
   assert.equal(num(after.on_hand_qty), num(before.on_hand_qty));
   assert.equal(num(after.stock_value), num(before.stock_value));

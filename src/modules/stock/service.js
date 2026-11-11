@@ -1,4 +1,5 @@
 import { db } from '../../core/db.js';
+import { claimForReceipt } from '../gate/deliveries.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { httpError } from '../../core/validate.js';
@@ -74,12 +75,14 @@ export async function receiveGoods(orderId, input, actor) {
       return { ...row, line, stockQty, goods: row.quantity > 0 ? round2(stockQty * row.unit_price) : 0 };
     });
     if (!rows.some((r) => r.quantity > 0)) throw err(422, 'Enter what arrived.', 'lines');
+    // Only against a delivery the gate logged in for this order (step 26b): one arrival, one GRN.
+    const arrival = await claimForReceipt(trx, { deliveryId: input.delivery_id, orderId, siteId: actor.site.id });
 
     const shares = shareTransport(rows.map((r) => r.goods), input.transport_cost ?? 0);
     const goodsTotal = round2(rows.reduce((sum, r) => sum + r.goods, 0));
     const number = await nextNumber(trx, 'receipt');
     const [id] = await trx('goods_receipts').insert({
-      number, order_id: orderId, site_id: actor.site.id, received_on: input.received_on, delivery_note: input.delivery_note, invoice_ref: input.invoice_ref,
+      number, order_id: orderId, site_id: actor.site.id, received_on: input.received_on, delivery_note: input.delivery_note ?? arrival.delivery_note, invoice_ref: input.invoice_ref,
       goods_total: goodsTotal, transport_cost: input.transport_cost ?? 0, notes: input.notes, received_by: actor.user.id,
     });
 
@@ -112,7 +115,9 @@ export async function receiveGoods(orderId, input, actor) {
     }
 
     await trx('purchase_orders').where({ id: orderId }).update({ status: await statusFromLines(trx, orderId) });
-    await audit(trx, actor, { entity: 'goods_receipt', id, action: 'create', summary: `Against ${order.number}` });
+    await trx('gate_deliveries').where({ id: arrival.id }).update({ status: 'received', receipt_id: id });
+    await audit(trx, actor, { entity: 'gate_delivery', id: arrival.id, action: 'received', summary: number });
+    await audit(trx, actor, { entity: 'goods_receipt', id, action: 'create', summary: `Against ${order.number}, ${arrival.number}` });
     await audit(trx, actor, { entity: 'purchase_order', id: orderId, action: 'po_received', summary: number });
     return { id, number, changes };
   });
@@ -157,6 +162,12 @@ export async function reverseReceipt(id, reason, actor) {
     }
 
     await trx('goods_receipts').where({ id }).update({ reversed_at: trx.fn.now(), reversed_by: actor.user.id, reversed_reason: reason });
+    // The arrival it came from waits for stores again, to be received properly.
+    const arrival = await trx('gate_deliveries').where({ receipt_id: id }).forUpdate().first('id');
+    if (arrival) {
+      await trx('gate_deliveries').where({ id: arrival.id }).update({ status: 'waiting', receipt_id: null });
+      await audit(trx, actor, { entity: 'gate_delivery', id: arrival.id, action: 'grn_reversed', summary: receipt.number });
+    }
     const order = await trx('purchase_orders').where({ id: receipt.order_id }).forUpdate().first('id', 'number');
     await trx('purchase_orders').where({ id: order.id }).update({ status: await statusFromLines(trx, order.id) });
     await audit(trx, actor, { entity: 'goods_receipt', id, action: 'grn_reversed', summary: reason });
@@ -240,8 +251,10 @@ export async function getReceipt(id) {
     .join('sites as site', 'site.id', 'g.site_id')
     .leftJoin('users as u', 'u.id', 'g.received_by')
     .leftJoin('users as rv', 'rv.id', 'g.reversed_by')
+    .leftJoin('gate_deliveries as d', 'd.receipt_id', 'g.id').leftJoin('users as du', 'du.id', 'd.logged_by')
     .where('g.id', id)
-    .first('g.*', 'o.number as order_number', 's.id as supplier_id', 's.name as supplier_name', 'site.name as site_name', 'u.name as received_name', 'rv.name as reversed_name');
+    .first('g.*', 'o.number as order_number', 's.id as supplier_id', 's.name as supplier_name', 'site.name as site_name', 'u.name as received_name', 'rv.name as reversed_name',
+      'd.number as arrival_number', 'd.arrived_at', 'd.vehicle_reg', 'd.driver_name', 'du.name as arrival_logged_name');
   if (!r) return null;
   r.lines = await db('goods_receipt_lines as gl')
     .join('items as i', 'i.id', 'gl.item_id')

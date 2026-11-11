@@ -518,6 +518,23 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Gate → Goods at the gate: a supplier's truck is logged against its open order (what is still to come shows, no prices), or as no order.
+  Alpine.data('gateDelivery', ({ orders = [], value = '' } = {}) => ({
+    orders, order_id: value,
+    get order() { return this.orders.find((o) => String(o.id) === String(this.order_id)) ?? null; },
+    get noOrder() { return this.order_id === 'none'; },
+    picker(el) {
+      mountPicker(el, {
+        value: this.order_id, placeholder: 'Type the order number or supplier',
+        options: () => [
+          ...this.orders.map((o) => ({ value: String(o.id), label: `${o.number} · ${o.supplier_name}`, sub: `${o.lines.length} item${o.lines.length === 1 ? '' : 's'} still to come` })),
+          { value: 'none', label: 'No order', sub: 'Not on the list: type who it is from' },
+        ],
+        onChange: (v) => { this.order_id = v; },
+      });
+    },
+  }));
+
   // System → Backups: download and delete ask for the password again in one small window.
   Alpine.data('backupActions', () => ({
     action: { url: '', which: '', title: '', button: '', danger: false },

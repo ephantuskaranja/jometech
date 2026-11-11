@@ -10,6 +10,7 @@ import * as invoices from '../invoices/service.js';
 import * as orders from '../purchasing/service.js';
 import { stockTotals } from '../stock/service.js';
 import { atGate as goodsAtGate } from '../stock/transfers.js';
+import { waitingCount } from '../gate/deliveries.js';
 import { counts as visitorCounts } from '../visitors/service.js';
 import { waitingAtGate } from '../checkins/release.js';
 
@@ -78,6 +79,7 @@ async function stores(user, siteIds) {
     items.push({ label: 'Orders to approve', value: pending, foot: 'sent for approval', icon: 'patch-check', href: '/purchase-orders', tone: can(user, 'purchasing.approve') ? 'warn' : null });
     items.push({ label: 'Open orders', value: o.open, foot: 'draft, pending or approved', icon: 'cart', href: '/purchase-orders' });
     items.push({ label: 'Goods to receive', value: o.sent, foot: 'ordered, not all delivered', icon: 'box-seam', href: '/purchase-orders?show=sent', tone: 'info' });
+    items.push({ label: 'At the gate', value: await waitingCount(siteIds), foot: 'deliveries logged in, to receive', icon: 'truck', href: '/goods-received', tone: 'warn' });
   }
   return items.length ? { title: 'Stores', icon: 'box-seam', items } : null;
 }

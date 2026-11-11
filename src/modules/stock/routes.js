@@ -7,6 +7,7 @@ import { check, httpError, optionalAmount, optionalText } from '../../core/valid
 import * as stock from './service.js';
 import { pendingCount } from './adjustments.js';
 import { incomingCount } from './transfers.js';
+import * as deliveries from '../gate/deliveries.js';
 import { getOrder, itemOptions } from '../purchasing/service.js';
 import { listCategories } from '../items/service.js';
 import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
@@ -84,8 +85,15 @@ async function loadOrder(req) {
   return order;
 }
 
-function renderForm(res, { status = 200, order, values, rows, errors = {} }) {
-  res.status(status).render('stock/views/receive', { title: `Receive ${order.number}`, order, values, rows, errors });
+function renderForm(res, { status = 200, order, arrivals, values, rows, errors = {} }) {
+  res.status(status).render('stock/views/receive', { title: `Receive ${order.number}`, order, arrivals, values, rows, errors });
+}
+
+/** Arrivals the gate logged in for this order at this site: goods are received only against one of them. */
+async function arrivalsFor(req, order) {
+  const list = (await deliveries.waitingFor(order.id)).filter((d) => d.site_id === req.site.id);
+  if (!list.length) throw httpError(409, `Nothing for ${order.number} has been logged in at the gate yet. When the truck arrives, the gate logs it; then you can receive it here.`);
+  return list;
 }
 
 function canReceive(req, order) {
@@ -98,26 +106,31 @@ function canReceive(req, order) {
 router.get('/purchase-orders/:id/receive', receive, async (req, res) => {
   const order = await loadOrder(req);
   canReceive(req, order);
-  renderForm(res, { order, rows: rowsFor(order), values: { received_on: localDay(), delivery_note: '', invoice_ref: '', transport_cost: '', notes: '' } });
+  const arrivals = await arrivalsFor(req, order);
+  const chosen = arrivals.find((d) => String(d.id) === String(req.query.delivery)) ?? arrivals[0];
+  renderForm(res, { order, arrivals, rows: rowsFor(order), values: { delivery_id: String(chosen.id), received_on: localDay(), delivery_note: chosen.delivery_note ?? '', invoice_ref: '', transport_cost: '', notes: '' } });
 });
 
 router.post('/purchase-orders/:id/receive', receive, async (req, res) => {
   const order = await loadOrder(req);
   canReceive(req, order);
-  const values = { received_on: '', delivery_note: '', invoice_ref: '', transport_cost: '', notes: '', ...req.body };
+  const arrivals = await arrivalsFor(req, order);
+  const values = { delivery_id: '', received_on: '', delivery_note: '', invoice_ref: '', transport_cost: '', notes: '', ...req.body };
   const { data, errors } = check(receiptSchema, req.body);
   const { shown, lines, error } = readLines(req.body, rowsFor(order));
   const all = { ...errors, ...(error ? { lines: error } : {}) };
-  if (Object.keys(all).length) return renderForm(res, { status: 422, order, values, rows: shown, errors: all });
+  const deliveryId = Number(values.delivery_id);
+  if (!arrivals.some((d) => d.id === deliveryId)) all.delivery_id = 'Choose the delivery the gate logged in';
+  if (Object.keys(all).length) return renderForm(res, { status: 422, order, arrivals, values, rows: shown, errors: all });
   try {
-    const { id, number: receiptNumber, changes } = await stock.receiveGoods(order.id, { ...data, lines }, req);
+    const { id, number: receiptNumber, changes } = await stock.receiveGoods(order.id, { ...data, delivery_id: deliveryId, lines }, req);
     req.session.flash = changes.length
       ? { type: 'warning', text: `${receiptNumber} saved and stock updated. Big price change: ${changes.join(', ')}.` }
       : { type: 'success', text: `${receiptNumber} saved and stock updated.` };
     res.redirect(`/goods-received/${id}`);
   } catch (err) {
     if (!err.field) throw err;
-    renderForm(res, { status: 422, order, values, rows: shown, errors: { [err.field]: err.message } });
+    renderForm(res, { status: 422, order, arrivals, values, rows: shown, errors: { [err.field]: err.message } });
   }
 });
 
@@ -135,7 +148,56 @@ router.post('/purchase-orders/:id/close', receive, async (req, res) => {
 
 router.get('/goods-received', seeReceipts, async (req, res) => {
   const q = String(req.query.q ?? '').slice(0, 60);
-  res.render('stock/views/receipts', { title: 'Goods received', q, list: await stock.listReceipts({ siteIds: req.user.sites.map((s) => s.id), q }) });
+  const siteIds = req.user.sites.map((s) => s.id);
+  const waiting = await deliveries.waitingAt(siteIds);
+  // A no-order arrival can be linked to an open order at its site.
+  const needOrders = [...new Set(waiting.filter((d) => !d.order_id).map((d) => d.site_id))];
+  const orders = Object.fromEntries(await Promise.all(needOrders.map(async (id) => [id, await deliveries.openOrders(id)])));
+  res.render('stock/views/receipts', {
+    title: 'Goods received', q, waiting, orders, statuses: deliveries.STATUSES,
+    canReceive: req.user.can('purchasing.manage'),
+    list: await stock.listReceipts({ siteIds, q }),
+  });
+});
+
+async function loadDelivery(req) {
+  const id = Number(req.params.id);
+  const d = Number.isInteger(id) ? await deliveries.getDelivery(id) : null;
+  if (!d) throw httpError(404, 'That delivery doesn’t exist.');
+  if (!worksAt(req, d.site_id)) throw httpError(403, `${d.number} came to ${d.site_name}, which isn’t one of your sites.`);
+  return d;
+}
+
+/** Stores, on a no-order arrival: it is for this open order. */
+router.post('/deliveries/:id/link', receive, async (req, res) => {
+  const d = await loadDelivery(req);
+  try {
+    const { order } = await deliveries.linkOrder(d.id, Number(req.body.order_id), req);
+    req.session.flash = { type: 'success', text: `${d.number} is now against ${order.number}. Receive it from the order.` };
+    return res.redirect(`/purchase-orders/${order.id}/receive?delivery=${d.id}`);
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect('/goods-received');
+});
+
+/** Stores: sent back, or not ours. */
+router.post('/deliveries/:id/close', receive, async (req, res) => {
+  const d = await loadDelivery(req);
+  const reason = String(req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'warning', text: 'Say why it isn’t being received (3 to 255 characters).' };
+    return res.redirect('/goods-received');
+  }
+  try {
+    await deliveries.closeDelivery(d.id, reason, req);
+    req.session.flash = { type: 'success', text: `${d.number} closed.` };
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect('/goods-received');
 });
 
 async function loadReceipt(req) {

@@ -8,6 +8,24 @@
 <form method="post" action="/purchase-orders/<%= order.id %>/receive" novalidate x-data="receiveForm(<%= JSON.stringify({ rows, transport: values.transport_cost ?? '' }) %>)">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
+  <%# The arrival the gate logged in: one GRN per arrival. %>
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0"><%= arrivals.length === 1 ? 'Logged in at the gate' : 'Which delivery is this?' %></h2></div>
+    <div class="list-group list-group-flush">
+      <% arrivals.forEach((d) => { %>
+        <label class="list-group-item d-flex gap-3 align-items-start">
+          <input class="form-check-input mt-1<%= arrivals.length === 1 ? ' d-none' : '' %>" type="radio" name="delivery_id" value="<%= d.id %>"<%= String(values.delivery_id) === String(d.id) ? ' checked' : '' %>>
+          <span>
+            <span class="font-monospace small"><%= d.number %></span> · arrived <%= fmt.dateTime(d.arrived_at) %>
+            <span class="d-block small text-body-secondary"><%= [d.delivery_note && `Delivery note ${d.delivery_note}`, d.driver_name, d.vehicle_reg, d.logged_name && `logged by ${d.logged_name}`].filter(Boolean).join(' · ') %></span>
+            <% if (d.note) { %><span class="d-block small text-body-secondary"><%= d.note %></span><% } %>
+          </span>
+        </label>
+      <% }) %>
+    </div>
+    <% if (errors.delivery_id) { %><div class="card-body pt-0 jt-error-text"><%= errors.delivery_id %></div><% } %>
+  </section>
+
   <section class="card mb-4">
     <div class="card-body jt-fields">
       <%- include('partials/field', { name: 'received_on', label: 'Date received', type: 'date', value: values.received_on, error: errors.received_on, required: true }) %>

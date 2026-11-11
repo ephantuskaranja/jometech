@@ -80,8 +80,13 @@
         <% } %>
 
         <div class="d-grid gap-2" x-show="!step">
-          <% if (canReceive) { %>
-            <a class="btn btn-success w-100" href="/purchase-orders/<%= order.id %>/receive"><i class="bi bi-box-arrow-in-down"></i>Receive goods</a>
+          <% if (canReceive && arrivals.length) { %>
+            <% arrivals.forEach((d) => { %>
+              <a class="btn btn-success w-100" href="/purchase-orders/<%= order.id %>/receive?delivery=<%= d.id %>"><i class="bi bi-box-arrow-in-down"></i>Receive <%= arrivals.length > 1 ? d.number : 'goods' %></a>
+            <% }) %>
+            <p class="small text-body-secondary mb-0">Logged in at the gate <%= fmt.dateTime(arrivals[0].arrived_at) %><%= arrivals.length > 1 ? ` (${arrivals.length} deliveries)` : '' %>.</p>
+          <% } else if (canReceive) { %>
+            <p class="small text-body-secondary mb-0"><i class="bi bi-hourglass-split"></i> Goods are received once the gate logs the delivery in.</p>
           <% } %>
           <% if (canApprove && ['draft', 'pending'].includes(order.status)) { %>
             <form method="post" action="/purchase-orders/<%= order.id %>/approve">

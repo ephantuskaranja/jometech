@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { canAny } from '../../core/auth.js';
 import { httpError } from '../../core/validate.js';
 import * as transfers from '../stock/transfers.js';
+import * as deliveries from './deliveries.js';
 
 // The gate: goods going out and coming in (step 26). Guards (goods.gate) at their site:
 //   transfers to another site leave → "Left the gate"; transfers from another site arrive → "Arrived at the gate".
-// Stores can't receive a transfer until its arrival is logged here.
+//   a supplier's truck arrives → logged against its open purchase order (or as no order).
+// Stores can't receive a transfer, or goods from a supplier, until the arrival is logged here.
 export const router = Router();
 const gate = canAny('goods.gate');
 
@@ -15,14 +17,53 @@ function needSite(req) {
 
 const text = (v, max) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max) || null;
 
-router.get('/gate/goods', gate, async (req, res) => {
-  needSite(req);
+const BLANK = { order_id: '', supplier_name: '', delivery_note: '', vehicle_reg: '', driver_name: '', note: '' };
+
+async function renderGoods(req, res, { status = 200, values = BLANK, errors = {} } = {}) {
   const list = await transfers.atGate(req.site.id);
-  res.render('gate/views/goods', {
+  res.status(status).render('gate/views/goods', {
     title: 'Goods at the gate',
     leaving: list.filter((t) => t.leaving),
     arriving: list.filter((t) => !t.leaving),
+    orders: await deliveries.openOrders(req.site.id),
+    today: await deliveries.loggedToday(req.site.id),
+    statuses: deliveries.STATUSES,
+    values, errors,
   });
+}
+
+router.get('/gate/goods', gate, async (req, res) => {
+  needSite(req);
+  await renderGoods(req, res);
+});
+
+/** A supplier's truck has arrived: log it against the open order, or as no order. */
+router.post('/gate/deliveries', gate, async (req, res) => {
+  needSite(req);
+  const values = Object.fromEntries(Object.keys(BLANK).map((k) => [k, String(req.body[k] ?? '').trim()]));
+  const errors = {};
+  const noOrder = values.order_id === 'none';
+  const orderId = noOrder ? null : Number(values.order_id);
+  if (!noOrder && !Number.isInteger(orderId)) errors.order_id = 'Choose the order on the delivery note, or No order';
+  if (!values.order_id) errors.order_id = 'Choose the order on the delivery note, or No order';
+  if (noOrder && values.supplier_name.length < 2) errors.supplier_name = 'Type who it is from';
+  if (values.driver_name.length < 2) errors.driver_name = 'Type the driver’s name';
+  if (Object.keys(errors).length) return renderGoods(req, res, { status: 422, values, errors });
+  try {
+    const { number, order } = await deliveries.logArrival({
+      siteId: req.site.id, orderId,
+      supplierName: noOrder ? text(values.supplier_name, 150) : null,
+      deliveryNote: text(values.delivery_note, 60),
+      vehicleReg: text(values.vehicle_reg, 20)?.toUpperCase() ?? null,
+      driverName: text(values.driver_name, 100),
+      note: text(values.note, 255),
+    }, req);
+    req.session.flash = { type: 'success', text: `${number} logged in${order ? ` against ${order.number}` : ''}. Stores can receive it now.` };
+    res.redirect('/gate/goods');
+  } catch (err) {
+    if (!err.field) throw err;
+    await renderGoods(req, res, { status: 422, values, errors: { [err.field]: err.message } });
+  }
 });
 
 async function step(req, res, fn, done) {

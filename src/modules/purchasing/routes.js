@@ -10,6 +10,7 @@ import * as orders from './service.js';
 import { getSupplier } from '../suppliers/service.js';
 import { listCategories } from '../items/service.js';
 import { receiptsForOrder, RECEIVABLE } from '../stock/service.js';
+import { waitingFor } from '../gate/deliveries.js';
 
 // Purchase orders: write one, have it approved, print it for the supplier.
 
@@ -167,6 +168,8 @@ router.get('/purchase-orders/:id', view, async (req, res) => {
     canSeeJobs: req.user.can('jobs.view') || req.user.can('jobs.progress') || req.user.can('jobs.manage'),
     receipts: await receiptsForOrder(order.id),
     canReceive: req.user.can('purchasing.manage') && RECEIVABLE.includes(order.status),
+    // Logged in at the gate, at the site you're working at: goods are received against these.
+    arrivals: req.site ? (await waitingFor(order.id)).filter((d) => d.site_id === req.site.id) : [],
   });
 });
 
