@@ -199,9 +199,43 @@ Push to `master` (or GitHub → Actions → **Test and deploy** → Run workflow
 - **Tests failed in Actions:** nothing was deployed. Fix on your PC, push again.
 - **Deploy failed at "Updating the database":** the app may still be running the old code. Read the error in Actions, fix with a new migration, push.
 - **Undo a bad release:** `git revert <commit>` on your PC and push. The code goes back; migrations that already ran stay, so undo a table change with a new migration.
-- **Restore the database from before a deploy:**
-  ```bash
-  sudo systemctl stop jometech
-  gunzip < /var/www/apps/jometech/storage/backups/pre-deploy-YYYYMMDD-HHMMSS.sql.gz | mysql -u jometech -p jometech
-  sudo systemctl start jometech
-  ```
+- **Restore the database:** see *Backups* below.
+
+## Backups
+
+Admins see them at **System → Backups** in the app:
+
+- **Nightly** at 01:00 (Nairobi), database only. The last 7 days, 4 weeks and 12 months are kept; older ones are cleared out by the app.
+- **Back up now**, optionally *with photos and signatures* (a second file, `BKP-…-files.tar.gz`). Kept until an admin deletes them.
+- **Before an app update**: made by `scripts/deploy.sh` (`pre-deploy-….sql.gz`, last 10), listed on the same page.
+- **Check** re-reads a file and compares it with the checksum taken when it was made. **Download** and **Delete** ask for the admin's password again and go in the history.
+
+All files are in `/var/www/apps/jometech/storage/backups/` on the same disk as the database, so they don't survive a lost server. Download one now and then (or after big data entry) and keep it off the server. Backups aren't encrypted: whoever has the file has every customer's details.
+
+The app uses `mysqldump` and `mysql` from the PATH (installed with MySQL). On Windows, set `MYSQLDUMP_PATH` and `MYSQL_PATH` in `.env`.
+
+### Restoring a backup
+
+The database (the app must be stopped; everyone is logged out):
+
+```bash
+sudo systemctl stop jometech
+cd /var/www/apps/jometech
+sudo -u jometech npm run db:restore -- BKP-2026-0012.sql.gz      # or pre-deploy-YYYYMMDD-HHMMSS.sql.gz, or a full path
+sudo systemctl start jometech
+```
+
+It asks you to type the database name, then:
+
+1. makes a **safety backup** of the database as it is now (its name is printed: restore that one to undo),
+2. drops every table and loads the backup,
+3. runs the migrations, so an older backup is brought up to the app's current version,
+4. lists the backup files on disk again (the restored list is older than the folder).
+
+Photos and signatures, from a `-files.tar.gz` (adds and overwrites files; it deletes nothing):
+
+```bash
+sudo -u jometech tar -xzf storage/backups/BKP-2026-0012-files.tar.gz -C storage
+```
+
+To restore a downloaded file, copy it to `storage/backups/` first (e.g. with `scp`), or give `db:restore` its full path.

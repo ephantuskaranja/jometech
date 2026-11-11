@@ -431,6 +431,21 @@ document.addEventListener('alpine:init', () => {
 
   // Purchase order form (purchasing/views/form.ejs): find an item by typing its name; plates ask for a size.
   // The sums here are only for showing; the server works out what is saved.
+  // System → Backups: download and delete ask for the password again in one small window.
+  Alpine.data('backupActions', () => ({
+    action: { url: '', which: '', title: '', button: '', danger: false },
+    modal: null,
+    ask(action) {
+      this.action = { danger: false, ...action };
+      this.$refs.password.value = '';
+      this.modal ??= window.bootstrap.Modal.getOrCreateInstance(this.$refs.modal);
+      this.modal.show();
+      this.$refs.modal.addEventListener('shown.bs.modal', () => this.$refs.password.focus(), { once: true });
+    },
+    // A download leaves this page open: close the window and forget the password once the form has gone.
+    done() { setTimeout(() => { this.$refs.password.value = ''; this.modal?.hide(); }, 50); },
+  }));
+
   Alpine.data('purchaseOrderForm', ({ rows = [], items = [], orderDate = '' } = {}) => {
     let next = 0;
     const num = (v) => Number(String(v ?? '').replace(/[,\s]/g, '')) || 0;

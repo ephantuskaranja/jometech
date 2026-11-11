@@ -1,0 +1,105 @@
+<%# System → Backups: back up now, and the list of backups with check, download and delete. %>
+<%
+  const size = (n) => {
+    if (n === null || n === undefined) return '';
+    const v = Number(n);
+    if (v < 1024 * 1024) return `${Math.max(1, Math.round(v / 1024))} KB`;
+    if (v < 1024 ** 3) return `${(v / 1024 ** 2).toFixed(1)} MB`;
+    return `${(v / 1024 ** 3).toFixed(1)} GB`;
+  };
+  const kinds = { manual: 'Back up now', nightly: 'Nightly', pre_deploy: 'Before an app update' };
+  const anyRunning = list.some((b) => b.status === 'running');
+%>
+<%- include('partials/page-header', {
+  crumb: ['System', 'Backups'],
+  heading: 'Backups',
+  sub: 'Copies of the database, made while people keep working. One runs every night at 01:00, and another before each app update.',
+}) %>
+
+<section class="card mb-4">
+  <div class="card-body d-grid gap-3">
+    <form method="post" action="/admin/backups" class="jt-backup-now">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-primary" type="submit"<%= anyRunning ? ' disabled' : '' %>><i class="bi bi-database-down"></i>Back up now</button>
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="f-with_files" name="with_files" value="1">
+        <label class="form-check-label" for="f-with_files">Also the photos and signatures <span class="text-body-secondary">(a second, bigger file)</span></label>
+      </div>
+    </form>
+    <p class="small text-body-secondary mb-0">
+      Nightly backups are kept for the last 7 days, 4 weeks and 12 months; older ones are cleared out by themselves. Backups made here stay until you delete them.
+      <% if (disk) { %>Space left on the server: <strong><%= size(disk.free) %></strong> of <%= size(disk.total) %>.<% } %>
+    </p>
+  </div>
+</section>
+
+<div x-data="backupActions">
+  <section class="card"<% if (anyRunning) { %> x-data x-init="const t = setInterval(async () => { const r = await fetch('/api/admin/backups/running'); if (r.ok && !(await r.json()).running) { clearInterval(t); location.reload(); } }, 3000)"<% } %>>
+    <% if (list.length === 0) { %>
+      <%- include('partials/empty', { icon: 'database', heading: 'No backups yet', text: 'Press Back up now to make the first one. The nightly one starts tonight at 01:00.' }) %>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Backup</th><th class="d-none d-md-table-cell">Made</th><th class="text-end d-none d-md-table-cell">Size</th><th>Status</th><th class="text-end d-none d-md-table-cell"><span class="visually-hidden">Actions</span></th></tr></thead>
+          <tbody>
+            <% list.forEach((b) => { const name = b.number ?? b.file_name; %>
+              <tr>
+                <td>
+                  <strong class="font-monospace small text-nowrap"><%= name %></strong>
+                  <small class="d-block text-body-secondary"><%= kinds[b.kind] %><%= b.with_files ? ' · with photos and files' : '' %></small>
+                  <small class="d-block text-body-secondary d-md-none"><%= fmt.dateTime(b.started_at) %> · <%= size(b.size_bytes) %><%= b.files_size_bytes ? ` + ${size(b.files_size_bytes)}` : '' %></small>
+                  <div class="d-md-none mt-2"><%- include('backups/views/actions', { backup: b, size }) %></div>
+                </td>
+                <td class="text-nowrap d-none d-md-table-cell"><%= fmt.dateTime(b.started_at) %>
+                  <small class="d-block text-body-secondary"><%= b.created_name ?? (b.kind === 'nightly' ? 'Automatic' : b.kind === 'pre_deploy' ? 'App update' : '') %></small></td>
+                <td class="text-end jt-num text-nowrap d-none d-md-table-cell"><%= size(b.size_bytes) %>
+                  <% if (b.files_size_bytes) { %><small class="d-block text-body-secondary">+ <%= size(b.files_size_bytes) %> files</small><% } %></td>
+                <td>
+                  <% if (b.status === 'running') { %>
+                    <span class="d-inline-flex align-items-center gap-2"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Running…</span>
+                  <% } else if (b.status === 'failed') { %>
+                    <%- include('partials/pill', { text: 'Failed', tone: 'bad' }) %>
+                    <small class="d-block text-danger-emphasis jt-backup-error"><%= b.error %></small>
+                  <% } else if (b.check_ok === null || b.check_ok === undefined) { %>
+                    <%- include('partials/pill', { text: 'Done', tone: 'ok' }) %>
+                  <% } else if (b.check_ok) { %>
+                    <%- include('partials/pill', { text: 'Checked', tone: 'ok' }) %>
+                    <small class="d-block text-body-secondary"><%= fmt.dateTime(b.checked_at) %></small>
+                  <% } else { %>
+                    <%- include('partials/pill', { text: 'Problem', tone: 'bad' }) %>
+                    <small class="d-block text-danger-emphasis">Found on <%= fmt.dateTime(b.checked_at) %>. Make a new backup.</small>
+                  <% } %>
+                </td>
+                <td class="text-end text-nowrap d-none d-md-table-cell"><%- include('backups/views/actions', { backup: b, size }) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+  <%# Download and delete: the admin types their password again. %>
+  <div class="modal fade" id="backup-password" tabindex="-1" aria-labelledby="backup-password-title" aria-hidden="true" x-ref="modal">
+    <div class="modal-dialog modal-dialog-centered">
+      <form class="modal-content" method="post" :action="action.url" @submit="done()">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="which" :value="action.which">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="backup-password-title" x-text="action.title">Confirm</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-grid gap-2">
+          <p class="small mb-0" x-show="!action.danger">A backup holds every customer’s details. Keep the downloaded file somewhere safe.</p>
+          <p class="small mb-0" x-show="action.danger">The file is removed from the server for good.</p>
+          <label class="form-label mb-0" for="backup-password-input">Your password</label>
+          <input class="form-control" type="password" id="backup-password-input" name="password" x-ref="password" autocomplete="current-password" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn" :class="action.danger ? 'btn-danger' : 'btn-primary'" x-text="action.button">OK</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

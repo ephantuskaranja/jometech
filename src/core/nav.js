@@ -57,7 +57,7 @@ export const nav = [
       { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },
       { label: 'Sites', href: '/admin/sites', icon: 'geo-alt', permission: 'system.settings', ready: true },
       { label: 'Job types & steps', href: '/admin/job-types', icon: 'list-check', permission: 'system.settings', ready: true },
-      { label: 'Settings & backups', href: '/admin/settings', icon: 'sliders', permission: ['system.settings', 'system.backup.manage'] },
+      { label: 'Backups', href: '/admin/backups', icon: 'database-check', permission: 'system.backup.manage', ready: true },
     ],
   },
 ];

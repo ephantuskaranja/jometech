@@ -16,6 +16,7 @@
     "db:status": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:list",
     "db:make": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js migrate:make",
     "db:seed": "node --env-file-if-exists=.env node_modules/knex/bin/cli.js seed:run",
+    "db:restore": "node --env-file-if-exists=.env scripts/restore.js",
     "migration:run": "npm run db:migrate",
     "seed": "npm run db:seed",
     "user:create": "node --env-file-if-exists=.env scripts/create-user.js"
@@ -28,6 +29,7 @@
     "argon2": "^0.45.1",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
+    "croner": "^10.0.1",
     "csrf-sync": "^4.2.1",
     "ejs": "^7.0.2",
     "exceljs": "^4.4.0",

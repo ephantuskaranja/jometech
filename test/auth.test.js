@@ -69,7 +69,7 @@ test('menu shows only what the role may use', async () => {
   const techPage = (await tech.get('/').expect(200)).text;
   const menu = (html) => [...html.matchAll(/class="jt-nav-link[^"]*"[^>]*>\s*<i[^>]*><\/i><span>([^<]+)<\/span>/g)].map((m) => m[1]);
   assert.ok(menu(adminPage).includes('Payroll'));
-  assert.ok(menu(adminPage).includes('Settings &amp; backups'));
+  assert.ok(menu(adminPage).includes('Backups'));
   assert.deepEqual(menu(techPage), ['Dashboard', 'Jobs']);
 });
 

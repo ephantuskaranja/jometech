@@ -1,0 +1,23 @@
+<%# One backup's buttons: check, download (password), delete (password). Used in the table and, on phones, under the name. %>
+<% const b = backup; const name = b.number ?? b.file_name; %>
+  <% if (b.status === 'done') { %>
+    <form method="post" action="/admin/backups/<%= b.id %>/check" class="d-inline">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-outline-secondary btn-sm" type="submit" title="Check the file is complete and unchanged"><i class="bi bi-shield-check"></i>Check</button>
+    </form>
+    <% if (b.files_name) { %>
+      <div class="dropdown d-inline-block">
+        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download"></i>Download</button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><button class="dropdown-item" type="button" @click="ask(<%= JSON.stringify({ url: `/admin/backups/${b.id}/download`, which: 'db', title: `Download ${name}: database`, button: 'Download' }) %>)">Database (<%= size(b.size_bytes) %>)</button></li>
+          <li><button class="dropdown-item" type="button" @click="ask(<%= JSON.stringify({ url: `/admin/backups/${b.id}/download`, which: 'files', title: `Download ${name}: photos and files`, button: 'Download' }) %>)">Photos and files (<%= size(b.files_size_bytes) %>)</button></li>
+        </ul>
+      </div>
+    <% } else { %>
+      <button class="btn btn-outline-secondary btn-sm" type="button" @click="ask(<%= JSON.stringify({ url: `/admin/backups/${b.id}/download`, which: 'db', title: `Download ${name}`, button: 'Download' }) %>)"><i class="bi bi-download"></i>Download</button>
+    <% } %>
+  <% } %>
+  <% if (b.status !== 'running') { %>
+    <button class="btn jt-icon-btn" type="button" aria-label="Delete <%= name %>" title="Delete"
+            @click="ask(<%= JSON.stringify({ url: `/admin/backups/${b.id}/delete`, which: '', title: `Delete ${name}?`, button: 'Delete', danger: true }) %>)"><i class="bi bi-trash"></i></button>
+  <% } %>

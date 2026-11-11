@@ -52,6 +52,12 @@ export const config = {
     fullDayHours: Number(process.env.FULL_DAY_HOURS || 7),
     halfDayHours: Number(process.env.HALF_DAY_HOURS || 3.5),
   },
+  // Backups (System → Backups): files in storage/backups, made with MySQL's own tools.
+  // Blank paths = found on the PATH (Ubuntu); on Windows give the full path to the .exe.
+  backups: {
+    mysqldump: process.env.MYSQLDUMP_PATH || 'mysqldump',
+    mysql: process.env.MYSQL_PATH || 'mysql',
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 3306),

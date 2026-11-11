@@ -512,6 +512,8 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-cat-add > div { flex: 1; }
 .jt-cat-add > .btn { margin-top: 1.78rem; } /* level with the input, under its label */
 .jt-step-row .jt-icon-btn:disabled { opacity: .25; }
+.jt-backup-now { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; }
+.jt-backup-error { max-width: 22rem; white-space: normal; }
 /* On a job (jobs/views/show.ejs) */
 .jt-job-steps .list-group-item { display: flex; align-items: center; gap: .625rem; padding-block: .5rem; }
 .jt-job-step-name { flex: 1; min-width: 0; }
