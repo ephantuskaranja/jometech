@@ -26,6 +26,20 @@
     </div>
   </section>
 
+  <%# Going out of the gate (to a customer's site, an outside fabricator): the gate checks it out. %>
+  <section class="card mb-4" x-data="{ leaves: <%= values.leaves_site === '1' %> }">
+    <div class="card-body d-grid gap-3">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="f-leaves_site" name="leaves_site" value="1" x-model="leaves">
+        <label class="form-check-label" for="f-leaves_site"><strong>Leaves the site</strong>
+          <span class="d-block small text-body-secondary">Going out of the gate, e.g. to the customer’s site or an outside fabricator. The gate checks the load and lets it out.</span></label>
+      </div>
+      <div x-show="leaves" x-cloak>
+        <%- include('partials/field', { name: 'destination', label: 'Going to', value: values.destination, error: errors.destination, required: true, placeholder: 'e.g. Customer’s yard, Mombasa Road', attrs: 'maxlength="150"' }) %>
+      </div>
+    </div>
+  </section>
+
   <section class="card mb-4">
     <div class="card-body">
       <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, value: values.notes, error: errors.notes, hint: 'Optional.' }) %>

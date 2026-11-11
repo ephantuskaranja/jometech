@@ -15,6 +15,7 @@
           <span><i class="bi bi-person"></i><%= issue.customer_name %></span>
           <span><i class="bi bi-calendar"></i><%= fmt.date(`${issue.issued_on}T12:00:00Z`) %></span>
           <span><i class="bi bi-geo-alt"></i><%= issue.site_name %></span>
+          <% if (pass) { %><span><%- include('partials/pill', { text: passStages[pass].label, tone: passStages[pass].tone }) %></span><% } %>
         </div>
       </div>
     </div>
@@ -51,6 +52,31 @@
     </section>
   </div>
   <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <% if (pass) { %>
+      <%# The gate pass: these materials go out of the gate; the guard lets them out. %>
+      <section class="card" x-data="{ open: false }">
+        <div class="card-header d-flex align-items-center gap-2"><h2 class="h6 mb-0 me-auto">Gate pass</h2><%- include('partials/pill', { text: passStages[pass].label, tone: passStages[pass].tone }) %></div>
+        <div class="card-body d-grid gap-2 small">
+          <div>Going to <strong><%= issue.destination %></strong>.</div>
+          <% if (pass === 'waiting') { %>
+            <div class="text-body-secondary">On the gate’s list. The guard checks the load and lets it out.</div>
+          <% } else if (pass === 'out') { %>
+            <div>Left the gate <%= fmt.dateTime(issue.gate_out_at) %><%= issue.gate_out_name ? `, ${issue.gate_out_name}` : '' %>.<% if (issue.gate_out_note) { %><span class="d-block text-body-secondary"><%= issue.gate_out_note %></span><% } %></div>
+          <% } else { %>
+            <div>Cancelled <%= fmt.dateTime(issue.pass_cancelled_at) %><%= issue.pass_cancelled_name ? ` by ${issue.pass_cancelled_name}` : '' %>: <%= issue.pass_cancel_reason %></div>
+          <% } %>
+          <% if (canCancelPass) { %>
+            <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" style="justify-self: start" x-show="!open" @click="open = true">Not going after all? Cancel the pass</button>
+            <form method="post" action="/stores/issue/<%= issue.id %>/cancel-pass" class="d-grid gap-2" x-show="open" x-cloak>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <label class="form-label mb-0" for="pass-reason">Why isn’t it going?</label>
+              <input class="form-control" id="pass-reason" name="reason" maxlength="255" required placeholder="e.g. Customer will collect next week">
+              <div class="d-flex gap-2"><button class="btn btn-secondary btn-sm" type="submit">Cancel the pass</button><button class="btn btn-link btn-sm" type="button" @click="open = false">Keep it</button></div>
+            </form>
+          <% } %>
+        </div>
+      </section>
+    <% } %>
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">Details</h2></div>
       <div class="card-body">

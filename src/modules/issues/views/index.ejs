@@ -47,7 +47,7 @@
             <tr>
               <td><a class="jt-row-link font-monospace text-nowrap" href="/stores/issue/<%= m.id %>"><%= m.number %></a></td>
               <td><span class="font-monospace small text-nowrap"><%= m.job_number %></span><span class="jt-sub"><%= m.customer_name %></span></td>
-              <td><%= m.received_by ?? '—' %></td>
+              <td><%= m.received_by ?? '—' %><% if (m.leaves_site) { %><span class="d-block mt-1"><%- include('partials/pill', m.pass_cancelled_at ? { text: 'Pass cancelled', tone: 'neutral' } : m.gate_out_at ? { text: 'Left the site', tone: 'ok' } : { text: 'Waiting at the gate', tone: 'warn' }) %></span><% } %></td>
               <td class="d-none d-md-table-cell text-nowrap"><%= fmt.date(`${m.issued_on}T12:00:00Z`) %></td>
               <td class="text-end jt-num"><%= fmt.money(m.net_value) %></td>
             </tr>

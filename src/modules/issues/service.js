@@ -37,7 +37,7 @@ export async function availableStock(siteId) {
 
 /**
  * @param {number} jobId
- * @param {{ issued_on: string, received_by: string|null, notes: string|null, lines: { balance_id: number, quantity: number }[] }} input
+ * @param {{ issued_on: string, received_by: string|null, notes: string|null, leaves_site?: boolean, destination?: string|null, lines: { balance_id: number, quantity: number }[] }} input
  * @returns {Promise<{ id: number, number: string }>}
  */
 export async function issueMaterials(jobId, input, actor) {
@@ -49,6 +49,7 @@ export async function issueMaterials(jobId, input, actor) {
     const number = await nextNumber(trx, 'issue');
     const [id] = await trx('material_issues').insert({
       number, job_id: job.id, site_id: actor.site.id, issued_on: input.issued_on, received_by: input.received_by, notes: input.notes, created_by: actor.user.id,
+      leaves_site: Boolean(input.leaves_site), destination: input.leaves_site ? input.destination : null,
     });
 
     // One row of the form at a time, in a fixed order so two people issuing can't lock each other out.
@@ -77,7 +78,7 @@ export async function issueMaterials(jobId, input, actor) {
       });
     }
 
-    await audit(trx, actor, { entity: 'material_issue', id, action: 'create', summary: `To ${job.number}` });
+    await audit(trx, actor, { entity: 'material_issue', id, action: 'create', summary: `To ${job.number}${input.leaves_site ? `, leaving the site for ${input.destination}` : ''}` });
     // No amount: the workshop can read a job's history, and costs stay with the stores.
     await audit(trx, actor, { entity: 'job', id: job.id, action: 'materials_issued', summary: number });
     return { id, number };
@@ -135,8 +136,10 @@ export async function getIssue(id) {
     .join('customers as c', 'c.id', 'j.customer_id')
     .join('sites as s', 's.id', 'm.site_id')
     .leftJoin('users as u', 'u.id', 'm.created_by')
+    .leftJoin('users as go', 'go.id', 'm.gate_out_by').leftJoin('users as pc', 'pc.id', 'm.pass_cancelled_by')
     .where('m.id', id)
-    .first('m.*', 'j.number as job_number', 'j.status as job_status', 'c.name as customer_name', 's.name as site_name', 'u.name as created_name');
+    .first('m.*', 'j.number as job_number', 'j.status as job_status', 'c.name as customer_name', 's.name as site_name', 'u.name as created_name',
+      'go.name as gate_out_name', 'pc.name as pass_cancelled_name');
   if (!issue) return null;
   issue.lines = await db('material_issue_lines as l').join('items as i', 'i.id', 'l.item_id')
     .where('l.issue_id', id).orderBy('l.id').select('l.*', 'i.name as item_name', 'i.unit as item_unit', 'i.priced_by');
@@ -148,7 +151,7 @@ export function listIssues({ siteIds, q = '' }) {
     .join('jobs as j', 'j.id', 'm.job_id')
     .join('customers as c', 'c.id', 'j.customer_id')
     .whereIn('m.site_id', siteIds).orderBy('m.id', 'desc').limit(200)
-    .select('m.id', 'm.number', 'm.issued_on', 'm.received_by', 'j.number as job_number', 'c.name as customer_name',
+    .select('m.id', 'm.number', 'm.issued_on', 'm.received_by', 'm.leaves_site', 'm.gate_out_at', 'm.pass_cancelled_at', 'j.number as job_number', 'c.name as customer_name',
       db('material_issue_lines').where('issue_id', db.ref('m.id')).sum({ v: db.raw('`value` - `returned_value`') }).as('net_value'));
   const term = q.trim();
   if (term) {
@@ -172,4 +175,60 @@ export function activeJobs(siteIds) {
   return db('jobs as j').join('customers as c', 'c.id', 'j.customer_id').leftJoin('vehicles as v', 'v.id', 'j.vehicle_id')
     .whereIn('j.site_id', siteIds).whereIn('j.status', ['open', 'in_progress']).orderBy('j.id', 'desc').limit(200)
     .select('j.id', 'j.number', 'c.name as customer_name', 'v.reg_no');
+}
+
+// ---------- gate passes (step 26c) ----------
+
+/** Where an issue's gate pass is: null when it doesn't leave the site. */
+export function passStage(issue) {
+  if (!issue.leaves_site) return null;
+  if (issue.pass_cancelled_at) return 'cancelled';
+  return issue.gate_out_at ? 'out' : 'waiting';
+}
+export const PASS_STAGES = {
+  waiting: { label: 'Waiting at the gate', tone: 'warn' },
+  out: { label: 'Left the site', tone: 'ok' },
+  cancelled: { label: 'Pass cancelled', tone: 'neutral' },
+};
+
+/** Materials waiting at this site's gate to go out, with what is on the load (no costs). */
+export async function passesAtGate(siteId) {
+  const rows = await db('material_issues as m').join('jobs as j', 'j.id', 'm.job_id').join('customers as c', 'c.id', 'j.customer_id')
+    .leftJoin('users as u', 'u.id', 'm.created_by')
+    .where({ 'm.site_id': siteId, 'm.leaves_site': true }).whereNull('m.gate_out_at').whereNull('m.pass_cancelled_at')
+    .orderBy('m.id')
+    .select('m.id', 'm.number', 'm.destination', 'm.received_by', 'm.created_at', 'j.number as job_number', 'c.name as customer_name', 'u.name as created_name');
+  const lines = rows.length ? await db('material_issue_lines as l').join('items as i', 'i.id', 'l.item_id').whereIn('l.issue_id', rows.map((r) => r.id)).orderBy('l.id')
+    .select('l.issue_id', 'l.quantity', 'l.size_key', 'l.length', 'l.width', 'l.size_unit', 'i.name as item_name', 'i.unit') : [];
+  return rows.map((r) => ({ ...r, lines: lines.filter((l) => l.issue_id === r.id) }));
+}
+
+async function lockPass(trx, id) {
+  const issue = await trx('material_issues').where({ id }).forUpdate().first();
+  if (!issue) throw httpError(404, 'That issue doesn’t exist.');
+  if (!issue.leaves_site) throw httpError(409, `${issue.number} isn’t leaving the site, so it has no gate pass.`);
+  if (issue.pass_cancelled_at) throw httpError(409, `${issue.number}: its gate pass was cancelled.`);
+  if (issue.gate_out_at) throw httpError(409, `${issue.number} has already left the gate.`);
+  return issue;
+}
+
+/** The guard checked the load: it leaves. Only the gate of the site it was issued at. */
+export async function letOut(id, siteId, note, actor) {
+  return db.transaction(async (trx) => {
+    const issue = await lockPass(trx, id);
+    if (issue.site_id !== siteId) throw httpError(403, `${issue.number} leaves from another site’s gate.`);
+    await trx('material_issues').where({ id }).update({ gate_out_at: trx.fn.now(), gate_out_by: actor.user.id, gate_out_note: note });
+    await audit(trx, actor, { entity: 'material_issue', id, action: 'gate_out', summary: note ?? undefined });
+    return issue;
+  });
+}
+
+/** Stores: it isn't going after all. The materials stay issued to the job; return them if unused. */
+export async function cancelPass(id, reason, actor) {
+  return db.transaction(async (trx) => {
+    const issue = await lockPass(trx, id);
+    await trx('material_issues').where({ id }).update({ pass_cancelled_at: trx.fn.now(), pass_cancelled_by: actor.user.id, pass_cancel_reason: reason });
+    await audit(trx, actor, { entity: 'material_issue', id, action: 'pass_cancelled', summary: reason });
+    return issue;
+  });
 }

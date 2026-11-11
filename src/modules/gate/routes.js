@@ -3,10 +3,12 @@ import { canAny } from '../../core/auth.js';
 import { httpError } from '../../core/validate.js';
 import * as transfers from '../stock/transfers.js';
 import * as deliveries from './deliveries.js';
+import * as issues from '../issues/service.js';
 
 // The gate: goods going out and coming in (step 26). Guards (goods.gate) at their site:
 //   transfers to another site leave → "Left the gate"; transfers from another site arrive → "Arrived at the gate".
-//   a supplier's truck arrives → logged against its open purchase order (or as no order).
+//   a supplier's truck arrives → logged against its open purchase order (or as no order);
+//   materials issued to a job that leave the site → "Let out".
 // Stores can't receive a transfer, or goods from a supplier, until the arrival is logged here.
 export const router = Router();
 const gate = canAny('goods.gate');
@@ -25,6 +27,7 @@ async function renderGoods(req, res, { status = 200, values = BLANK, errors = {}
     title: 'Goods at the gate',
     leaving: list.filter((t) => t.leaving),
     arriving: list.filter((t) => !t.leaving),
+    passes: await issues.passesAtGate(req.site.id),
     orders: await deliveries.openOrders(req.site.id),
     today: await deliveries.loggedToday(req.site.id),
     statuses: deliveries.STATUSES,
@@ -85,3 +88,16 @@ router.post('/gate/transfers/:id/out', gate, (req, res) => step(req, res,
 router.post('/gate/transfers/:id/in', gate, (req, res) => step(req, res,
   () => transfers.gateIn(Number(req.params.id), req.site.id, text(req.body.note, 255), req),
   (t) => `${t.number} logged in at the gate. Stores can receive it now.`));
+
+/** Materials issued to a job going out: the guard checked the load. */
+router.post('/gate/issues/:id/out', gate, async (req, res) => {
+  needSite(req);
+  try {
+    const issue = await issues.letOut(Number(req.params.id), req.site.id, text(req.body.note, 255), req);
+    req.session.flash = { type: 'success', text: `${issue.number} let out of the gate.` };
+  } catch (err) {
+    if (![403, 404, 409].includes(err.status)) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect('/gate/goods');
+});

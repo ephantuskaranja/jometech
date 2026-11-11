@@ -17,6 +17,7 @@ const issueSchema = z.object({
   issued_on: z.string().trim().refine((v) => isDay(v), 'Check the date'),
   received_by: optionalText(100),
   notes: optionalText(2000),
+  destination: optionalText(150),
 });
 
 const number = (v) => Number(String(v ?? '').replace(/[,\s]/g, ''));
@@ -87,20 +88,23 @@ router.get('/jobs/:id/issue', manage, async (req, res) => {
   needSite(req);
   const job = await loadJob(req);
   if (!['open', 'in_progress'].includes(job.status)) throw httpError(409, `${job.number} is finished, so materials can’t be issued to it. Reopen it first.`);
-  await renderForm(req, res, { job, values: { issued_on: localDay(), received_by: '', notes: '' } });
+  await renderForm(req, res, { job, values: { issued_on: localDay(), received_by: '', notes: '', leaves_site: '', destination: '' } });
 });
 
 router.post('/jobs/:id/issue', manage, async (req, res) => {
   needSite(req);
   const job = await loadJob(req);
-  const values = { issued_on: '', received_by: '', notes: '', ...req.body };
+  const values = { issued_on: '', received_by: '', notes: '', leaves_site: '', destination: '', ...req.body };
   const { data, errors } = check(issueSchema, req.body);
   const { rows, lines, error } = readLines(req.body);
   const all = { ...errors, ...(error ? { lines: error } : {}) };
+  // Leaving the site: a gate pass, so the gate must know where it is going.
+  const leaves = values.leaves_site === '1';
+  if (leaves && !data?.destination) all.destination = 'Say where it is going';
   if (Object.keys(all).length) return renderForm(req, res, { status: 422, job, values, rows, errors: all });
   try {
-    const { id, number: issueNumber } = await issues.issueMaterials(job.id, { ...data, lines }, req);
-    req.session.flash = { type: 'success', text: `${issueNumber} saved: stock reduced and charged to ${job.number}.` };
+    const { id, number: issueNumber } = await issues.issueMaterials(job.id, { ...data, leaves_site: leaves, lines }, req);
+    req.session.flash = { type: 'success', text: `${issueNumber} saved: stock reduced and charged to ${job.number}.${leaves ? ' It is on the gate’s list to let out.' : ''}` };
     res.redirect(`/stores/issue/${id}`);
   } catch (err) {
     if (!err.field) throw err;
@@ -124,7 +128,27 @@ router.get('/stores/issue/:id', see, async (req, res) => {
     title: issue.number, issue, returnError,
     entries: await history('material_issue', issue.id),
     canReturn: req.user.can('stores.issue'),
+    pass: issues.passStage(issue), passStages: issues.PASS_STAGES,
+    canCancelPass: req.user.can('stores.issue') && issues.passStage(issue) === 'waiting',
   });
+});
+
+/** Stores: the materials aren't going out after all. */
+router.post('/stores/issue/:id/cancel-pass', manage, async (req, res) => {
+  const issue = await loadIssue(req);
+  const reason = String(req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'warning', text: 'Say why it isn’t going (3 to 255 characters).' };
+    return res.redirect(`/stores/issue/${issue.id}`);
+  }
+  try {
+    await issues.cancelPass(issue.id, reason, req);
+    req.session.flash = { type: 'success', text: `Gate pass for ${issue.number} cancelled. The materials are still charged to ${issue.job_number}: return what isn’t used.` };
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(`/stores/issue/${issue.id}`);
 });
 
 router.post('/stores/issue/:id/return', manage, async (req, res) => {

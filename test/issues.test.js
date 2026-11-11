@@ -223,3 +223,52 @@ test('every movement stays on the permanent record', async () => {
   assert.match(page, /Returned/);
   assert.match(page, /JOB-2026-8835/);
 });
+
+test('leaving the site: a gate pass the guard lets out; stores can cancel it before then', async () => {
+  const hqGate = await loginAs(app, await makeUser(8, ['gate']));
+  const siteB = await db('sites').where({ code: 'SITEB' }).first();
+  const bGate = await loginAs(app, await makeUser(9, ['gate'], { siteIds: [siteB.id] }));
+  await post(store, '/items', { name: 'Test Gate Bracket', category: 'Other', priced_by: 'unit', unit: 'Pc' });
+  const bracket = await item('Test Gate Bracket');
+  await opening([[bracket, 6, 100]]);
+  const b = await balanceOf(bracket);
+  const send = (fields) => post(store, `/jobs/${job.id}/issue`, {
+    issued_on: localDay(), received_by: 'Test Fitter', line_balance_id: [b.id], line_label: ['chosen'], line_quantity: ['2'], ...fields,
+  });
+
+  let res = await send({ leaves_site: '1', destination: '' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Say where it is going/);
+  res = await send({});
+  const stays = await db('material_issues').where({ id: idOf(res.headers.location) }).first();
+  assert.equal(stays.leaves_site, 0, 'not ticked: no gate pass');
+
+  res = await send({ leaves_site: '1', destination: 'Test customer yard, Athi River' });
+  assert.equal(res.status, 302, res.text);
+  const id = idOf(res.headers.location);
+  const gatePage = (await hqGate.get('/gate/goods')).text;
+  assert.match(gatePage, /Materials going out[\s\S]*Test customer yard, Athi River[\s\S]*Test Gate Bracket/);
+  assert.doesNotMatch(gatePage, /100\.00/, 'no costs at the gate');
+  assert.doesNotMatch((await hqGate.get('/gate/goods')).text, new RegExp(`/gate/issues/${stays.id}/out`));
+  assert.match((await store.get(`/stores/issue/${id}`)).text, /Waiting at the gate/);
+
+  assert.equal((await post(store, `/gate/issues/${id}/out`)).status, 403, 'stores don’t let it out');
+  await post(bGate, `/gate/issues/${id}/out`);
+  assert.equal((await db('material_issues').where({ id }).first()).gate_out_at, null, 'not from another site’s gate');
+  await post(hqGate, `/gate/issues/${id}/out`, { note: 'Test Fitter, KDA 001B' });
+  const out = await db('material_issues').where({ id }).first();
+  assert.ok(out.gate_out_at);
+  assert.equal(out.gate_out_note, 'Test Fitter, KDA 001B');
+  assert.match((await store.get(`/stores/issue/${id}`)).text, /Left the site/);
+  await post(store, `/stores/issue/${id}/cancel-pass`, { reason: 'Too late now' });
+  assert.equal((await db('material_issues').where({ id }).first()).pass_cancelled_at, null, 'gone: can’t cancel');
+
+  res = await send({ leaves_site: '1', destination: 'Test outside fabricator' });
+  const later = idOf(res.headers.location);
+  await post(store, `/stores/issue/${later}/cancel-pass`, { reason: 'Customer will collect next week' });
+  const cancelled = await db('material_issues').where({ id: later }).first();
+  assert.ok(cancelled.pass_cancelled_at);
+  assert.doesNotMatch((await hqGate.get('/gate/goods')).text, /Test outside fabricator/);
+  await post(hqGate, `/gate/issues/${later}/out`);
+  assert.equal((await db('material_issues').where({ id: later }).first()).gate_out_at, null);
+});
