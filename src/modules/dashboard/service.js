@@ -9,6 +9,7 @@ import * as proformas from '../proformas/service.js';
 import * as invoices from '../invoices/service.js';
 import * as orders from '../purchasing/service.js';
 import { stockTotals } from '../stock/service.js';
+import { atGate as goodsAtGate } from '../stock/transfers.js';
 import { counts as visitorCounts } from '../visitors/service.js';
 import { waitingAtGate } from '../checkins/release.js';
 
@@ -116,6 +117,9 @@ async function visitors(user, site) {
   ];
   if (can(user, 'checkin.gate')) {
     items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' });
+  }
+  if (can(user, 'goods.gate')) {
+    items.push({ label: 'Goods at the gate', value: (await goodsAtGate(site.id)).length, foot: 'to let out or log in', icon: 'box-seam', href: '/gate/goods', tone: 'info' });
   }
   if (can(user, 'visitors.receive') && !atGate) {
     items.push({ label: 'Received today', value: c.received, foot: 'confirmed at reception', icon: 'person-check', href: '/visitors?show=register' });

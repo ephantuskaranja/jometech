@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   ['Gate', 'visitors.gate', 'Sign visitors in and clear them out at the gate'],
   ['Gate', 'visitors.receive', 'Confirm visitors were received; sign in walk-ins at reception'],
   ['Gate', 'visitors.view', 'See the visitor register'],
+  ['Gate', 'goods.gate', 'Check goods in and out at the gate: transfers, deliveries, materials leaving'],
   ['Sales', 'customers.manage', 'Add and edit customers and vehicles'],
   ['Sales', 'enquiries.manage', 'Record and follow up enquiries'],
   ['Sales', 'quotations.manage', 'Prepare quotations'],
@@ -49,7 +50,7 @@ export const ROLES = [
   {
     key: 'supervisor', name: 'Supervisor',
     description: 'Jobs, check-in, attendance and quality checks at their sites',
-    permissions: ['checkin.manage', 'checkin.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view'],
+    permissions: ['checkin.manage', 'checkin.gate', 'goods.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view'],
   },
   {
     key: 'sales', name: 'Sales',
@@ -70,7 +71,7 @@ export const ROLES = [
   {
     key: 'gate', name: 'Gate', site_at_login: true,
     description: 'The gate: visitors in and out, and released vehicles out',
-    permissions: ['visitors.gate', 'visitors.view', 'checkin.gate'],
+    permissions: ['visitors.gate', 'visitors.view', 'checkin.gate', 'goods.gate'],
   },
   {
     key: 'reception', name: 'Reception', site_at_login: true,

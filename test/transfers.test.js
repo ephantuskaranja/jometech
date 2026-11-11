@@ -5,7 +5,7 @@ import { db } from '../src/core/db.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
-let hqStore, bStore, manager, hq, siteB, plate, bolt;
+let hqStore, bStore, manager, hqGate, bGate, hq, siteB, plate, bolt;
 
 before(async () => {
   hq = await db('sites').where({ code: 'HQ' }).first();
@@ -13,6 +13,8 @@ before(async () => {
   hqStore = await loginAs(app, await makeUser(54, ['storekeeper']));
   bStore = await loginAs(app, await makeUser(59, ['storekeeper'], { siteIds: [siteB.id] }));
   manager = await loginAs(app, await makeUser(60, ['manager']));
+  hqGate = await loginAs(app, await makeUser(2, ['gate']));
+  bGate = await loginAs(app, await makeUser(3, ['gate'], { siteIds: [siteB.id] }));
   await post(hqStore, '/items', { name: 'Test Trf Plate 6 mm', category: 'Plates', priced_by: 'area', thickness_mm: '6' });
   await post(hqStore, '/items', { name: 'Test Trf Bolt', category: 'Other', priced_by: 'unit', unit: 'Pc' });
   [plate, bolt] = await Promise.all(['Test Trf Plate 6 mm', 'Test Trf Bolt'].map((name) => db('items').where({ name }).first()));
@@ -48,6 +50,11 @@ const balanceRow = (site, itemId, sizeKey = '') => db('stock_balances').where({ 
 const balance = async (site, itemId, sizeKey = '') => Number((await balanceRow(site, itemId, sizeKey))?.quantity ?? 0);
 const latest = () => db('stock_transfers').where({ from_site_id: hq.id }).orderBy('id', 'desc').first();
 const linesOf = (id) => db('stock_transfer_lines').where({ transfer_id: id }).orderBy('id');
+/** Both gates: out at HQ, in at Site B. */
+async function throughGates(id) {
+  await post(hqGate, `/gate/transfers/${id}/out`);
+  await post(bGate, `/gate/transfers/${id}/in`, { note: 'Test Driver, KAA 001A' });
+}
 
 /** Lines picked from HQ's stock: [[itemId, sizeKey, qty], …]. */
 async function send(agent, toSite, picks, extra = {}) {
@@ -91,6 +98,17 @@ test('only the receiving site receives; everything arriving lands in its stock',
   const all = Object.fromEntries(lines.map((l) => [`received_${l.id}`, String(Number(l.quantity))]));
   assert.equal((await post(hqStore, `/inventory/transfers/${t.id}/receive`, all)).status, 403, 'the sender can’t receive it');
 
+  // The gates come first: stores can't receive it until it has left HQ's gate and arrived at Site B's.
+  await post(bStore, `/inventory/transfers/${t.id}/receive`, all);
+  assert.match((await bStore.get(`/inventory/transfers/${t.id}`)).text, /hasn’t been logged in at the gate yet/);
+  await post(bGate, `/gate/transfers/${t.id}/in`);
+  assert.match((await bGate.get('/gate/goods')).text, /hasn’t left the other site’s gate yet/, 'can’t arrive before it leaves');
+  assert.match((await hqGate.get('/gate/goods')).text, new RegExp(t.number), 'on HQ’s gate list to let out');
+  await throughGates(t.id);
+  const logged = await db('stock_transfers').where({ id: t.id }).first();
+  assert.ok(logged.gate_out_at && logged.gate_in_at);
+  assert.equal(logged.gate_in_note, 'Test Driver, KAA 001A');
+
   assert.match((await bStore.get('/inventory/transfers')).text, new RegExp(t.number), 'on Site B’s “to receive” list');
   const res = await post(bStore, `/inventory/transfers/${t.id}/receive`, all);
   assert.equal(res.status, 302);
@@ -104,6 +122,7 @@ test('only the receiving site receives; everything arriving lands in its stock',
 test('fewer arrived: the shortfall becomes a “lost” adjustment at the receiving site, for approval', async () => {
   await send(hqStore, siteB, [[bolt.id, '', 3]]);
   const t = await latest();
+  await throughGates(t.id);
   const [line] = await linesOf(t.id);
   let res = await post(bStore, `/inventory/transfers/${t.id}/receive`, { [`received_${line.id}`]: '4' });
   assert.equal((await db('stock_transfers').where({ id: t.id }).first()).status, 'in_transit', 'more than was sent is refused');
@@ -124,7 +143,7 @@ test('fewer arrived: the shortfall becomes a “lost” adjustment at the receiv
   assert.equal(Number((await db('items').where({ id: bolt.id }).first()).on_hand_qty), onHand - 1);
 });
 
-test('the sender can cancel while it is in transit; the stock goes back', async () => {
+test('the sender can cancel until it leaves the gate; the stock goes back', async () => {
   await send(hqStore, siteB, [[bolt.id, '', 1]]);
   const t = await latest();
   assert.equal(await balance(hq, bolt.id), 2);
@@ -132,4 +151,16 @@ test('the sender can cancel while it is in transit; the stock goes back', async 
   await post(hqStore, `/inventory/transfers/${t.id}/cancel`, { reason: 'Truck didn’t leave' });
   assert.equal((await db('stock_transfers').where({ id: t.id }).first()).status, 'cancelled');
   assert.equal(await balance(hq, bolt.id), 3);
+
+  await send(hqStore, siteB, [[bolt.id, '', 1]]);
+  const gone = await latest();
+  await post(hqGate, `/gate/transfers/${gone.id}/out`);
+  await post(hqStore, `/inventory/transfers/${gone.id}/cancel`, { reason: 'Too late' });
+  assert.equal((await db('stock_transfers').where({ id: gone.id }).first()).status, 'in_transit', 'once out of the gate, it can’t be cancelled');
+});
+
+test('gate staff see the goods page; stores don’t act at the gate', async () => {
+  await hqGate.get('/gate/goods').expect(200);
+  assert.match((await hqGate.get('/')).text, /Goods at the gate/);
+  await hqStore.get('/gate/goods').expect(403);
 });

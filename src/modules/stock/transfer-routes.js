@@ -63,7 +63,7 @@ router.get('/inventory/transfers', see, async (req, res) => {
   const siteIds = req.user.sites.map((s) => s.id);
   const show = ['incoming', 'outgoing', 'all'].includes(req.query.show) ? req.query.show : 'incoming';
   res.render('stock/views/transfers', {
-    title: 'Stock transfers', show, statuses: transfers.STATUSES,
+    title: 'Stock transfers', show, stages: transfers.STAGES, stage: transfers.stage,
     list: await transfers.listTransfers({ siteIds, show }),
     incoming: await transfers.incomingCount(siteIds),
     canSend: req.user.can('inventory.manage'),
@@ -98,10 +98,12 @@ router.post('/inventory/transfers', manage, async (req, res) => {
 router.get('/inventory/transfers/:id', see, async (req, res) => {
   const t = await loadTransfer(req);
   res.render('stock/views/transfer', {
-    title: t.number, t, statuses: transfers.STATUSES,
+    title: t.number, t, stage: transfers.stage(t), stages: transfers.STAGES,
     entries: await history('stock_transfer', t.id),
-    canReceive: t.status === 'in_transit' && req.user.can('inventory.manage') && worksAt(req, t.to_site_id),
-    canCancel: t.status === 'in_transit' && req.user.can('inventory.manage') && worksAt(req, t.from_site_id),
+    // Stores receive only after the gate has logged it in; the sender cancels only before it leaves the gate.
+    canReceive: t.status === 'in_transit' && Boolean(t.gate_in_at) && req.user.can('inventory.manage') && worksAt(req, t.to_site_id),
+    canCancel: t.status === 'in_transit' && !t.gate_out_at && req.user.can('inventory.manage') && worksAt(req, t.from_site_id),
+    gateHere: req.user.can('goods.gate') && req.site ? req.site.id : null,
   });
 });
 

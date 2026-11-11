@@ -74,6 +74,7 @@ async function inTransit(trx, id) {
 export async function receiveTransfer(id, { received, note }, actor) {
   return db.transaction(async (trx) => {
     const transfer = await inTransit(trx, id);
+    if (!transfer.gate_in_at) throw httpError(409, `${transfer.number} hasn’t been logged in at the gate yet. The gate does that when the truck arrives.`);
     const lines = await trx('stock_transfer_lines').where({ transfer_id: id }).orderBy('item_id').orderBy('id');
     const short = [];
     for (const line of lines) {
@@ -106,6 +107,7 @@ export async function receiveTransfer(id, { received, note }, actor) {
 export async function cancelTransfer(id, reason, actor) {
   await db.transaction(async (trx) => {
     const transfer = await inTransit(trx, id);
+    if (transfer.gate_out_at) throw httpError(409, `${transfer.number} has already left the gate, so it can’t be cancelled. The other site receives what arrives.`);
     const lines = await trx('stock_transfer_lines').where({ transfer_id: id }).orderBy('item_id').orderBy('id');
     for (const line of lines) await move(trx, { type: 'transfer_in', siteId: transfer.from_site_id, line, pieces: num(line.quantity), transferId: id, actor });
     await trx('stock_transfers').where({ id }).update({ status: 'cancelled', cancel_reason: reason });
@@ -113,13 +115,70 @@ export async function cancelTransfer(id, reason, actor) {
   });
 }
 
+// ---------- the gates ----------
+
+/** The sending site's gate lets the truck out. */
+export async function gateOut(id, siteId, actor) {
+  return db.transaction(async (trx) => {
+    const t = await inTransit(trx, id);
+    if (t.from_site_id !== siteId) throw httpError(403, `${t.number} leaves from another site’s gate.`);
+    if (t.gate_out_at) throw httpError(409, `${t.number} has already left the gate.`);
+    await trx('stock_transfers').where({ id }).update({ gate_out_at: trx.fn.now(), gate_out_by: actor.user.id });
+    await audit(trx, actor, { entity: 'stock_transfer', id, action: 'gate_out', summary: t.carried_by ? `Carried by ${t.carried_by}` : null });
+    return t;
+  });
+}
+
+/** The receiving site's gate logs the truck in; stores can then receive it. */
+export async function gateIn(id, siteId, note, actor) {
+  return db.transaction(async (trx) => {
+    const t = await inTransit(trx, id);
+    if (t.to_site_id !== siteId) throw httpError(403, `${t.number} is going to another site.`);
+    if (!t.gate_out_at) throw httpError(409, `${t.number} hasn’t left the other site’s gate yet.`);
+    if (t.gate_in_at) throw httpError(409, `${t.number} is already logged in.`);
+    await trx('stock_transfers').where({ id }).update({ gate_in_at: trx.fn.now(), gate_in_by: actor.user.id, gate_in_note: note });
+    await audit(trx, actor, { entity: 'stock_transfer', id, action: 'gate_in', summary: note });
+    return t;
+  });
+}
+
+/** Where a transfer in transit is: waiting at the sending gate, on the road, or at the receiving site. */
+export function stage(t) {
+  if (t.status !== 'in_transit') return t.status;
+  if (!t.gate_out_at) return 'at_sending_gate';
+  if (!t.gate_in_at) return 'on_the_road';
+  return 'arrived';
+}
+export const STAGES = {
+  at_sending_gate: { label: 'Waiting at the gate', tone: 'warn' },
+  on_the_road: { label: 'On the road', tone: 'info' },
+  arrived: { label: 'At the gate, to receive', tone: 'warn' },
+  received: STATUSES.received,
+  cancelled: STATUSES.cancelled,
+};
+
+/** The gate's list at a site: transfers to let out, and transfers on their way in. With their lines. */
+export async function atGate(siteId) {
+  const rows = await db('stock_transfers as t').join('sites as f', 'f.id', 't.from_site_id').join('sites as d', 'd.id', 't.to_site_id').leftJoin('users as u', 'u.id', 't.sent_by')
+    .where('t.status', 'in_transit')
+    .where((w) => w.where((a) => a.where('t.from_site_id', siteId).whereNull('t.gate_out_at'))
+      .orWhere((b) => b.where('t.to_site_id', siteId).whereNotNull('t.gate_out_at').whereNull('t.gate_in_at')))
+    .orderBy('t.id')
+    .select('t.*', 'f.name as from_name', 'd.name as to_name', 'u.name as sent_name');
+  const lines = rows.length ? await db('stock_transfer_lines as l').join('items as i', 'i.id', 'l.item_id').whereIn('l.transfer_id', rows.map((r) => r.id)).orderBy('l.id')
+    .select('l.transfer_id', 'l.quantity', 'l.size_key', 'l.length', 'l.width', 'l.size_unit', 'i.name as item_name', 'i.unit') : [];
+  return rows.map((r) => ({ ...r, leaving: r.from_site_id === siteId, lines: lines.filter((l) => l.transfer_id === r.id) }));
+}
+
 // ---------- reading ----------
 
 export async function getTransfer(id) {
   const t = await db('stock_transfers as t').join('sites as f', 'f.id', 't.from_site_id').join('sites as d', 'd.id', 't.to_site_id')
     .leftJoin('users as s', 's.id', 't.sent_by').leftJoin('users as r', 'r.id', 't.received_by').leftJoin('stock_adjustments as a', 'a.id', 't.adjustment_id')
+    .leftJoin('users as go', 'go.id', 't.gate_out_by').leftJoin('users as gi', 'gi.id', 't.gate_in_by')
     .where('t.id', id)
-    .first('t.*', 'f.name as from_name', 'd.name as to_name', 's.name as sent_name', 'r.name as received_name', 'a.number as adjustment_number', 'a.status as adjustment_status');
+    .first('t.*', 'f.name as from_name', 'd.name as to_name', 's.name as sent_name', 'r.name as received_name', 'a.number as adjustment_number', 'a.status as adjustment_status',
+      'go.name as gate_out_name', 'gi.name as gate_in_name');
   if (!t) return null;
   t.lines = await db('stock_transfer_lines as l').join('items as i', 'i.id', 'l.item_id').where('l.transfer_id', id).orderBy('l.id')
     .select('l.*', 'i.name as item_name', 'i.unit', 'i.priced_by');
@@ -130,7 +189,7 @@ export async function getTransfer(id) {
 export function listTransfers({ siteIds, show = 'incoming' }) {
   const q = db('stock_transfers as t').join('sites as f', 'f.id', 't.from_site_id').join('sites as d', 'd.id', 't.to_site_id').leftJoin('users as u', 'u.id', 't.sent_by')
     .orderBy('t.id', 'desc').limit(200)
-    .select('t.id', 't.number', 't.status', 't.carried_by', 't.sent_at', 't.received_at', 't.from_site_id', 't.to_site_id', 'f.name as from_name', 'd.name as to_name', 'u.name as sent_name',
+    .select('t.id', 't.number', 't.status', 't.carried_by', 't.sent_at', 't.received_at', 't.gate_out_at', 't.gate_in_at', 't.from_site_id', 't.to_site_id', 'f.name as from_name', 'd.name as to_name', 'u.name as sent_name',
       db('stock_transfer_lines as l').whereRaw('l.transfer_id = t.id').count('*').as('line_count'));
   if (show === 'incoming') q.whereIn('t.to_site_id', siteIds).where('t.status', 'in_transit');
   else if (show === 'outgoing') q.whereIn('t.from_site_id', siteIds).where('t.status', 'in_transit');

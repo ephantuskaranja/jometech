@@ -30,7 +30,7 @@
               <td><a class="jt-row-link font-monospace" href="/inventory/transfers/<%= t.id %>"><%= t.number %></a><span class="jt-sub"><%= t.line_count %> line<%= Number(t.line_count) === 1 ? '' : 's' %></span></td>
               <td class="text-nowrap"><%= t.from_name %> → <%= t.to_name %><% if (t.carried_by) { %><span class="jt-sub">By <%= t.carried_by %></span><% } %></td>
               <td class="d-none d-md-table-cell text-nowrap"><%= fmt.dateTime(t.sent_at) %><span class="jt-sub"><%= t.sent_name ?? '' %></span></td>
-              <td><%- include('partials/pill', { text: statuses[t.status].label, tone: statuses[t.status].tone }) %></td>
+              <td><%- include('partials/pill', { text: stages[stage(t)].label, tone: stages[stage(t)].tone }) %></td>
             </tr>
           <% }) %>
         </tbody>

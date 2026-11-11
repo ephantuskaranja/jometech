@@ -18,7 +18,7 @@
       <section class="card">
         <div class="card-header d-flex align-items-center gap-2">
           <h2 class="h6 mb-0 me-auto"><%= canReceive ? 'What arrived?' : 'What was sent' %></h2>
-          <%- include('partials/pill', { text: statuses[t.status].label, tone: statuses[t.status].tone }) %>
+          <%- include('partials/pill', { text: stages[stage].label, tone: stages[stage].tone }) %>
         </div>
         <% if (t.note) { %><div class="card-body border-bottom small"><strong>Note:</strong> <%= t.note %></div><% } %>
         <% if (canReceive) { %><div class="card-body border-bottom small"><i class="bi bi-info-circle"></i> Count what came off the truck. Anything missing goes to a manager as a loss to approve.</div><% } %>
@@ -53,9 +53,29 @@
   </div>
 
   <div class="col-lg-4 d-grid gap-4 align-content-start">
-    <% if (t.status === 'in_transit' && !canReceive) { %>
-      <section class="card"><div class="card-body small"><i class="bi bi-truck"></i> On its way. <%= t.to_name %> receives it when it arrives.</div></section>
-    <% } else if (received) { %>
+    <%# Where it is: sent, out of the sending gate, in at the receiving gate, received. %>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Where it is</h2></div>
+      <ol class="card-body jt-steps mb-0">
+        <li class="done"><strong>Sent from <%= t.from_name %></strong><span><%= fmt.dateTime(t.sent_at) %><%= t.sent_name ? `, ${t.sent_name}` : '' %></span></li>
+        <li class="<%= t.gate_out_at ? 'done' : (stage === 'at_sending_gate' ? 'now' : '') %>"><strong>Left the <%= t.from_name %> gate</strong>
+          <span><%= t.gate_out_at ? `${fmt.dateTime(t.gate_out_at)}${t.gate_out_name ? `, ${t.gate_out_name}` : ''}` : (t.status === 'cancelled' ? 'Didn’t leave' : 'Waiting for the gate') %></span>
+          <% if (stage === 'at_sending_gate' && gateHere === t.from_site_id) { %>
+            <form method="post" action="/gate/transfers/<%= t.id %>/out" class="mt-2"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="transfer">
+              <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Left the gate</button></form>
+          <% } %></li>
+        <li class="<%= t.gate_in_at ? 'done' : (stage === 'on_the_road' ? 'now' : '') %>"><strong>Arrived at the <%= t.to_name %> gate</strong>
+          <span><%= t.gate_in_at ? `${fmt.dateTime(t.gate_in_at)}${t.gate_in_name ? `, ${t.gate_in_name}` : ''}` : (stage === 'on_the_road' ? 'On the road' : '—') %></span>
+          <% if (t.gate_in_note) { %><span><%= t.gate_in_note %></span><% } %>
+          <% if (stage === 'on_the_road' && gateHere === t.to_site_id) { %>
+            <form method="post" action="/gate/transfers/<%= t.id %>/in" class="mt-2"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="transfer">
+              <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-box-arrow-in-left"></i>Arrived at the gate</button></form>
+          <% } %></li>
+        <li class="<%= received ? 'done' : (stage === 'arrived' ? 'now' : '') %>"><strong>Received into stock</strong>
+          <span><%= received ? `${fmt.dateTime(t.received_at)}${t.received_name ? `, ${t.received_name}` : ''}` : (stage === 'arrived' ? 'Waiting for stores' : '—') %></span></li>
+      </ol>
+    </section>
+    <% if (received) { %>
       <section class="card"><div class="card-body small">
         Received <%= fmt.dateTime(t.received_at) %><%= t.received_name ? ` by ${t.received_name}` : '' %>.
         <% if (t.receive_note) { %><div class="mt-1"><strong>Note:</strong> <%= t.receive_note %></div><% } %>
