@@ -227,7 +227,7 @@ sudo systemctl start jometech
 
 It asks you to type the database name, then:
 
-1. makes a **safety backup** of the database as it is now (its name is printed: restore that one to undo),
+1. makes a **safety backup** of the database as it is now (its name is printed: restore that one to undo); skipped when the database is empty (just created),
 2. drops every table and loads the backup,
 3. runs the migrations, so an older backup is brought up to the app's current version,
 4. lists the backup files on disk again (the restored list is older than the folder).

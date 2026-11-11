@@ -41,15 +41,22 @@ async function main() {
     return 1;
   }
 
-  say('1/4 Safety backup of the database as it is now…');
-  const safety = await startBackup({ kind: 'manual' });
-  await waitFor(safety.id);
-  const made = await getBackup(safety.id);
-  if (made.status !== 'done') {
-    say(`    The safety backup failed (${made.error}). Stopped. Nothing was changed.`);
-    return 1;
+  // An empty database (just created) has nothing to protect, and no backups table to record a safety backup in.
+  const [[{ tables }]] = await db.raw('SELECT COUNT(*) AS tables FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
+  let made = null;
+  if (Number(tables) === 0) {
+    say('1/4 The database is empty: no safety backup needed.');
+  } else {
+    say('1/4 Safety backup of the database as it is now…');
+    const safety = await startBackup({ kind: 'manual' });
+    await waitFor(safety.id);
+    made = await getBackup(safety.id);
+    if (made.status !== 'done') {
+      say(`    The safety backup failed (${made.error}). Stopped. Nothing was changed.`);
+      return 1;
+    }
+    say(`    saved ${made.file_name}`);
   }
-  say(`    saved ${made.file_name}`);
 
   say(`2/4 Loading ${path.basename(file)} (tables are emptied first)…`);
   await restoreDatabase(file);
@@ -61,7 +68,7 @@ async function main() {
   say('4/4 Listing the backup files on disk again…');
   await relist();
 
-  say(`Done. If it went wrong, put the safety backup back: npm run db:restore -- ${made.file_name}`);
+  say(made ? `Done. If it went wrong, put the safety backup back: npm run db:restore -- ${made.file_name}` : 'Done.');
   return 0;
 }
 
