@@ -34,11 +34,12 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
  *   lines: { item_id: number, quantity: number, length: number|null, width: number|null, size_unit: string|null, area_sq_ft: number|null, entered_cost: number|null }[] }} input
  *   quantity: pieces for a plate, minus = taken off
  */
-export async function createAdjustment(input, actor) {
-  return db.transaction(async (trx) => {
+export async function createAdjustment(input, actor, outer = null) {
+  const run = (fn) => (outer ? fn(outer) : db.transaction(fn));
+  return run(async (trx) => {
     const number = await nextNumber(trx, 'adjustment');
     const [id] = await trx('stock_adjustments').insert({
-      number, site_id: input.siteId, reason: input.reason, note: input.note, created_by: actor.user.id,
+      number, site_id: input.siteId, reason: input.reason, note: input.note, count_id: input.countId ?? null, created_by: actor.user.id,
     });
     await trx('stock_adjustment_lines').insert(input.lines.map((l) => ({
       adjustment_id: id, item_id: l.item_id, size_key: sizeKey(l), length: l.length, width: l.width, size_unit: l.size_unit, area_sq_ft: l.area_sq_ft,

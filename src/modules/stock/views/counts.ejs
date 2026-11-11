@@ -1,0 +1,44 @@
+<%# Inventory → Stock counts: start one, and the counts so far. %>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, 'Stock counts'],
+  heading: 'Stock counts',
+  sub: 'Count what is on the racks without seeing the system’s figures. The differences go to a manager for approval as one adjustment.',
+}) %>
+
+<% if (canCount) { %>
+  <section class="card mb-4">
+    <div class="card-body">
+      <form method="post" action="/inventory/counts" class="jt-count-start">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <%- include('partials/field', { name: 'category_id', label: `Start a count at ${site.name}`, type: 'select', value: '', blank: 'Everything',
+              options: categories.map((c) => ({ value: c.id, label: `Only ${c.name}` })), hint: 'A big store is easier to count a category at a time.' }) %>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-clipboard-check"></i>Start counting</button>
+      </form>
+      <p class="small text-body-secondary mb-0 mt-2"><i class="bi bi-info-circle"></i> Count when nothing is moving (no issues or deliveries): the count is compared with stock at the moment it is posted.</p>
+    </div>
+  </section>
+<% } %>
+
+<section class="card">
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', { icon: 'clipboard-check', heading: 'No counts yet', text: 'Start one above. You can print the sheet and count on paper.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Count</th><th>What</th><th class="d-none d-md-table-cell">Started</th><th class="text-end">Counted</th><th>Status</th></tr></thead>
+        <tbody>
+          <% list.forEach((c) => { %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/inventory/counts/<%= c.id %>"><%= c.number %></a><span class="jt-sub"><%= c.site_name %></span></td>
+              <td><%= c.category_name ?? 'Everything' %></td>
+              <td class="d-none d-md-table-cell text-nowrap"><%= fmt.dateTime(c.created_at) %><span class="jt-sub"><%= c.created_name ?? '' %></span></td>
+              <td class="text-end jt-num text-nowrap"><%= c.counted_count %> of <%= c.line_count %></td>
+              <td><%- include('partials/pill', { text: statuses[c.status].label, tone: statuses[c.status].tone }) %>
+                <% if (c.adjustment_number) { %><span class="jt-sub"><a href="/inventory/adjustments/<%= c.adjustment_id %>"><%= c.adjustment_number %></a></span><% } %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

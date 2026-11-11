@@ -1,0 +1,61 @@
+<%# Review a count before posting: what was counted against stock right now, and what the differences are worth. %>
+<%
+  const size = (l) => (l.size_key ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '');
+  const unitOf = (l) => (l.size_key ? 'pcs' : l.unit);
+  const counted = lines.filter((l) => l.counted !== null);
+  const changed = counted.filter((l) => l.diff !== 0);
+  const notCounted = lines.length - counted.length;
+  const total = changed.reduce((sum, l) => sum + (l.value ?? 0), 0);
+  const signed = (n) => `${n < 0 ? '−' : '+'}${fmt.money(Math.abs(n))}`;
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Stock counts', href: '/inventory/counts' }, { label: count.number, href: `/inventory/counts/${count.id}` }, 'Review'],
+  heading: `Review ${count.number}`,
+  sub: `What was counted at ${count.site_name}, against what the system has right now.`,
+}) %>
+
+<section class="card mb-4">
+  <div class="card-body d-flex flex-wrap gap-4">
+    <div><div class="small text-body-secondary">Counted</div><div class="h5 mb-0 jt-num"><%= counted.length %> of <%= lines.length %> lines</div></div>
+    <div><div class="small text-body-secondary">Differences</div><div class="h5 mb-0 jt-num"><%= changed.length %></div></div>
+    <div><div class="small text-body-secondary">Worth, at today’s average</div><div class="h5 mb-0 jt-num <%= total < 0 ? 'text-danger-emphasis' : '' %>">KES <%= signed(total) %></div></div>
+  </div>
+  <% if (notCounted) { %><div class="card-body border-top small"><i class="bi bi-info-circle"></i> <%= notCounted %> line<%= notCounted === 1 ? ' was' : 's were' %> left blank: not counted, so left as they are.</div><% } %>
+</section>
+
+<section class="card mb-4">
+  <div class="card-header"><h2 class="h6 mb-0"><%= changed.length ? 'Differences' : 'No differences' %></h2></div>
+  <% if (!changed.length) { %>
+    <div class="card-body small"><%= counted.length ? 'Everything counted matches the system. Posting closes the count; nothing changes.' : 'Nothing has been counted yet. Go back to the sheet.' %></div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Item</th><th class="text-end">Counted</th><th class="text-end">System now</th><th class="text-end">Difference</th><th class="text-end">Value (KES)</th></tr></thead>
+        <tbody>
+          <% changed.forEach((l) => { %>
+            <tr>
+              <td><%= l.item_name %><% if (l.size_key) { %><span class="jt-sub"><%= size(l) %></span><% } %></td>
+              <td class="text-end jt-num text-nowrap"><%= fmt.qty(l.counted) %> <%= unitOf(l) %></td>
+              <td class="text-end jt-num text-nowrap"><%= fmt.qty(l.system) %> <%= unitOf(l) %></td>
+              <td class="text-end jt-num text-nowrap <%= l.diff < 0 ? 'text-danger-emphasis' : 'text-success-emphasis' %>"><%= l.diff > 0 ? '+' : '−' %><%= fmt.qty(Math.abs(l.diff)) %></td>
+              <td class="text-end jt-num text-nowrap"><%= l.value === null ? 'no cost yet' : signed(l.value) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<div class="jt-savebar">
+  <span class="jt-savebar-note"><i class="bi bi-hourglass-split"></i><%= changed.length ? 'Posting sends the differences to a manager as one adjustment. Stock changes when it is approved.' : 'Posting closes the count.' %></span>
+  <div class="jt-savebar-actions">
+    <a class="btn btn-outline-secondary" href="/inventory/counts/<%= count.id %>"><i class="bi bi-arrow-left"></i>Back to the sheet</a>
+    <% if (counted.length) { %>
+      <form method="post" action="/inventory/counts/<%= count.id %>/post" x-data @submit="if (!confirm(<%= JSON.stringify(changed.length ? `Post ${count.number} and send ${changed.length} difference${changed.length === 1 ? '' : 's'} for approval?` : `Post ${count.number}?`) %>)) $event.preventDefault()">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i>Post the count</button>
+      </form>
+    <% } %>
+  </div>
+</div>

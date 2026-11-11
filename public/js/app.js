@@ -507,6 +507,17 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // Stock count: "Found something not on the sheet?" (an item, with its size for a plate).
+  Alpine.data('countAddLine', ({ items = [] } = {}) => ({
+    items, item_id: '',
+    get item() { return this.items.find((i) => String(i.id) === String(this.item_id)) ?? null; },
+    get isArea() { return this.item?.priced_by === 'area'; },
+    get countedLabel() { return this.isArea ? 'Counted (pieces)' : `Counted${this.item ? ` (${this.item.unit})` : ''}`; },
+    picker(el) {
+      mountPicker(el, { options: () => this.items.map((i) => ({ value: String(i.id), label: i.name })), onChange: (v) => { this.item_id = v; } });
+    },
+  }));
+
   // System → Backups: download and delete ask for the password again in one small window.
   Alpine.data('backupActions', () => ({
     action: { url: '', which: '', title: '', button: '', danger: false },

@@ -33,6 +33,7 @@ import { router as payrollRoutes } from './modules/payroll/routes.js';
 import { router as itemCategoryRoutes } from './modules/items/category-routes.js';
 import { router as backupRoutes } from './modules/backups/routes.js';
 import { router as adjustmentRoutes } from './modules/stock/adjustment-routes.js';
+import { router as countRoutes } from './modules/stock/count-routes.js';
 import { router as jobTypeRoutes } from './modules/job-types/routes.js';
 import { router as itemRoutes } from './modules/items/routes.js';
 import { router as supplierRoutes } from './modules/suppliers/routes.js';
@@ -167,6 +168,7 @@ export function createApp() {
   app.use(supplierRoutes);
   app.use(purchasingRoutes);
   app.use(adjustmentRoutes);
+  app.use(countRoutes);
   app.use(stockRoutes);
   app.use(issueRoutes);
   app.use(siteRoutes);

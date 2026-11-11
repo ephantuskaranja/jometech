@@ -39,6 +39,7 @@ export const NUMBER_FORMATS = {
   release:   { prefix: 'RN', yearly: true },
   backup:    { prefix: 'BKP', yearly: true },
   adjustment: { prefix: 'ADJ', yearly: true }, // stock taken off or added, approved by a manager
+  count:     { prefix: 'CNT', yearly: true },   // a stock count at a site
 };
 
 const PAD = 4; // 0001; grows to 10000 by itself if a year is that busy

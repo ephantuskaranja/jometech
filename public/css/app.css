@@ -369,6 +369,17 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-seg a.active, .jt-seg button.active { background: var(--bs-primary); color: var(--jt-on-primary); }
 .jt-adj-dir { height: 2.5rem; flex-shrink: 0; }
 .jt-adj-dir button { display: inline-flex; align-items: center; gap: .3rem; }
+.jt-count-start { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .75rem; max-width: 40rem; }
+.jt-count-start > div { flex: 1 1 16rem; }
+.jt-count-start > .btn { margin-top: 1.78rem; }
+.jt-count-group th { background: var(--bs-tertiary-bg); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-secondary-color); }
+.jt-count-input { display: inline-flex; align-items: center; gap: .4rem; }
+.jt-count-input input { width: 7rem; min-height: 2.25rem; padding-block: .3rem; }
+.jt-count-input span { width: 2.5rem; text-align: left; font-size: .8rem; color: var(--bs-secondary-color); }
+@media print {
+  .jt-count-input input { border: 1px solid #000 !important; background: none !important; }
+  .jt-count-table td, .jt-count-table th { padding-block: .35rem !important; }
+}
 .jt-po-fields.jt-adj-fields { grid-template-columns: repeat(auto-fill, minmax(7rem, 9rem)); } /* a lone Qty box doesn't stretch across */
 .jt-table { --bs-table-bg: transparent; margin: 0; }
 .jt-table th { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--bs-tertiary-color); font-weight: 600; padding: .65rem 1.125rem; white-space: nowrap; border-bottom-color: var(--bs-border-color); }

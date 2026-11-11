@@ -1,0 +1,131 @@
+<%# One stock count. Open: the blind sheet (no system figures), printable. Posted: counted against the system. %>
+<%
+  const open = count.status === 'open';
+  const editable = open && canCount;
+  const size = (l) => (l.size_key ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '');
+  const countedQty = (l) => (l.counted === null ? '' : fmt.qty(l.counted));
+  const columns = open ? (editable ? 4 : 3) : 5;
+  let lastCategory = null;
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', { label: 'Inventory', href: '/inventory' }, { label: 'Stock counts', href: '/inventory/counts' }, count.number],
+  heading: `${count.number}: ${count.category_name ?? 'everything'}`,
+  sub: open
+    ? `Count at ${count.site_name}. Write what is on the racks; leave a line blank if it wasn’t counted. Plates in whole pieces.`
+    : `${statuses[count.status].label}${count.posted_at ? ` ${fmt.dateTime(count.posted_at)}${count.posted_name ? ` by ${count.posted_name}` : ''}` : ''}. Started ${fmt.dateTime(count.created_at)}${count.created_name ? ` by ${count.created_name}` : ''}.`,
+  actions: !open && count.adjustment_number ? [{ label: `Adjustment ${count.adjustment_number}`, href: `/inventory/adjustments/${count.adjustment_id}`, icon: 'plus-slash-minus' }] : [],
+}) %>
+
+<%# On paper: who counted and when. %>
+<div class="d-none d-print-block mb-3 small">Site: <strong><%= count.site_name %></strong> &nbsp; Counted by: ______________________ &nbsp; Date: ______________ &nbsp; Signature: ______________</div>
+
+<div class="row g-4">
+  <div class="<%= editable ? 'col-lg-8' : 'col-12' %>">
+    <form method="post" action="/inventory/counts/<%= count.id %>" novalidate id="count-sheet">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <section class="card mb-4">
+        <div class="card-header d-flex align-items-center gap-2">
+          <h2 class="h6 mb-0 me-auto"><%= open ? 'Count sheet' : 'What was counted' %></h2>
+          <span class="small text-body-secondary jt-noprint"><%= count.lines.filter((l) => l.counted !== null).length %> of <%= count.lines.length %> counted</span>
+          <% if (open) { %><button class="btn btn-outline-secondary btn-sm jt-noprint" type="button" x-data @click="window.print()"><i class="bi bi-printer"></i>Print sheet</button><% } %>
+        </div>
+        <div class="table-responsive">
+          <table class="table jt-table mb-0 jt-count-table">
+            <thead><tr><th>Item</th><th>Size</th><th class="text-end">Counted</th>
+              <% if (!open) { %><th class="text-end">System had</th><th class="text-end">Difference</th><% } %>
+              <% if (editable) { %><th class="jt-noprint"><span class="visually-hidden">Remove</span></th><% } %></tr></thead>
+            <tbody>
+              <% count.lines.forEach((l) => { %>
+                <% if (l.category !== lastCategory) { lastCategory = l.category; %>
+                  <tr class="jt-count-group"><th colspan="<%= columns %>"><%= l.category %></th></tr>
+                <% } %>
+                <tr id="line-<%= l.id %>">
+                  <td><%= l.item_name %><% if (l.added) { %> <%- include('partials/pill', { text: 'Added', tone: 'info' }) %><% } %></td>
+                  <td class="text-nowrap"><%= size(l) %></td>
+                  <td class="text-end">
+                    <% if (editable) { %>
+                      <div class="jt-count-input">
+                        <input class="form-control text-end jt-num" name="counted_<%= l.id %>" value="<%= countedQty(l) %>" inputmode="decimal" data-number="decimal" autocomplete="off" aria-label="Counted: <%= l.item_name %> <%= size(l) %>">
+                        <span><%= l.size_key ? 'pcs' : l.unit %></span>
+                      </div>
+                    <% } else { %>
+                      <span class="jt-num"><%= l.counted === null ? '—' : `${fmt.qty(l.counted)} ${l.size_key ? 'pcs' : l.unit}` %></span>
+                    <% } %>
+                  </td>
+                  <% if (!open) {
+                    const diff = l.counted === null || l.system_qty === null ? null : Number(l.counted) - Number(l.system_qty);
+                    const shown = diff === null ? (l.counted === null ? 'not counted' : '—') : diff === 0 ? '✓' : `${diff > 0 ? '+' : '−'}${fmt.qty(Math.abs(diff))}`; %>
+                    <td class="text-end jt-num"><%= l.system_qty === null ? '—' : fmt.qty(l.system_qty) %></td>
+                    <td class="text-end jt-num <%= diff ? (diff < 0 ? 'text-danger-emphasis' : 'text-success-emphasis') : 'text-body-secondary' %>"><%= shown %></td>
+                  <% } %>
+                  <% if (editable) { %>
+                    <td class="jt-noprint text-end"><% if (l.added) { %>
+                      <button class="btn jt-icon-btn" type="submit" form="remove-<%= l.id %>" aria-label="Remove <%= l.item_name %>"><i class="bi bi-x-lg"></i></button>
+                    <% } %></td>
+                  <% } %>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <% if (editable) { %>
+        <div class="jt-savebar jt-noprint">
+          <span class="jt-savebar-note"><i class="bi bi-eye-slash"></i>Blind count: the system’s figures show only when you review.</span>
+          <div class="jt-savebar-actions">
+            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-floppy"></i>Save</button>
+            <button class="btn btn-primary" type="submit" name="next" value="review"><i class="bi bi-list-check"></i>Save and review</button>
+          </div>
+        </div>
+      <% } %>
+    </form>
+    <% if (!editable) { %>
+      <section class="card jt-noprint">
+        <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+        <div class="card-body"><%- include('partials/history', { entries }) %></div>
+      </section>
+    <% } %>
+    <% if (editable) { count.lines.filter((l) => l.added).forEach((l) => { %>
+      <form id="remove-<%= l.id %>" method="post" action="/inventory/counts/<%= count.id %>/lines/<%= l.id %>/remove" class="d-none"><input type="hidden" name="_csrf" value="<%= csrfToken %>"></form>
+    <% }) } %>
+  </div>
+
+  <% if (editable) { %>
+    <div class="col-lg-4 d-grid gap-4 align-content-start jt-noprint">
+      <section class="card" id="add-line">
+        <div class="card-header"><h2 class="h6 mb-0">Found something not on the sheet?</h2></div>
+        <form method="post" action="/inventory/counts/<%= count.id %>/lines" class="card-body d-grid gap-3" novalidate x-data="countAddLine(<%= JSON.stringify({ items }) %>)">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="item_id" :value="item_id">
+          <div>
+            <label class="form-label" for="add-item">Item</label>
+            <select class="form-select" id="add-item" x-init="$nextTick(() => picker($el))"></select>
+          </div>
+          <div class="jt-po-fields" x-show="isArea" x-cloak>
+            <div><label class="form-label" for="add-l">Length</label><input class="form-control text-end jt-num" id="add-l" name="length" inputmode="decimal" data-number="decimal"></div>
+            <div><label class="form-label" for="add-w">Width</label><input class="form-control text-end jt-num" id="add-w" name="width" inputmode="decimal" data-number="decimal"></div>
+            <div><label class="form-label" for="add-u">In</label><select class="form-select" id="add-u" name="size_unit"><option value="ft">feet</option><option value="mm">mm</option></select></div>
+          </div>
+          <div>
+            <label class="form-label" for="add-counted" x-text="countedLabel">Counted</label>
+            <input class="form-control text-end jt-num" id="add-counted" name="counted" inputmode="decimal" data-number="decimal">
+          </div>
+          <button class="btn btn-outline-primary" type="submit"><i class="bi bi-plus-lg"></i>Add to the sheet</button>
+        </form>
+      </section>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Stop this count?</h2></div>
+        <form method="post" action="/inventory/counts/<%= count.id %>/cancel" class="card-body d-grid gap-2">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <label class="form-label mb-0" for="cancel-note">Cancel it, saying why. Stock doesn’t change.</label>
+          <input class="form-control" id="cancel-note" name="note" maxlength="255" required placeholder="e.g. Started the wrong category">
+          <button class="btn btn-outline-secondary" type="submit">Cancel this count</button>
+        </form>
+      </section>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+        <div class="card-body"><%- include('partials/history', { entries }) %></div>
+      </section>
+    </div>
+  <% } %>
+</div>
