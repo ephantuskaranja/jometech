@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readdir, rm, stat, statfs, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,11 +60,12 @@ async function dumpDatabase(target) {
   await withLoginFile((login) => run(config.backups.mysqldump, [
     `--defaults-extra-file=${login}`, '--single-transaction', '--quick', '--routines', '--triggers', '--no-tablespaces',
     config.db.database,
-  ], { stdout: (out) => pipeline(out, createGzip(), createWriteStream(target)) }));
+  ], { stdout: (out) => pipeline(out, createGzip(), createWriteStream(target, { flags: 'wx' })) })); // wx: never overwrite a backup
 }
 
 /** Everything in storage except the backups themselves. tar runs inside the backup folder, so the archive name has no drive letter. */
 async function archiveFiles(target) {
+  if (existsSync(target)) throw Object.assign(new Error(`${path.basename(target)} is already there; it wasn’t overwritten.`), { code: 'EEXIST' });
   await run('tar', ['-czf', path.basename(target), '-C', config.storageDir, '--exclude=./backups', '.'], {
     cwd: path.dirname(target),
     okCodes: [0, 1], // GNU tar: 1 = a file changed while being read (a photo saved meanwhile); the archive is still fine
@@ -76,7 +77,9 @@ async function archiveFiles(target) {
  * @param {{ kind: 'manual' | 'nightly', withFiles?: boolean, actor?: object }} options
  */
 export async function startBackup({ kind, withFiles = false, actor = SYSTEM }) {
-  await mkdir(backupDir(), { recursive: true });
+  // Files already in the folder move the counter past them first: after a fresh database (go-live)
+  // or a restore, the counter is behind what's on disk, and a new backup must never take an old one's name.
+  await syncWithDisk();
   const { id, number } = await db.transaction(async (trx) => {
     const busy = await trx('system_backups').where({ status: 'running' }).forUpdate().first('number');
     if (busy) throw httpError(409, `${busy.number} is still running. Wait for it to finish.`);
@@ -107,7 +110,8 @@ async function runBackup(id) {
     await db('system_backups').where({ id }).update({ ...result, status: 'done', finished_at: db.fn.now() });
     logger.info(`Backup ${row.number} done`);
   } catch (err) {
-    for (const file of [dbFile, filesFile]) if (file) await rm(file, { force: true });
+    // Remove what this backup half-wrote, but never a file that was already there (EEXIST).
+    if (err.code !== 'EEXIST') for (const file of [dbFile, filesFile]) if (file) await rm(file, { force: true });
     await db('system_backups').where({ id }).update({ status: 'failed', error: String(err.message).slice(0, 1000), finished_at: db.fn.now() });
     logger.error(`Backup ${row.number} failed: ${err.message}`);
   }

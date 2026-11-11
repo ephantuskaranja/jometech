@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -71,6 +71,20 @@ test('Back up now: the database, and the photos and files when ticked', needsDum
   const page = (await admin.get('/admin/backups')).text;
   assert.match(page, new RegExp(b.number));
   assert.match(page, /with photos and files/);
+});
+
+test('a new backup never takes the name of a file already on disk (fresh database at go-live, or a restore)', needsDump, async () => {
+  const year = new Intl.DateTimeFormat('en-GB', { year: 'numeric', timeZone: config.timezone }).format(new Date());
+  const old = path.join(storage, 'backups', `BKP-${year}-9000.sql.gz`);
+  writeFileSync(old, 'an old backup');
+  await post(admin, '/admin/backups');
+  const b = await latest();
+  await backups.waitFor(b.id);
+  assert.ok(Number(b.number.split('-')[2]) > 9000, `${b.number} comes after the file on disk`);
+  assert.equal(readFileSync(old, 'utf8'), 'an old backup', 'the old file is untouched');
+  const listed = await db('system_backups').where({ file_name: path.basename(old) }).first();
+  assert.equal(listed.kind, 'manual', 'and it is on the list');
+  for (const r of [listed, b]) await backups.deleteBackup(r.id, { user: null });
 });
 
 test('Check finds a damaged file', needsDump, async () => {
