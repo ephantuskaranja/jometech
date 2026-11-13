@@ -403,6 +403,8 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-table tr { position: relative; }
 .jt-table .jt-row-link { color: inherit; font-weight: 600; text-decoration: none; }
 .jt-table .jt-row-link::after { content: ""; position: absolute; inset: 0; } /* whole row is clickable */
+/* …except its own buttons, forms and links, which sit above that and do their own thing (Clear out, Received, Arrived). */
+.jt-table tr :is(form, button, input, select, textarea, .btn, a:not(.jt-row-link)) { position: relative; z-index: 1; }
 .jt-sub { display: block; font-size: .8rem; color: var(--bs-tertiary-color); font-weight: 400; }
 
 /* Sticky save bar at the bottom of long forms */
