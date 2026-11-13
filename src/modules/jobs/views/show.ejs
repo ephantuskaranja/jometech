@@ -43,13 +43,29 @@
           <% job.steps.forEach((s) => { const isCurrent = current?.id === s.id; %>
             <li class="list-group-item is-<%= isCurrent ? 'current' : s.status %>">
               <i class="bi bi-<%= isCurrent ? 'arrow-right-circle-fill' : { done: 'check-circle-fill', skipped: 'dash-circle', pending: 'circle' }[s.status] %>" aria-hidden="true"></i>
-              <span class="jt-job-step-name"><%= s.name %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %></span>
+              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %></span>
               <% if (s.status !== 'pending') { %>
                 <span class="small text-body-tertiary text-end"><%= s.status === 'skipped' ? 'Skipped' : 'Done' %> <%= fmt.dateTime(s.finished_at) %><% if (s.finished_by_name) { %><span class="d-block"><%= s.finished_by_name %></span><% } %></span>
               <% } %>
             </li>
           <% }) %>
         </ol>
+      </section>
+    <% } %>
+
+    <% if (qcChecks.length) { %>
+      <section class="card">
+        <div class="card-header"><h2 class="h6 mb-0">Quality checks</h2></div>
+        <ul class="list-group list-group-flush">
+          <% qcChecks.forEach((q) => { %>
+            <li class="list-group-item d-flex flex-wrap gap-2 align-items-center">
+              <a class="font-monospace me-2" href="/qc/<%= q.id %>"><%= q.number %></a>
+              <%- include('partials/pill', { text: qcStatuses[q.status].label, tone: qcStatuses[q.status].tone }) %>
+              <span class="small text-body-secondary me-auto">Attempt <%= q.attempt %><%= Number(q.failed) ? ` · ${q.failed} failed` : '' %></span>
+              <span class="small text-body-tertiary"><%= [q.finished_by_name ?? q.started_by_name, fmt.dateTime(q.finished_at ?? q.started_at)].filter(Boolean).join(', ') %></span>
+            </li>
+          <% }) %>
+        </ul>
       </section>
     <% } %>
 
@@ -136,6 +152,30 @@
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-play-fill"></i>Start the job</button>
             </form>
+          <% } else if (current?.is_qc) { %>
+            <%# The quality check step: ticked off only by a passed check. %>
+            <% const openCheck = qcChecks.find((q) => q.status === 'in_progress'); %>
+            <div class="d-grid gap-2" x-show="!step">
+              <% if (!canInspect) { %>
+                <p class="small mb-0"><i class="bi bi-shield-check"></i> Waiting for a quality check by a supervisor.</p>
+              <% } else if (openCheck) { %>
+                <a class="btn btn-primary btn-lg w-100" href="/qc/<%= openCheck.id %>"><i class="bi bi-clipboard-check"></i>Carry on with <%= openCheck.number %></a>
+              <% } else { %>
+                <form method="post" action="/jobs/<%= job.id %>/qc">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-clipboard-check"></i>Start quality check</button>
+                </form>
+              <% } %>
+              <div class="d-flex flex-wrap gap-3 small">
+                <a class="btn btn-link btn-sm p-0 text-body-secondary" href="/qc-form/print?job=<%= job.id %>">Print the blank form</a>
+                <% if (job.stepsFinished) { %>
+                  <form method="post" action="/jobs/<%= job.id %>/steps/undo">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Undo the last step</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
           <% } else if (current) { %>
             <div class="d-grid gap-2" x-show="!step">
               <form method="post" action="/jobs/<%= job.id %>/steps/<%= current.id %>/done">

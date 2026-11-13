@@ -27,6 +27,7 @@ import { router as bookingRoutes } from './modules/visitors/booking-routes.js';
 import { router as enquiryRoutes } from './modules/enquiries/routes.js';
 import { router as proformaRoutes } from './modules/proformas/routes.js';
 import { router as jobRoutes } from './modules/jobs/routes.js';
+import { router as qcRoutes } from './modules/qc/routes.js';
 import { router as invoiceRoutes } from './modules/invoices/routes.js';
 import { router as employeeRoutes } from './modules/employees/routes.js';
 import { router as attendanceRoutes } from './modules/attendance/routes.js';
@@ -162,6 +163,7 @@ export function createApp() {
   app.use(enquiryRoutes);
   app.use(proformaRoutes);
   app.use(jobRoutes);
+  app.use(qcRoutes);
   app.use(invoiceRoutes);
   app.use(employeeRoutes);
   app.use(attendanceRoutes);

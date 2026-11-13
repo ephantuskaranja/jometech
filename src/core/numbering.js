@@ -43,6 +43,7 @@ export const NUMBER_FORMATS = {
   transfer:  { prefix: 'TRF', yearly: true },   // stock sent from one site to the other
   delivery:  { prefix: 'DLV', yearly: true },   // a supplier's delivery logged in at the gate
   booking:   { prefix: 'BKG', yearly: true },   // a visitor expected at a site
+  qc:        { prefix: 'QC', yearly: true },    // a quality inspection of a job
 };
 
 const PAD = 4; // 0001; grows to 10000 by itself if a year is that busy

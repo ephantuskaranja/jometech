@@ -44,6 +44,9 @@ export async function cleanup() {
   await db('audit_log').where({ entity: 'invoice' }).whereIn('entity_id', invoiceIds).delete();
   await db('invoices').whereIn('id', invoiceIds).delete(); // lines go with them
   await db('payments').whereIn('job_id', jobIds).delete();
+  const qcIds = await db('qc_inspections').whereIn('job_id', jobIds).pluck('id');
+  await db('audit_log').where({ entity: 'qc' }).whereIn('entity_id', qcIds).delete();
+  await db('qc_inspections').whereIn('id', qcIds).delete(); // items go with them
   await db('audit_log').where({ entity: 'job' }).whereIn('entity_id', jobIds).delete();
   await db('jobs').whereIn('id', jobIds).delete(); // lines go with them
   await db('audit_log').where({ entity: 'proforma' }).whereIn('entity_id', proformaIds).delete();

@@ -1,0 +1,113 @@
+<%#
+  One quality check. While in progress (and for those who inspect): each item Pass / Fail / N/A with a
+  note, saved as you go or finished at the end. Otherwise the report as it was signed off.
+%>
+<%
+  const st = statuses[insp.status];
+  const tone = { pass: 'ok', fail: 'bad', na: 'neutral' };
+  const missing = problems?.missing ?? new Set();
+  const unexplained = problems?.unexplained ?? new Set();
+%>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Quality checks', href: '/qc' }, insp.number],
+  heading: `Quality check ${insp.number}`,
+  sub: `${insp.job_number} · ${insp.customer_name}${vehicle ? ` · ${vehicle}` : ''} · attempt ${insp.attempt}`,
+  actions: [
+    { label: insp.status === 'in_progress' ? 'Print form' : 'Print report', href: `/qc/${insp.id}/print`, icon: 'printer' },
+    { label: `Back to ${insp.job_number}`, href: `/jobs/${insp.job_id}`, icon: 'wrench-adjustable' },
+  ],
+}) %>
+
+<% if (problems) { %>
+  <div class="alert alert-warning d-flex gap-2" role="alert"><i class="bi bi-exclamation-triangle"></i>
+    <div><% if (missing.size) { %><div><%= missing.size %> item<%= missing.size === 1 ? '' : 's' %> not answered yet: Pass, Fail or N/A for each.</div><% } %>
+    <% if (unexplained.size) { %><div>Say what is wrong for every failed item (<%= unexplained.size %>).</div><% } %></div>
+  </div>
+<% } %>
+
+<% if (canInspect) { %>
+  <form method="post" action="/qc/<%= insp.id %>" novalidate
+        x-data="{ total: <%= insp.items.length %>, answered: 0, failed: 0,
+                  count() { this.answered = this.$root.querySelectorAll('input.btn-check:checked').length; this.failed = this.$root.querySelectorAll('input.btn-check[value=fail]:checked').length; },
+                  fill(section, value) { section.querySelectorAll('.jt-qc-item').forEach((row) => { if (!row.querySelector('input.btn-check:checked')) row.querySelector(`input.btn-check[value=${value}]`).checked = true; }); this.count(); } }"
+        x-init="count()" @change="count()">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<% } %>
+
+<div class="d-grid gap-4">
+  <% insp.sections.forEach((section, si) => { %>
+    <section class="card" x-ref="s<%= si %>">
+      <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+        <h2 class="h6 mb-0 me-auto"><%= String.fromCharCode(65 + si) %>. <%= section.name %></h2>
+        <% if (canInspect) { %>
+          <button class="btn btn-link btn-sm p-0" type="button" @click="fill($refs.s<%= si %>, 'pass')">All pass</button>
+          <button class="btn btn-link btn-sm p-0 text-body-secondary" type="button" @click="fill($refs.s<%= si %>, 'na')">All N/A</button>
+        <% } %>
+      </div>
+      <ul class="list-group list-group-flush">
+        <% section.items.forEach((item) => { const n = insp.items.indexOf(item) + 1; const flagged = missing.has(item.id) || unexplained.has(item.id); %>
+          <li class="list-group-item jt-qc-item<%= flagged ? ' is-flagged' : '' %>" x-data="{ result: <%= JSON.stringify(item.result ?? '') %> }">
+            <div class="jt-qc-text"><span class="jt-qc-no"><%= n %></span><%= item.text %></div>
+            <% if (canInspect) { %>
+              <div class="jt-qc-answer" role="radiogroup" aria-label="Result for item <%= n %>">
+                <% ['pass', 'fail', 'na'].forEach((r) => { const id = `r${item.id}-${r}`; %>
+                  <input type="radio" class="btn-check" name="result_<%= item.id %>" id="<%= id %>" value="<%= r %>" autocomplete="off" x-model="result"<%= item.result === r ? ' checked' : '' %>>
+                  <label class="btn btn-sm btn-outline-<%= { pass: 'success', fail: 'danger', na: 'secondary' }[r] %>" for="<%= id %>"><%= results[r] %></label>
+                <% }) %>
+              </div>
+              <input class="form-control form-control-sm jt-qc-note<%= unexplained.has(item.id) ? ' is-invalid' : '' %>" name="note_<%= item.id %>" value="<%= item.note ?? '' %>" maxlength="255"
+                     :placeholder="result === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)'" :required="result === 'fail'" aria-label="Note for item <%= n %>">
+            <% } else { %>
+              <div class="jt-qc-answer"><% if (item.result) { %><%- include('partials/pill', { text: results[item.result], tone: tone[item.result] }) %><% } else { %><span class="small text-body-tertiary">Not answered</span><% } %></div>
+              <% if (item.note) { %><div class="jt-qc-note small text-body-secondary"><%= item.note %></div><% } %>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    </section>
+  <% }) %>
+
+  <section class="card">
+    <div class="card-header d-flex align-items-center gap-2">
+      <h2 class="h6 mb-0 me-auto">Result</h2>
+      <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
+    </div>
+    <div class="card-body d-grid gap-3">
+      <% if (canInspect) { %>
+        <%- include('partials/field', { name: 'remarks', label: 'Remarks', type: 'textarea', rows: 2, value: insp.remarks ?? '', hint: 'Optional: anything else the supervisor or customer should know' }) %>
+      <% } else { %>
+        <dl class="jt-kv mb-0">
+          <div><dt>Items</dt><dd><%= insp.counts.pass %> pass · <%= insp.counts.fail %> fail · <%= insp.counts.na %> N/A</dd></div>
+          <% if (insp.remarks) { %><div><dt>Remarks</dt><dd style="white-space: pre-line"><%= insp.remarks %></dd></div><% } %>
+          <div><dt>Started</dt><dd><%= fmt.dateTime(insp.started_at) %><span class="d-block small text-body-secondary"><%= insp.started_by_name ?? '' %></span></dd></div>
+          <% if (insp.finished_at) { %><div><dt><%= insp.status === 'cancelled' ? 'Cancelled' : 'Finished' %></dt><dd><%= fmt.dateTime(insp.finished_at) %><span class="d-block small text-body-secondary"><%= insp.finished_by_name ?? '' %></span></dd></div><% } %>
+        </dl>
+        <% if (insp.status === 'failed') { %><p class="small mb-0">Put the failed items right, then start a new quality check from the job.</p><% } %>
+      <% } %>
+    </div>
+  </section>
+
+  <% if (insp.entries?.length) { %>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries: insp.entries, labels: {} }) %></div>
+    </section>
+  <% } %>
+</div>
+
+<% if (canInspect) { %>
+    <div class="jt-savebar">
+      <span class="jt-savebar-note"><i class="bi bi-list-check"></i><span x-text="`${answered} of ${total} answered`"></span><span class="text-danger fw-semibold" x-show="failed" x-cloak x-text="` · ${failed} failed`"></span></span>
+      <div class="jt-savebar-actions">
+        <button class="btn btn-outline-secondary" type="submit" name="finish" value="0"><i class="bi bi-save"></i>Save, finish later</button>
+        <button class="btn" :class="failed ? 'btn-danger' : 'btn-success'" type="submit" name="finish" value="1">
+          <i class="bi" :class="failed ? 'bi-x-octagon' : 'bi-check2-circle'"></i><span x-text="failed ? 'Finish: failed' : 'Finish: passed'">Finish</span>
+        </button>
+      </div>
+    </div>
+  </form>
+  <form method="post" action="/qc/<%= insp.id %>/cancel" class="mt-3 text-end" x-data @submit="if (!confirm('Cancel this quality check? The job stays at its quality check step.')) $event.preventDefault()">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="btn btn-link btn-sm text-body-secondary" type="submit">Started by mistake? Cancel this check</button>
+  </form>
+<% } %>

@@ -429,11 +429,13 @@ document.addEventListener('alpine:init', () => {
   });
 
   // Job type form (job-types/views/form.ejs): a list of steps to add to, remove from and reorder.
-  Alpine.data('jobTypeForm', ({ rows = [] } = {}) => {
+  Alpine.data('jobTypeForm', ({ rows = [], qcStep = '' } = {}) => {
     let next = 0;
     const row = (name = '') => ({ key: next++, name });
     return {
       rows: rows.map(row),
+      qcStep, // the step a passed quality check ticks off (a step name, or '' for none)
+      get stepNames() { return this.rows.map((r) => r.name.replace(/\s+/g, ' ').trim()).filter(Boolean); },
       addRow(after) {
         this.rows.splice(after + 1, 0, row());
         this.$nextTick(() => this.$root.querySelectorAll('.jt-step-row input')[after + 1]?.focus());
@@ -445,6 +447,30 @@ document.addEventListener('alpine:init', () => {
       move(i, by) {
         const [item] = this.rows.splice(i, 1);
         this.rows.splice(i + by, 0, item);
+      },
+    };
+  });
+
+  // System → Quality checklist (qc/views/checklist.ejs): sections of items, sent as JSON on save.
+  Alpine.data('qcChecklist', ({ sections = [] } = {}) => {
+    let next = 0;
+    const item = (text = '') => ({ key: next++, text });
+    const section = (s = {}) => ({ key: next++, name: s.name ?? '', rework_step: s.rework_step ?? '', items: (s.items?.length ? s.items : ['']).map(item) });
+    const move = (list, i, by) => { const [x] = list.splice(i, 1); list.splice(i + by, 0, x); };
+    return {
+      sections: sections.map(section),
+      addSection() { this.sections.push(section()); },
+      removeSection(i) {
+        const s = this.sections[i];
+        if (s.items.some((x) => x.text.trim()) && !confirm(`Remove “${s.name || 'this section'}” and its items?`)) return;
+        this.sections.splice(i, 1);
+      },
+      moveSection(i, by) { move(this.sections, i, by); },
+      addItem(s, after) { s.items.splice(after + 1, 0, item()); },
+      removeItem(s, i) { s.items.splice(i, 1); if (!s.items.length) s.items.push(item()); },
+      moveItem(s, i, by) { move(s.items, i, by); },
+      pack() {
+        this.$refs.data.value = JSON.stringify(this.sections.map((s) => ({ name: s.name, rework_step: s.rework_step, items: s.items.map((x) => x.text) })));
       },
     };
   });

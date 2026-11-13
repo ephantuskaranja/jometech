@@ -141,3 +141,21 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
   .title-row, .letterhead { flex-wrap: wrap; }
   .company { margin-left: 0; text-align: left; }
 }
+
+/* Quality inspection report (qc/views/print.ejs) */
+.qc-sheet { font-size: 9pt; }
+.qc-list { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.qc-list th, .qc-list td { border: 1px solid #111827; padding: 2px 5px; vertical-align: middle; }
+.qc-list th { font-size: 8pt; text-transform: uppercase; }
+.qc-list .no { width: 7mm; text-align: center; }
+.qc-list .res { width: 11mm; text-align: center; font-weight: 700; }
+.qc-list .note { width: 52mm; }
+.qc-list td { height: 6mm; }
+.qc-list .qc-section td { background: #eef0f4; font-weight: 600; height: auto; }
+.qc-list tr.is-fail td { font-weight: 600; }
+.qc-list tbody { break-inside: avoid; }
+.qc-result { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 8px; }
+.qc-choice { display: inline-flex; align-items: center; gap: 5px; }
+.qc-remarks { margin-top: 6px; min-height: 12mm; padding: 4px 6px; border: 1px solid #111827; white-space: pre-line; }
+.qc-signoff { margin-top: 8px; }
+.qc-signoff .jc-sign-line { display: flex; align-items: flex-end; padding-bottom: 2px; }

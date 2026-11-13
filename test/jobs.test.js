@@ -214,7 +214,14 @@ test('start, complete, reopen and cancel, in the right order', async () => {
   assert.equal((await post(technician, `/jobs/${id}/complete`)).status, 403, 'a technician can’t close a job');
 
   assert.equal((await post(supervisor, `/jobs/${id}/complete`)).status, 409, 'its steps aren’t finished');
-  for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
+  for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) {
+    if (!step.is_qc) { await post(supervisor, `/jobs/${id}/steps/${step.id}/done`); continue; }
+    // The quality check step is ticked off by a passed check, not by hand.
+    assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);
+    const check = idOf((await post(supervisor, `/jobs/${id}/qc`)).headers.location);
+    const items = await db('qc_inspection_items').where({ inspection_id: check }).pluck('id');
+    await post(supervisor, `/qc/${check}`, { finish: '1', ...Object.fromEntries(items.map((i) => [`result_${i}`, 'pass'])) });
+  }
   assert.equal(await status(), 'completed');
   assert.equal((await post(supervisor, `/jobs/${id}`, { customer_id: other.id, ...work })).status, 409, 'a completed job is locked');
   await supervisor.get(`/jobs/${id}/edit`).expect(409);

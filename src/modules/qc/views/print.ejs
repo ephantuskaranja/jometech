@@ -1,0 +1,118 @@
+<%#
+  Quality Inspection Report, A4. Filled in from a check in the app, or blank (from today's
+  checklist) to fill in by hand. Sign-off: inspected by, supervisor, and the customer at
+  Customer Inspection. Standalone (no app layout) so it prints cleanly.
+%>
+<%
+  const tick = (item, r) => (item.result === r ? '✓' : '');
+  const finished = insp.status === 'passed' || insp.status === 'failed';
+  const back = insp.id ? `/qc/${insp.id}` : (insp.job_id ? `/jobs/${insp.job_id}` : '/qc');
+  let n = 0;
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/css/print-note.css?v=<%= assetVersion %>">
+  <script defer src="/js/print-note.js?v=<%= assetVersion %>"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="<%= back %>">&larr; Back</a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+  <% if (insp.status === 'in_progress') { %><div class="toolbar draft-note">This check isn’t finished: answers so far are shown.</div><% } %>
+  <% if (insp.status === 'cancelled') { %><div class="toolbar draft-note">This check was cancelled.</div><% } %>
+
+  <main class="sheet job-card qc-sheet">
+    <header class="letterhead">
+      <img src="/img/brand/icon.svg" alt="" width="52" height="52">
+      <div class="company">
+        <div class="company-name"><%= company.name %></div>
+        <div><%= company.address.join(' · ') %></div>
+        <div>Tel: <%= company.phone %></div>
+      </div>
+    </header>
+
+    <div class="title-row">
+      <h1>Quality inspection report</h1>
+      <div class="doc-meta">
+        <div class="jc-number"><%= insp.number ?? '' %></div>
+        <div><span>Date:</span> <%= insp.finished_at ? fmt.date(insp.finished_at) : (insp.started_at ? fmt.date(insp.started_at) : '') %><% if (insp.attempt) { %> · <span>Attempt:</span> <%= insp.attempt %><% } %></div>
+      </div>
+    </div>
+
+    <table class="grid jc-grid">
+      <tr>
+        <td><span class="label">Job no:</span> <span class="mono"><%= insp.job_number ?? '' %></span></td>
+        <td colspan="2"><span class="label">Customer:</span> <%= insp.customer_name ?? '' %></td>
+        <td><span class="label">Site:</span> <%= insp.site_name ?? '' %></td>
+      </tr>
+      <tr>
+        <td><span class="label">Reg / tag:</span> <span class="mono"><%= vehicle ?? '' %></span></td>
+        <td colspan="2"><span class="label">Chassis no:</span> <span class="mono"><%= insp.chassis_no ?? '' %></span></td>
+        <td><span class="label">Make / model:</span> <%= [insp.make, insp.model].filter(Boolean).join(' ') %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Job type:</span> <%= insp.job_type_name ?? '' %></td>
+        <td colspan="2"><span class="label">Supervisor:</span> <%= insp.supervisor_name ?? '' %></td>
+      </tr>
+    </table>
+
+    <table class="qc-list">
+      <thead><tr><th class="no">#</th><th>Check</th><th class="res">Pass</th><th class="res">Fail</th><th class="res">N/A</th><th class="note">Note</th></tr></thead>
+      <% sections.forEach((s, si) => { %>
+        <tbody>
+          <tr class="qc-section"><td colspan="6"><%= String.fromCharCode(65 + si) %>. <%= s.name %></td></tr>
+          <% s.items.forEach((item) => { n++; %>
+            <tr class="<%= item.result === 'fail' ? 'is-fail' : '' %>">
+              <td class="no"><%= n %></td>
+              <td><%= item.text %></td>
+              <td class="res"><%= tick(item, 'pass') %></td>
+              <td class="res"><%= tick(item, 'fail') %></td>
+              <td class="res"><%= tick(item, 'na') %></td>
+              <td class="note"><%= item.note ?? '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      <% }) %>
+    </table>
+
+    <div class="qc-result">
+      <span class="label">Result:</span>
+      <span class="qc-choice"><span class="jc-box"><%= insp.status === 'passed' ? '✓' : '' %></span>Passed</span>
+      <span class="qc-choice"><span class="jc-box"><%= insp.status === 'failed' ? '✓' : '' %></span>Failed: rework needed</span>
+    </div>
+    <div class="qc-remarks"><span class="label">Remarks:</span> <%= insp.remarks ?? '' %></div>
+
+    <div class="jc-signoff qc-signoff">
+      <div>
+        <div class="label">Inspected by</div>
+        <div class="jc-sign-line"><%= finished ? insp.finished_by_name ?? '' : '' %></div>
+        <div class="muted small">Name, signature and date</div>
+      </div>
+      <div>
+        <div class="label">Supervisor</div>
+        <div class="jc-sign-line"></div>
+        <div class="muted small">Name, signature and date</div>
+      </div>
+      <div>
+        <div class="label">Customer</div>
+        <div class="jc-sign-line"></div>
+        <div class="muted small">Name, signature and date, at customer inspection</div>
+      </div>
+    </div>
+
+    <footer class="muted small">
+      <span><%= insp.number ?? (insp.job_number ? `Blank form for ${insp.job_number}` : 'Blank form') %></span>
+      <span>Printed <%= fmt.dateTime(printedAt) %></span>
+    </footer>
+  </main>
+</body>
+</html>

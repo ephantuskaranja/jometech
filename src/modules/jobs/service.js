@@ -70,12 +70,13 @@ async function resolveType(trx, id) {
   return type?.id ?? null;
 }
 
-/** The job's own copy of its type's steps. */
+/** The job's own copy of its type's steps, with its quality check step marked. */
 async function copySteps(trx, jobId, typeId) {
   await trx('job_steps').where({ job_id: jobId }).delete();
   if (!typeId) return;
+  const { qc_step: qcStep } = await trx('job_types').where({ id: typeId }).first('qc_step');
   const steps = await trx('job_type_steps').where({ job_type_id: typeId }).orderBy('sort_order').pluck('name');
-  if (steps.length) await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name })));
+  if (steps.length) await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name, is_qc: name === qcStep })));
 }
 
 async function writeLines(trx, jobId, lines) {
@@ -245,12 +246,30 @@ export async function finishStep(jobId, stepId, status, actor) {
     if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
     const step = await pendingStep(trx, jobId);
     if (step?.id !== stepId) return null;
+    if (step.is_qc) throw httpError(409, `${step.name} is ticked off by a passed quality check. Start the quality check on the job.`);
     await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(), finished_by: actor.user.id });
     await audit(trx, actor, { entity: 'job', id: jobId, action: status === 'done' ? 'step_done' : 'step_skipped', summary: step.name });
     const next = await pendingStep(trx, jobId);
     if (!next) await markCompleted(trx, jobId, actor);
     return { name: step.name, next: next?.name ?? null };
   });
+}
+
+/**
+ * A passed quality check ticks off the job's quality check step (inside the inspection's transaction).
+ * Only while the job is in progress and that step is the current one.
+ * @returns {Promise<{ name: string, next: string|null }>}
+ */
+export async function passQcStep(trx, jobId, actor) {
+  const job = await lockJob(trx, jobId);
+  if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}, so the quality check can’t be finished.`);
+  const step = await pendingStep(trx, jobId);
+  if (!step?.is_qc) throw httpError(409, `${job.number} isn’t at its quality check step any more (it is at ${step?.name ?? 'no step'}). Ask the supervisor to check the job.`);
+  await trx('job_steps').where({ id: step.id }).update({ status: 'done', finished_at: trx.fn.now(), finished_by: actor.user.id });
+  await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_done', summary: `${step.name} (quality check passed)` });
+  const next = await pendingStep(trx, jobId);
+  if (!next) await markCompleted(trx, jobId, actor);
+  return { name: step.name, next: next?.name ?? null };
 }
 
 /** Ticked by mistake: the last finished step becomes the current one again. */
@@ -331,7 +350,7 @@ export async function getJob(id) {
   job.vehicle_label = job.vehicle_id ? vehicleLabel(job) : null;
   job.lines = await db('job_lines').where({ job_id: id }).orderBy('sort_order');
   job.steps = await db('job_steps as s').leftJoin('users as u', 'u.id', 's.finished_by')
-    .where('s.job_id', id).orderBy('s.sort_order').select('s.id', 's.name', 's.status', 's.finished_at', 'u.name as finished_by_name');
+    .where('s.job_id', id).orderBy('s.sort_order').select('s.id', 's.name', 's.status', 's.is_qc', 's.finished_at', 'u.name as finished_by_name');
   job.currentStep = job.status === 'in_progress' ? job.steps.find((s) => s.status === 'pending') ?? null : null;
   job.stepsFinished = job.steps.filter((s) => s.status !== 'pending').length;
   return job;

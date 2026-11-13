@@ -1,0 +1,56 @@
+<%# Quality checks at the current site: jobs waiting at their quality check step, and finished checks. %>
+<%- include('partials/page-header', {
+  crumb: ['Workshop', 'Quality checks'],
+  heading: `Quality checks at ${site.name}`,
+  sub: tab === 'waiting' ? 'Jobs at their quality check step. A passed check ticks the step off and moves the job on.' : 'Finished checks, newest first.',
+  actions: [{ label: 'Blank form to print', href: '/qc-form/print', icon: 'printer' }],
+}) %>
+
+<section class="card">
+  <nav class="nav nav-tabs jt-tabs">
+    <a class="nav-link<%= tab === 'waiting' ? ' active' : '' %>" href="/qc"<%- tab === 'waiting' ? ' aria-current="page"' : '' %>>To check <span class="badge rounded-pill"><%= waiting.length %></span></a>
+    <a class="nav-link<%= tab === 'done' ? ' active' : '' %>" href="/qc?show=done"<%- tab === 'done' ? ' aria-current="page"' : '' %>>Done</a>
+  </nav>
+
+  <% if (tab === 'waiting') { %>
+    <% if (!waiting.length) { %>
+      <%- include('partials/empty', { icon: 'shield-check', heading: 'No job waiting for a quality check', text: 'Jobs appear here when they reach their quality check step.' }) %>
+    <% } else { %>
+      <ul class="list-group list-group-flush">
+        <% waiting.forEach((j) => { %>
+          <li class="list-group-item d-flex flex-wrap gap-3 align-items-center">
+            <div class="flex-grow-1">
+              <a class="fw-semibold" href="/jobs/<%= j.id %>"><%= j.number %></a>
+              <% if (Number(j.failed_before)) { %> <%- include('partials/pill', { text: `Failed ${j.failed_before}×: re-check`, tone: 'warn' }) %><% } %>
+              <div class="small text-body-secondary"><%= [j.customer_name, vehicleOf(j), j.due_on && `promised ${fmt.date(`${j.due_on}T12:00:00Z`)}`].filter(Boolean).join(' · ') %></div>
+            </div>
+            <% if (j.open_id) { %>
+              <a class="btn btn-outline-primary btn-sm" href="/qc/<%= j.open_id %>"><i class="bi bi-arrow-right-circle"></i>Carry on</a>
+            <% } else { %>
+              <form method="post" action="/jobs/<%= j.id %>/qc"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-clipboard-check"></i>Start quality check</button></form>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  <% } else if (!done.length) { %>
+    <%- include('partials/empty', { icon: 'clipboard-check', heading: 'No finished quality checks yet', text: 'Passed and failed checks are listed here.' }) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Check</th><th>Job</th><th>Result</th><th>By</th></tr></thead>
+        <tbody>
+          <% done.forEach((q) => { %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/qc/<%= q.id %>"><%= q.number %></a><span class="jt-sub">attempt <%= q.attempt %></span></td>
+              <td><%= q.job_number %><span class="jt-sub"><%= [q.customer_name, vehicleOf(q)].filter(Boolean).join(' · ') %></span></td>
+              <td><%- include('partials/pill', { text: statuses[q.status].label, tone: statuses[q.status].tone }) %></td>
+              <td class="text-nowrap"><%= q.finished_by_name ?? '—' %><span class="jt-sub"><%= fmt.dateTime(q.finished_at) %></span></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

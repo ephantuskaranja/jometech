@@ -7,6 +7,7 @@ import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import { config } from '../../config.js';
 import * as jobs from './service.js';
+import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
 import * as customers from '../customers/service.js';
 import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
@@ -160,6 +161,8 @@ router.get('/jobs/:id', view, async (req, res) => {
     // Invoice and payments: admins and managers.
     money: req.user.can('invoices.manage') ? await moneyForJob(job.id) : null,
     paymentMethods: PAYMENT_METHODS,
+    qcChecks: await qcForJob(job.id), qcStatuses: QC_STATUSES,
+    canInspect: req.user.can('qc.manage'),
   });
 });
 

@@ -626,3 +626,13 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
   .jt-report-section .d-none { display: table-cell !important; }
   a { color: inherit !important; text-decoration: none !important; }
 }
+
+/* Quality check (qc/views/show.ejs): item text, Pass/Fail/N/A, note. */
+.jt-qc-item { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; align-items: center; }
+.jt-qc-text { display: flex; gap: .5rem; }
+.jt-qc-no { flex: none; min-width: 1.5rem; color: var(--bs-tertiary-color); font-variant-numeric: tabular-nums; }
+.jt-qc-answer { display: flex; gap: .25rem; justify-content: flex-end; }
+.jt-qc-answer .btn { min-width: 3.75rem; }
+.jt-qc-note { grid-column: 1 / -1; }
+.jt-qc-item.is-flagged { box-shadow: inset 3px 0 0 var(--bs-warning); }
+@media (max-width: 575.98px) { .jt-qc-item { grid-template-columns: 1fr; } .jt-qc-answer { justify-content: flex-start; } .jt-qc-answer .btn { flex: 1; } }
