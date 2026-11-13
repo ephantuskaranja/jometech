@@ -128,6 +128,44 @@ test('with nobody at reception, the guard can clear a visitor out with a reason,
   assert.match(entry.summary, /without reception confirming: Reception closed after 5pm/);
 });
 
+test('Received and Clear out are on the list, and each can be undone straight after by whoever tapped it', async () => {
+  await post(gate, '/visitors', visitor({ name: 'Undo Wekesa', phone: '0700 000 545' }));
+  const v = await db('visitors').where({ phone: '+254700000545' }).first();
+  assert.match((await reception.get('/visitors')).text, new RegExp(`action="/visitors/${v.id}/receive"`), 'Received on the list');
+
+  // Received by mistake: undo puts them back to waiting.
+  let res = await post(reception, `/visitors/${v.id}/receive`);
+  let page = (await reception.get(res.headers.location)).text;
+  assert.match(page, new RegExp(`action="/visitors/${v.id}/undo-receive"`), 'the message offers Undo');
+  assert.match(page, /--jt-toast-time: 20s/);
+  assert.equal((await post(gate, `/visitors/${v.id}/undo-receive`)).status, 403, 'the gate doesn’t undo reception’s step');
+  await post(reception, `/visitors/${v.id}/undo-receive`);
+  let row = await db('visitors').where({ id: v.id }).first();
+  assert.equal(row.status, 'arrived');
+  assert.equal(row.received_at, null);
+
+  // Cleared by mistake (after the override): undo puts them back on site, reason gone.
+  assert.match((await gate.get('/visitors')).text, new RegExp(`action="/visitors/${v.id}/clear"`), 'Clear out (anyway) on the list');
+  res = await post(gate, `/visitors/${v.id}/clear`, { override_reason: 'Reception closed' });
+  page = (await gate.get(res.headers.location)).text;
+  assert.match(page, new RegExp(`action="/visitors/${v.id}/undo-clear"`));
+  await post(gate, `/visitors/${v.id}/undo-clear`);
+  row = await db('visitors').where({ id: v.id }).first();
+  assert.equal(row.status, 'arrived');
+  assert.equal(row.override_reason, null);
+  assert.equal(row.cleared_at, null);
+  const actions = await db('audit_log').where({ entity: 'visitor', entity_id: v.id }).orderBy('id').pluck('action');
+  assert.deepEqual(actions.slice(-4), ['visitor_received', 'visitor_receive_undone', 'visitor_cleared', 'visitor_clear_undone'], 'both steps and their undos stay in the history');
+
+  // Too late: more than the undo time ago.
+  await post(reception, `/visitors/${v.id}/receive`);
+  await post(gate, `/visitors/${v.id}/clear`);
+  await db('visitors').where({ id: v.id }).update({ cleared_at: db.raw('NOW() - INTERVAL 1 MINUTE') });
+  res = await post(gate, `/visitors/${v.id}/undo-clear`);
+  assert.match((await gate.get(res.headers.location)).text, /Too late to undo/);
+  assert.equal((await db('visitors').where({ id: v.id }).first()).status, 'cleared');
+});
+
 test('reception signing in a walk-in receives them at once', async () => {
   await post(reception, '/visitors', visitor({ name: 'Grace Achieng', phone: '0700 000 503', purpose: 'Interview' }));
   const v = await db('visitors').where({ phone: '+254700000503' }).first();

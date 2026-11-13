@@ -89,6 +89,49 @@ export async function clearOut(id, actor, { override = null } = {}) {
   });
 }
 
+/** How long the guard has to undo a clear out: 20 seconds on screen, a little more for a slow connection. */
+export const UNDO_SECONDS = 20;
+const UNDO_GRACE = 10;
+
+/** Seconds since a visitor's step, by the database clock (the time it was saved with). */
+async function secondsSince(trx, id, column) {
+  const [[row]] = await trx.raw(`SELECT TIMESTAMPDIFF(SECOND, ??, NOW()) AS age FROM visitors WHERE id = ?`, [column, id]);
+  return Number(row.age);
+}
+
+/** Undoes "Received" tapped by mistake: only by whoever tapped it, within the undo time, and before the gate cleared them out. */
+export async function undoReceive(id, actor) {
+  return db.transaction(async (trx) => {
+    const v = await lockVisitor(trx, id);
+    if (v.status === 'cleared') throw httpError(409, `Too late to undo: the gate has already cleared ${v.name} out.`);
+    if (v.status !== 'received') throw httpError(409, `${v.name} isn’t marked received.`);
+    if (v.received_by !== actor.user.id || (await secondsSince(trx, id, 'received_at')) > UNDO_SECONDS + UNDO_GRACE) {
+      throw httpError(409, `Too late to undo: ${v.name} stays received.`);
+    }
+    await trx('visitors').where({ id }).update({ status: 'arrived', received_at: null, received_by: null });
+    await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_receive_undone', summary: `Received undone: ${v.name} is waiting for reception again (${v.number})` });
+    return v;
+  });
+}
+
+/**
+ * Undoes a clear out tapped by mistake: only by the guard who did it, within the undo time.
+ * The visitor goes back to where they were (received, or waiting for reception if it was an override).
+ */
+export async function undoClear(id, actor) {
+  return db.transaction(async (trx) => {
+    const v = await lockVisitor(trx, id);
+    if (v.status !== 'cleared') throw httpError(409, `${v.name} is still on site.`);
+    if (v.cleared_by !== actor.user.id || (await secondsSince(trx, id, 'cleared_at')) > UNDO_SECONDS + UNDO_GRACE) {
+      throw httpError(409, `Too late to undo: ${v.name} was cleared out. If they are still here, sign them in again.`);
+    }
+    const back = v.received_at ? 'received' : 'arrived';
+    await trx('visitors').where({ id }).update({ status: back, cleared_at: null, cleared_by: null, override_reason: null });
+    await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_clear_undone', summary: `Clear out undone: ${v.name} is back on site (${v.number})` });
+    return v;
+  });
+}
+
 export function getVisitor(id) {
   return withNames(db('visitors as v')).where('v.id', id).first(COLUMNS);
 }

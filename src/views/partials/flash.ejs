@@ -2,15 +2,23 @@
   The message after saving. Success and info float over the page and close themselves
   after 8 seconds (paused while pointed at or focused). Warnings and errors ask for
   action, so they sit at the top of the page until closed.
+  flash.undo = { action, back, seconds }: an Undo button (posts to action) while the message shows,
+  which is then `seconds` long and not paused by pointing at it (the bar shows the real time left).
 %>
 <% if (flash) {
   const tone = flash.type === 'error' ? 'danger' : flash.type;
   const toast = tone === 'success' || tone === 'info';
   const icon = { success: 'check-circle', info: 'info-circle', warning: 'exclamation-triangle', danger: 'exclamation-octagon' }[tone] ?? 'info-circle';
 %>
-  <div class="alert alert-<%= tone %> alert-dismissible fade show jt-flash<%= toast ? ' jt-toast' : '' %>" role="<%= toast ? 'status' : 'alert' %>"<%- toast ? ' data-autoclose' : '' %>>
+  <div class="alert alert-<%= tone %> alert-dismissible fade show jt-flash<%= toast ? ' jt-toast' : '' %><%= flash.undo ? ' jt-toast-undo' : '' %>" role="<%= toast ? 'status' : 'alert' %>"<%- toast ? ' data-autoclose' : '' %><%- flash.undo ? ` style="--jt-toast-time: ${Number(flash.undo.seconds) || 20}s"` : '' %>>
     <i class="bi bi-<%= icon %>"></i>
-    <span><%= flash.text %></span>
+    <span class="me-auto"><%= flash.text %></span>
+    <% if (flash.undo) { %>
+      <form method="post" action="<%= flash.undo.action %>" class="jt-undo">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="<%= flash.undo.back %>">
+        <button class="btn btn-sm btn-light fw-semibold" type="submit"><i class="bi bi-arrow-counterclockwise"></i>Undo</button>
+      </form>
+    <% } %>
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>
 <% } %>

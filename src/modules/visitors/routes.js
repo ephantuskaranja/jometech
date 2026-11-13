@@ -151,7 +151,8 @@ router.get('/visitors/:id', view, async (req, res) => {
 router.post('/visitors/:id/receive', reception, async (req, res) => {
   const visitor = await loadVisitor(req);
   await visitors.markReceived(visitor.id, req);
-  req.session.flash = { type: 'success', text: `${visitor.name} received.` };
+  req.session.flash = { type: 'success', text: `${visitor.name} received.`,
+    undo: { action: `/visitors/${visitor.id}/undo-receive`, back: req.body.back ?? '', seconds: visitors.UNDO_SECONDS } };
   res.redirect(req.body.back === 'visitor' ? `/visitors/${visitor.id}` : '/visitors');
 });
 
@@ -160,9 +161,35 @@ router.post('/visitors/:id/clear', gate, async (req, res) => {
   const override = String(req.body.override_reason ?? '').trim();
   try {
     await visitors.clearOut(visitor.id, req, { override: override || null });
+    // Tapped by mistake? The message offers Undo for a short while.
+    const undo = { action: `/visitors/${visitor.id}/undo-clear`, back: req.body.back ?? '', seconds: visitors.UNDO_SECONDS };
     req.session.flash = visitor.status === 'arrived'
-      ? { type: 'warning', text: `${visitor.name} cleared out without reception confirming. This shows on the register.` }
-      : { type: 'success', text: `${visitor.name} cleared out.` };
+      ? { type: 'success', text: `${visitor.name} cleared out without reception confirming. This shows on the register.`, undo }
+      : { type: 'success', text: `${visitor.name} cleared out.`, undo };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(req.body.back === 'visitor' ? `/visitors/${visitor.id}` : '/visitors');
+});
+
+router.post('/visitors/:id/undo-receive', reception, async (req, res) => {
+  const visitor = await loadVisitor(req);
+  try {
+    await visitors.undoReceive(visitor.id, req);
+    req.session.flash = { type: 'info', text: `Undone: ${visitor.name} is waiting for reception again.` };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(req.body.back === 'visitor' ? `/visitors/${visitor.id}` : '/visitors');
+});
+
+router.post('/visitors/:id/undo-clear', gate, async (req, res) => {
+  const visitor = await loadVisitor(req);
+  try {
+    await visitors.undoClear(visitor.id, req);
+    req.session.flash = { type: 'info', text: `Undone: ${visitor.name} is back on site.` };
   } catch (err) {
     if (!err.expose) throw err;
     req.session.flash = { type: 'warning', text: err.message };
