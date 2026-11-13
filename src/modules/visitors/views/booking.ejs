@@ -1,0 +1,57 @@
+<%# One booking: details, what happened to it, and its history. %>
+<% const st = statuses[status]; %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Expected visitors', href: '/visitors/expected' }, booking.number],
+  heading: booking.name,
+  sub: booking.company ?? '',
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">Booking</h2>
+        <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
+      </div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Expected</dt><dd><%= fmt.date(booking.expected_on) %><%= booking.expected_time ? `, about ${booking.expected_time}` : '' %></dd></div>
+          <div><dt>Why</dt><dd><%= booking.purpose %></dd></div>
+          <div><dt>Seeing</dt><dd><%= booking.host ?? '—' %></dd></div>
+          <div><dt>Phone</dt><dd><%= booking.phone ? fmt.phone(booking.phone) : '—' %></dd></div>
+          <div><dt>Vehicle</dt><dd><% if (booking.vehicle_reg) { %><%- include('partials/plate', { reg: booking.vehicle_reg }) %><% } else { %>—<% } %></dd></div>
+          <% if (booking.notes) { %><div><dt>Notes</dt><dd style="white-space: pre-line"><%= booking.notes %></dd></div><% } %>
+          <div><dt>Booked by</dt><dd><%= booking.booked_by_name ?? '—' %><span class="d-block small text-body-secondary"><%= fmt.dateTime(booking.created_at) %></span></dd></div>
+          <% if (booking.status === 'arrived') { %>
+            <div><dt>Arrived</dt><dd><% if (canSeeVisit && booking.visitor_id) { %><a href="/visitors/<%= booking.visitor_id %>"><%= booking.visitor_number %></a><% } else { %><%= booking.visitor_number ?? 'Yes' %><% } %><span class="d-block small text-body-secondary"><%= fmt.dateTime(booking.visitor_arrived_at) %></span></dd></div>
+          <% } %>
+          <% if (booking.status === 'cancelled') { %>
+            <div><dt>Cancelled</dt><dd><%= booking.cancel_reason %><span class="d-block small text-body-secondary"><%= [booking.cancelled_by_name, fmt.dateTime(booking.cancelled_at)].filter(Boolean).join(', ') %></span></dd></div>
+          <% } %>
+        </dl>
+
+        <% if (booking.status === 'expected' && (canSignIn || canBook)) { %>
+          <div class="d-flex gap-2 flex-wrap mt-3 align-items-start" x-data="{ cancelling: false }">
+            <% if (canSignIn) { %><a class="btn btn-primary" href="/visitors/new?booking=<%= booking.id %>"><i class="bi bi-box-arrow-in-right"></i>Arrived: sign in</a><% } %>
+            <% if (canBook) { %>
+              <a class="btn btn-outline-secondary" href="/visitors/expected/<%= booking.id %>/edit" x-show="!cancelling"><i class="bi bi-pencil"></i>Change</a>
+              <button class="btn btn-outline-danger" type="button" x-show="!cancelling" @click="cancelling = true; $nextTick(() => $refs.why.focus())"><i class="bi bi-x-circle"></i>Cancel booking</button>
+              <form method="post" action="/visitors/expected/<%= booking.id %>/cancel" class="d-grid gap-2 w-100" x-show="cancelling" x-cloak style="max-width: 28rem">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <%- include('partials/field', { name: 'cancel_reason', label: 'Why is it cancelled?', placeholder: 'e.g. Customer will come next week', required: true, attrs: 'x-ref="why" maxlength="255"' }) %>
+                <div class="d-flex gap-2"><button class="btn btn-danger" type="submit">Cancel booking</button><button class="btn btn-link" type="button" @click="cancelling = false">Back</button></div>
+              </form>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>

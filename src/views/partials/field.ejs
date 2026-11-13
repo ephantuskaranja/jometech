@@ -5,7 +5,7 @@
         value: values.phone, error: errors.phone, required: true, hint: 'Their login name' })
 
   name, label           required
-  type                  text (default) | tel | email | number | money | date | password | textarea | select
+  type                  text (default) | tel | email | number | money | date | time | password | textarea | select
                         number and money show 3,000 as you type; number: decimals: true for 12.5, grouping: false for a year
   value                 current value (for select with multiple: an array)
   error                 message shown under the field, turns it red
@@ -74,7 +74,7 @@
 
   <% } else { %>
     <%
-      const htmlType = { tel: 'tel', email: 'email', date: 'date', password: 'password', number: 'text' }[fieldType] ?? 'text';
+      const htmlType = { tel: 'tel', email: 'email', date: 'date', time: 'time', password: 'password', number: 'text' }[fieldType] ?? 'text';
       const mode = locals.inputmode ?? { tel: 'tel', number: 'decimal', email: 'email' }[fieldType];
     %>
     <%# Numbers get thousands separators as you type (public/js/app.js), unless grouping: false (a year). %>

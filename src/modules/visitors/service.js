@@ -4,6 +4,7 @@ import { nextNumber } from '../../core/numbering.js';
 import { dayStart, localDay, nextDay } from '../../core/dates.js';
 import { compact } from '../../core/vehicle-format.js';
 import { httpError } from '../../core/validate.js';
+import { markArrived } from './bookings.js';
 
 // Visitor register, per site: the gate signs a visitor in, reception confirms
 // they were received, the gate clears them out.
@@ -27,9 +28,9 @@ const withNames = (q) => q
 
 /**
  * Signs a visitor in at a site. `atReception`: reception signed in a walk-in,
- * so they are received at the same moment.
+ * so they are received at the same moment. `bookingId`: they were expected; the booking is marked arrived.
  */
-export async function signIn(siteId, input, actor, { atReception = false } = {}) {
+export async function signIn(siteId, input, actor, { atReception = false, bookingId = null } = {}) {
   return db.transaction(async (trx) => {
     const number = await nextNumber(trx, 'visitor');
     const now = new Date();
@@ -40,7 +41,9 @@ export async function signIn(siteId, input, actor, { atReception = false } = {})
       arrived_at: now, arrived_by: actor.user.id,
       ...(atReception ? { status: 'received', received_at: now, received_by: actor.user.id } : {}),
     });
-    await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_in', summary: `${input.name} signed in (${number})${atReception ? ' at reception' : ''}` });
+    const booking = bookingId ? await markArrived(trx, bookingId, siteId, { id, number, name: input.name }, actor) : null;
+    const note = `${atReception ? ' at reception' : ''}${booking ? `, booked (${booking.number})` : ''}`;
+    await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_in', summary: `${input.name} signed in (${number})${note}` });
     return { id, number };
   });
 }

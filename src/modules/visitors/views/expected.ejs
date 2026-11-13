@@ -1,0 +1,83 @@
+<%#
+  Expected visitors at the current site. Today: the gate's list (Arrived signs them in from the
+  booking); Coming up: later days; Past: earlier days, with no-shows. A table on wide screens, cards on phones.
+%>
+<%
+  const when = (b) => [tab === 'today' ? null : fmt.date(b.expected_on), b.expected_time].filter(Boolean).join(', ') || 'Any time';
+  const findText = (b) => [b.name, b.company, b.vehicle_reg, b.host, b.number, b.purpose].filter(Boolean).join(' ').toLowerCase();
+%>
+<%- include('partials/page-header', {
+  crumb: [canRegister ? { label: 'Visitors', href: '/visitors' } : 'Visitors', 'Expected'],
+  heading: `Expected at ${site.name}`,
+  sub: tab === 'today' ? 'People booked to come today. When one arrives, the gate signs them in from here: the form comes filled in.' : tab === 'upcoming' ? 'People booked for later days.' : 'Earlier bookings: who came, who didn’t, and cancellations.',
+  actions: canBook ? [{ label: 'Book a visitor', href: '/visitors/expected/new', icon: 'calendar-plus', primary: true }] : [],
+}) %>
+
+<section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); return !f || el.dataset.find.includes(f); } }">
+  <nav class="nav nav-tabs jt-tabs">
+    <a class="nav-link<%= tab === 'today' ? ' active' : '' %>" href="/visitors/expected"<%- tab === 'today' ? ' aria-current="page"' : '' %>>Today <span class="badge rounded-pill"><%= counts.today %></span></a>
+    <a class="nav-link<%= tab === 'upcoming' ? ' active' : '' %>" href="/visitors/expected?show=upcoming"<%- tab === 'upcoming' ? ' aria-current="page"' : '' %>>Coming up <span class="badge rounded-pill"><%= counts.upcoming %></span></a>
+    <a class="nav-link<%= tab === 'past' ? ' active' : '' %>" href="/visitors/expected?show=past"<%- tab === 'past' ? ' aria-current="page"' : '' %>>Past</a>
+  </nav>
+
+  <% if (list.length > 5) { %>
+    <div class="jt-toolbar">
+      <input class="form-control" type="search" x-model="find" placeholder="Find: name, company, vehicle, who they’re seeing" aria-label="Find a booking" autocomplete="off" style="max-width: 26rem">
+    </div>
+  <% } %>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', {
+          icon: 'calendar-event',
+          heading: tab === 'today' ? 'Nobody booked for today' : tab === 'upcoming' ? 'Nobody booked for later days' : 'No earlier bookings',
+          text: canBook ? 'Book a visitor so the gate knows who is coming.' : 'Reception, sales and supervisors book visitors here.',
+          action: canBook ? { label: 'Book a visitor', href: '/visitors/expected/new' } : null }) %>
+  <% } else { %>
+    <% const action = (b) => { const st = shownStatus(b, today); %>
+      <% if (st === 'expected' && canSignIn) { %>
+        <a class="btn btn-primary btn-sm" href="/visitors/new?booking=<%= b.id %>"><i class="bi bi-box-arrow-in-right"></i>Arrived</a>
+      <% } else if (b.status === 'arrived' && canRegister && b.visitor_id) { %>
+        <a class="btn btn-link btn-sm" href="/visitors/<%= b.visitor_id %>"><%= b.visitor_number %></a>
+      <% } %>
+    <% } %>
+
+    <div class="table-responsive d-none d-lg-block">
+      <table class="table jt-table mb-0">
+        <thead><tr><th><%= tab === 'today' ? 'Time' : 'When' %></th><th>Visitor</th><th>Seeing · why</th><th>Status</th><th class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+          <% list.forEach((b) => { const st = shownStatus(b, today); %>
+            <tr data-find="<%= findText(b) %>" x-show="hit($el)">
+              <td class="text-nowrap"><%= when(b) %></td>
+              <td>
+                <a class="fw-semibold jt-row-link" href="/visitors/expected/<%= b.id %>"><%= b.name %></a>
+                <span class="jt-sub"><%= [b.company, b.booked_by_name && `booked by ${b.booked_by_name}`].filter(Boolean).join(' · ') %></span>
+                <% if (b.vehicle_reg) { %><span class="d-block mt-1 small"><%- include('partials/plate', { reg: b.vehicle_reg }) %></span><% } %>
+                <% if (b.notes) { %><span class="jt-sub text-wrap"><%= b.notes %></span><% } %>
+              </td>
+              <td><%= b.host ?? '—' %><span class="jt-sub"><%= b.purpose %></span></td>
+              <td class="text-nowrap"><%- include('partials/pill', { text: statuses[st].label, tone: statuses[st].tone }) %><% if (b.status === 'arrived' && b.visitor_arrived_at) { %><span class="jt-sub">in <%= fmt.time(b.visitor_arrived_at) %></span><% } %></td>
+              <td class="text-end"><% action(b) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="list-group list-group-flush d-lg-none">
+      <% list.forEach((b) => { const st = shownStatus(b, today); %>
+        <li class="list-group-item d-flex gap-3 align-items-start" data-find="<%= findText(b) %>" x-show="hit($el)">
+          <div class="flex-grow-1">
+            <a class="fw-semibold jt-row-link" href="/visitors/expected/<%= b.id %>"><%= b.name %></a>
+            <div class="small text-body-secondary"><%= [when(b), b.company, b.purpose, b.host && `seeing ${b.host}`].filter(Boolean).join(' · ') %></div>
+            <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
+              <%- include('partials/pill', { text: statuses[st].label, tone: statuses[st].tone }) %>
+              <% if (b.vehicle_reg) { %><%- include('partials/plate', { reg: b.vehicle_reg }) %><% } %>
+            </div>
+            <% if (b.notes) { %><div class="small text-body-secondary mt-1"><%= b.notes %></div><% } %>
+          </div>
+          <div class="text-nowrap"><% action(b) %></div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>

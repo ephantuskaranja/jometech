@@ -13,6 +13,7 @@ export const nav = [
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress', 'jobs.manage'], ready: true },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage' },
       { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
+      { label: 'Expected visitors', href: '/visitors/expected', icon: 'calendar-event', permission: ['visitors.book', 'visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
       { label: 'Vehicles leaving', href: '/gate/vehicles', icon: 'box-arrow-right', permission: 'checkin.gate', ready: true },
       { label: 'Goods at the gate', href: '/gate/goods', icon: 'box-seam', permission: 'goods.gate', ready: true },
     ],
@@ -71,8 +72,12 @@ export function navFor(user) {
     .filter((group) => group.items.length > 0);
 }
 
-/** True when `href` is the current page or a parent of it. */
+const under = (href, path) => path === href || path.startsWith(href + '/');
+const allHrefs = nav.flatMap((group) => group.items.map((item) => item.href));
+
+/** True when `href` is the current page or a parent of it, and no other menu item matches it more closely
+ *  (/visitors/expected lights up "Expected visitors", not "Visitors" as well). */
 export function isActive(href, path) {
   if (href === '/') return path === '/';
-  return path === href || path.startsWith(href + '/');
+  return under(href, path) && !allHrefs.some((other) => other.length > href.length && other.startsWith(href + '/') && under(other, path));
 }

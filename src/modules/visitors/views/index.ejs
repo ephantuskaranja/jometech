@@ -24,6 +24,7 @@
   <nav class="nav nav-tabs jt-tabs">
     <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= onSiteCount %></span></a>
     <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
+    <a class="nav-link" href="/visitors/expected">Expected today <span class="badge rounded-pill"><%= expectedCount %></span></a>
   </nav>
 
   <% if (tab === 'register') { %>

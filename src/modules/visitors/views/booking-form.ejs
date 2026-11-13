@@ -1,0 +1,44 @@
+<%# Book an expected visitor, or change a booking. One person (the driver or main person); others in the notes. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Expected visitors', href: '/visitors/expected' }, booking ? booking.number : 'Book'],
+  heading: booking ? `Change booking ${booking.number}` : 'Book an expected visitor',
+  sub: `At ${siteName}. The gate sees them on the list that day and signs them in from it.`,
+}) %>
+
+<form method="post" action="<%= booking ? `/visitors/expected/${booking.id}` : '/visitors/expected' %>" novalidate class="card" x-data="{ purpose: <%= JSON.stringify(values.purpose ?? '') %> }">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="card-body d-grid gap-4">
+    <div class="jt-fields">
+      <% if (sites) { %>
+        <%- include('partials/field', { name: 'site_id', label: 'Coming to', type: 'select', value: values.site_id, error: errors.site_id, required: true,
+              options: sites.map((s) => ({ value: String(s.id), label: s.name })), hint: 'Who they can see is from this site’s staff' }) %>
+      <% } %>
+      <%- include('partials/field', { name: 'expected_on', label: 'Day', type: 'date', value: values.expected_on, error: errors.expected_on, required: true, attrs: `min="${today}"` }) %>
+      <%- include('partials/field', { name: 'expected_time', label: 'Time', type: 'time', value: values.expected_time, error: errors.expected_time, hint: 'Optional: about when' }) %>
+    </div>
+
+    <div class="jt-fields">
+      <%- include('partials/field', { name: 'name', label: 'Name', value: values.name, error: errors.name, required: true, autocomplete: 'off', hint: 'The driver or the main person' }) %>
+      <%- include('partials/field', { name: 'phone', label: 'Phone number', type: 'tel', value: values.phone, error: errors.phone, placeholder: '0712 345 678', autocomplete: 'off', hint: 'If you know it' }) %>
+      <%- include('partials/field', { name: 'company', label: 'Company / Organization / Location', value: values.company, error: errors.company, placeholder: 'e.g. Mabati Rolling Mills, KRA, or Nakuru' }) %>
+    </div>
+
+    <div class="jt-choices-compact"><%- include('partials/choices', { name: 'purpose', label: 'Why are they coming?', required: true, columns: 4, model: 'purpose',
+          options: purposes.map((p) => ({ value: p, label: p })), value: values.purpose, error: errors.purpose }) %></div>
+    <div x-show="purpose === 'Other'" x-cloak>
+      <%- include('partials/field', { name: 'other_purpose', label: 'Reason', value: values.other_purpose, error: errors.other_purpose, placeholder: 'e.g. Meeting the director about a tender' }) %>
+    </div>
+
+    <div class="jt-fields">
+      <%- include('partials/field', { name: 'host', label: 'Who are they seeing?', type: 'select', searchable: true, options: hostOptions, value: hostValue, error: errors.host,
+            hint: 'Not on the list? Choose Reception.' }) %>
+      <%- include('partials/field', { name: 'vehicle_reg', label: 'Their vehicle', value: values.vehicle_reg, error: errors.vehicle_reg, placeholder: 'KDA 123A', hint: 'e.g. the truck coming to collect or deliver' }) %>
+    </div>
+    <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, value: values.notes, error: errors.notes,
+          hint: 'Others coming with them (names), what they are bringing or collecting, anything the gate should know' }) %>
+  </div>
+  <div class="card-footer d-flex gap-2 flex-wrap">
+    <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-calendar-check"></i><%= booking ? 'Save' : 'Book' %></button>
+    <a class="btn btn-link" href="<%= booking ? `/visitors/expected/${booking.id}` : '/visitors/expected' %>">Cancel</a>
+  </div>
+</form>

@@ -76,6 +76,9 @@ export async function cleanup() {
   await db('audit_log').where({ entity: 'visitor' }).whereIn('entity_id', visitorIds).delete();
   await db('visitors').whereIn('id', visitorIds).delete();
   const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
+  const bookingIds = await db('visitor_bookings').whereIn('booked_by', ids).pluck('id');
+  await db('audit_log').where({ entity: 'visitor_booking' }).whereIn('entity_id', bookingIds).delete();
+  await db('visitor_bookings').whereIn('id', bookingIds).delete();
   // Staff and attendance made by test users; test machines are named TEST-…
   const payrollIds = await db('payrolls').whereIn('prepared_by', ids).pluck('id');
   await db('audit_log').where({ entity: 'payroll' }).whereIn('entity_id', payrollIds).delete();

@@ -13,6 +13,7 @@ import { atGate as goodsAtGate } from '../stock/transfers.js';
 import { waitingCount } from '../gate/deliveries.js';
 import { passesAtGate } from '../issues/service.js';
 import { counts as visitorCounts } from '../visitors/service.js';
+import { counts as bookingCounts } from '../visitors/bookings.js';
 import { waitingAtGate } from '../checkins/release.js';
 
 // The dashboard: one section per area the person works in (from their permissions),
@@ -109,7 +110,15 @@ async function people(user, site, siteIds) {
 
 /** Visitors today at the site. The gate also sees vehicles to release; reception, those received today and why people came. */
 async function visitors(user, site) {
-  if (!can(user, 'visitors.view', 'visitors.gate', 'visitors.receive')) return null;
+  if (!can(user, 'visitors.view', 'visitors.gate', 'visitors.receive')) {
+    if (!can(user, 'visitors.book')) return null;
+    // Booking only (sales): what they booked is on the expected list.
+    const b = await bookingCounts(site.id);
+    return { title: `Visitors at ${site.name}`, icon: 'person-badge', items: [
+      { label: 'Expected today', value: b.today, foot: 'booked, not yet arrived', icon: 'calendar-event', href: '/visitors/expected', tone: 'info' },
+      { label: 'Coming up', value: b.upcoming, foot: 'booked for later days', icon: 'calendar-week', href: '/visitors/expected?show=upcoming', hideZero: true },
+    ] };
+  }
   const c = await visitorCounts(site.id);
   const atGate = can(user, 'checkin.gate', 'visitors.gate');
   const items = [
@@ -118,6 +127,7 @@ async function visitors(user, site) {
     { label: 'Confirmed', value: c.confirmed, foot: 'received, ready to go', icon: 'check2-circle', href: '/visitors?only=confirmed' },
     { label: 'Cleared out today', value: c.cleared, foot: 'left the site', icon: 'box-arrow-right', href: '/visitors?show=register' },
   ];
+  items.push({ label: 'Expected today', value: (await bookingCounts(site.id)).today, foot: 'booked, not yet arrived', icon: 'calendar-event', href: '/visitors/expected', tone: 'info' });
   if (can(user, 'checkin.gate')) {
     items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' });
   }
@@ -154,5 +164,6 @@ export function quickActions(user) {
     can(user, 'purchasing.manage') && { label: 'New purchase order', href: '/purchase-orders/new', icon: 'cart-plus' },
     can(user, 'attendance.manage') && { label: 'Mark attendance', href: '/attendance', icon: 'calendar-check' },
     can(user, 'visitors.gate', 'visitors.receive') && { label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: !can(user, 'checkin.manage', 'enquiries.manage', 'quotations.manage', 'purchasing.manage', 'attendance.manage') },
+    can(user, 'visitors.book') && { label: 'Book a visitor', href: '/visitors/expected/new', icon: 'calendar-plus' },
   ].filter(Boolean).slice(0, 3);
 }
