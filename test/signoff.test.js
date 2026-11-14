@@ -149,18 +149,17 @@ test('concerns send the job back to the chosen steps and its quality check; afte
 
 test('the release checklist shows the passed quality check', async () => {
   const { id, check } = await jobAtSignoff();
-  const [checkin] = await db('checkins').whereNotNull('id').orderBy('id', 'desc').limit(1).pluck('id');
-  const job = await db('jobs').where({ id }).first('checkin_id');
-  await db('jobs').where({ id }).update({ checkin_id: checkin });
-  try {
-    const list = await releaseChecklist(checkin);
-    const qc = list.items.find((i) => i.key === 'qc');
-    const number = (await db('qc_inspections').where({ id: check }).first()).number;
-    assert.ok(qc, 'a line for the quality check');
-    assert.match(qc.detail, new RegExp(number));
-  } finally {
-    await db('jobs').where({ id }).update({ checkin_id: job.checkin_id });
-  }
+  // The job's own visit: a vehicle and a check-in for the test customer (cleanup removes both).
+  const hq = await db('sites').where({ code: 'HQ' }).first('id');
+  const by = (await db('users').where({ phone: '+254700000072' }).first('id')).id;
+  const [vehicle] = await db('vehicles').insert({ reg_no: 'KEC 871S', customer_id: customer.id, type: 'truck', make: 'Isuzu' });
+  const [checkin] = await db('checkins').insert({ number: 'CHK-T-871', site_id: hq.id, vehicle_id: vehicle, customer_id: customer.id, received_by: by, driver_name: 'Peter Otieno' });
+  await db('jobs').where({ id }).update({ vehicle_id: vehicle, checkin_id: checkin });
+
+  const qc = (await releaseChecklist(checkin)).items.find((i) => i.key === 'qc');
+  assert.ok(qc, 'a line for the quality check');
+  assert.equal(qc.ok, true);
+  assert.match(qc.detail, new RegExp(`${(await db('qc_inspections').where({ id: check }).first()).number} passed`));
 });
 
 test('a job type’s customer sign-off comes after its quality check', async () => {
