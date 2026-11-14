@@ -475,6 +475,61 @@ document.addEventListener('alpine:init', () => {
     };
   });
 
+  // A quality check (qc/views/show.ejs). Each row takes the colour of its answer. Finish with gaps
+  // (unanswered, or failed with nothing said) doesn't send: it marks them and takes you to the first.
+  Alpine.data('qcInspection', (total) => ({
+    total, answered: 0, failed: 0, flagged: 0,
+    rows() { return [...this.$root.querySelectorAll('.jt-qc-item')]; },
+    answer(row) { return row.querySelector('input.btn-check:checked')?.value ?? ''; },
+    gap(row) {
+      const r = this.answer(row);
+      if (!r) return 'answer';
+      return r === 'fail' && !row.querySelector('.jt-qc-note').value.trim() ? 'note' : null;
+    },
+    count() {
+      let answered = 0, failed = 0, flagged = 0;
+      for (const row of this.rows()) {
+        const r = this.answer(row);
+        const note = row.querySelector('.jt-qc-note');
+        row.classList.remove('is-pass', 'is-fail', 'is-na');
+        if (r) { answered++; row.classList.add(`is-${r}`); }
+        if (r === 'fail') failed++;
+        note.placeholder = r === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)';
+        if (row.classList.contains('is-flagged') && !this.gap(row)) { row.classList.remove('is-flagged'); note.classList.remove('is-invalid'); }
+        if (row.classList.contains('is-flagged')) flagged++;
+      }
+      Object.assign(this, { answered, failed, flagged });
+    },
+    fill(section, value) {
+      section.querySelectorAll('.jt-qc-item').forEach((row) => { if (!this.answer(row)) row.querySelector(`input.btn-check[value=${value}]`).checked = true; });
+      this.count();
+    },
+    goTo(row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const note = this.gap(row) === 'note';
+      (note ? row.querySelector('.jt-qc-note') : row.querySelector('input.btn-check')).focus({ preventScroll: true });
+      row.classList.remove('is-target'); void row.offsetWidth; row.classList.add('is-target');
+    },
+    nextGap() { const row = this.rows().find((r) => this.gap(r)); if (row) this.goTo(row); },
+    check(e) {
+      if (e.submitter?.value !== '1') return;
+      const open = this.rows().filter((r) => this.gap(r));
+      if (!open.length) return;
+      e.preventDefault();
+      for (const row of open) {
+        row.classList.add('is-flagged');
+        if (this.gap(row) === 'note') row.querySelector('.jt-qc-note').classList.add('is-invalid');
+      }
+      this.count();
+      this.goTo(open[0]);
+    },
+    init() {
+      this.count();
+      const first = this.$root.querySelector('.jt-qc-item.is-flagged');
+      if (first) setTimeout(() => this.goTo(first), 50);
+    },
+  }));
+
   // Item page (items/views/show.ejs): what a plate of any size comes to. The server does the sums.
   Alpine.data('sheetCalc', ({ url }) => ({
     length: '', width: '', unit: 'ft', pieces: '1', result: null, timer: null,

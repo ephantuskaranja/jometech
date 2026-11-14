@@ -118,6 +118,12 @@ test('a check saves as you go, needs every item answered and every failure expla
   const second = idOf(res.headers.location);
   assert.notEqual(second, first);
   assert.equal((await db('qc_inspections').where({ id: second }).first()).attempt, 2);
+  const carried = await itemsOf(second);
+  assert.equal(carried.filter((i) => i.result === 'pass').length, 21, 'what passed last time is filled in');
+  assert.equal(carried[13].result, null, 'the failed item is left to check again');
+  const repeat = (await supervisor.get(`/qc/${second}`)).text;
+  assert.match(repeat, /Failed last time<\/span> <span class="text-body-secondary">Bare patch under the floor/);
+  assert.match(repeat, /the 1 item that failed/);
   await post(supervisor, `/qc/${second}`, { finish: '1', ...answers(await itemsOf(second), 'na', { [`result_${(await itemsOf(second))[0].id}`]: 'pass' }) });
   assert.equal((await db('qc_inspections').where({ id: second }).first()).status, 'passed');
   assert.equal((await db('job_steps').where({ id: qcStep.id }).first()).status, 'done', 'a passed check ticks the step off');

@@ -632,7 +632,24 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-qc-text { display: flex; gap: .5rem; }
 .jt-qc-no { flex: none; min-width: 1.5rem; color: var(--bs-tertiary-color); font-variant-numeric: tabular-nums; }
 .jt-qc-answer { display: flex; gap: .25rem; justify-content: flex-end; }
-.jt-qc-answer .btn { min-width: 3.75rem; }
+.jt-qc-answer .btn { min-width: 4.5rem; }
+/* Pass / Fail / N/A: plain until picked, then solid in the answer's colour; the others fade back. */
+.jt-qc-btn { display: inline-flex; align-items: center; justify-content: center; gap: .3rem;
+  --bs-btn-color: var(--bs-secondary-color); --bs-btn-border-color: var(--bs-border-color); --bs-btn-bg: var(--bs-body-bg);
+  --bs-btn-hover-color: var(--bs-body-color); --bs-btn-hover-bg: var(--bs-tertiary-bg); --bs-btn-hover-border-color: var(--bs-secondary-color);
+  --bs-btn-active-color: #fff; font-weight: 600; }
+.jt-qc-pass { --bs-btn-active-bg: var(--bs-success); --bs-btn-active-border-color: var(--bs-success); }
+.jt-qc-fail { --bs-btn-active-bg: var(--bs-danger); --bs-btn-active-border-color: var(--bs-danger); }
+.jt-qc-na { --bs-btn-active-bg: var(--bs-secondary); --bs-btn-active-border-color: var(--bs-secondary); }
+.btn-check:checked + .jt-qc-btn { box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.jt-qc-item:is(.is-pass, .is-fail, .is-na) .btn-check:not(:checked) + .jt-qc-btn { opacity: .55; }
+.jt-qc-item:is(.is-pass, .is-fail, .is-na) .btn-check:not(:checked) + .jt-qc-btn:hover { opacity: 1; }
+.btn-check:focus-visible + .jt-qc-btn { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
 .jt-qc-note { grid-column: 1 / -1; }
-.jt-qc-item.is-flagged { box-shadow: inset 3px 0 0 var(--bs-warning); }
+.jt-qc-item.is-pass { box-shadow: inset 4px 0 0 var(--bs-success); }
+.jt-qc-item.is-na { box-shadow: inset 4px 0 0 var(--bs-secondary-color); }
+.jt-qc-item.is-fail { box-shadow: inset 4px 0 0 var(--bs-danger); --bs-list-group-bg: var(--bs-danger-bg-subtle); }
+.jt-qc-item.is-flagged { box-shadow: inset 4px 0 0 var(--bs-warning); --bs-list-group-bg: var(--bs-warning-bg-subtle); scroll-margin-bottom: 6rem; }
+.jt-qc-item.is-target { animation: jt-qc-target 1.2s ease-out 2; }
+@keyframes jt-qc-target { 0% { outline: 3px solid var(--bs-warning); outline-offset: -3px; } 100% { outline: 3px solid transparent; outline-offset: -3px; } }
 @media (max-width: 575.98px) { .jt-qc-item { grid-template-columns: 1fr; } .jt-qc-answer { justify-content: flex-start; } .jt-qc-answer .btn { flex: 1; } }

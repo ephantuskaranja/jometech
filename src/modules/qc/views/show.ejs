@@ -25,12 +25,14 @@
   </div>
 <% } %>
 
+<% if (canInspect && insp.previous) { %>
+  <div class="alert alert-info d-flex gap-2" role="status"><i class="bi bi-arrow-repeat"></i>
+    <div>Attempt <%= insp.attempt %>. What passed or didn’t apply on <%= insp.previous.number %> is filled in already<% if (insp.previous.failed) { %>; the <%= insp.previous.failed %> item<%= insp.previous.failed === 1 ? '' : 's' %> that failed (marked <span class="badge text-bg-danger">Failed last time</span>) need<%= insp.previous.failed === 1 ? 's' : '' %> checking again<% } %>. Change any answer if you need to.</div>
+  </div>
+<% } %>
+
 <% if (canInspect) { %>
-  <form method="post" action="/qc/<%= insp.id %>" novalidate
-        x-data="{ total: <%= insp.items.length %>, answered: 0, failed: 0,
-                  count() { this.answered = this.$root.querySelectorAll('input.btn-check:checked').length; this.failed = this.$root.querySelectorAll('input.btn-check[value=fail]:checked').length; },
-                  fill(section, value) { section.querySelectorAll('.jt-qc-item').forEach((row) => { if (!row.querySelector('input.btn-check:checked')) row.querySelector(`input.btn-check[value=${value}]`).checked = true; }); this.count(); } }"
-        x-init="count()" @change="count()">
+  <form method="post" action="/qc/<%= insp.id %>" novalidate x-data="qcInspection(<%= insp.items.length %>)" @change="count()" @input="count()" @submit="check($event)">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <% } %>
 
@@ -46,17 +48,19 @@
       </div>
       <ul class="list-group list-group-flush">
         <% section.items.forEach((item) => { const n = insp.items.indexOf(item) + 1; const flagged = missing.has(item.id) || unexplained.has(item.id); %>
-          <li class="list-group-item jt-qc-item<%= flagged ? ' is-flagged' : '' %>" x-data="{ result: <%= JSON.stringify(item.result ?? '') %> }">
-            <div class="jt-qc-text"><span class="jt-qc-no"><%= n %></span><%= item.text %></div>
+          <li class="list-group-item jt-qc-item<%= flagged ? ' is-flagged' : '' %><%= item.result ? ` is-${item.result}` : '' %>" id="qc-item-<%= item.id %>">
+            <div class="jt-qc-text"><span class="jt-qc-no"><%= n %></span><div><%= item.text %>
+              <% if (item.failed_before !== undefined) { %><div class="small mt-1"><span class="badge text-bg-danger">Failed last time</span><% if (item.failed_before) { %> <span class="text-body-secondary"><%= item.failed_before %></span><% } %></div><% } %>
+            </div></div>
             <% if (canInspect) { %>
               <div class="jt-qc-answer" role="radiogroup" aria-label="Result for item <%= n %>">
                 <% ['pass', 'fail', 'na'].forEach((r) => { const id = `r${item.id}-${r}`; %>
-                  <input type="radio" class="btn-check" name="result_<%= item.id %>" id="<%= id %>" value="<%= r %>" autocomplete="off" x-model="result"<%= item.result === r ? ' checked' : '' %>>
-                  <label class="btn btn-sm btn-outline-<%= { pass: 'success', fail: 'danger', na: 'secondary' }[r] %>" for="<%= id %>"><%= results[r] %></label>
+                  <input type="radio" class="btn-check" name="result_<%= item.id %>" id="<%= id %>" value="<%= r %>" autocomplete="off"<%= item.result === r ? ' checked' : '' %>>
+                  <label class="btn btn-sm jt-qc-btn jt-qc-<%= r %>" for="<%= id %>"><i class="bi <%= { pass: 'bi-check-lg', fail: 'bi-x-lg', na: 'bi-dash-lg' }[r] %>"></i><%= results[r] %></label>
                 <% }) %>
               </div>
               <input class="form-control form-control-sm jt-qc-note<%= unexplained.has(item.id) ? ' is-invalid' : '' %>" name="note_<%= item.id %>" value="<%= item.note ?? '' %>" maxlength="255"
-                     :placeholder="result === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)'" :required="result === 'fail'" aria-label="Note for item <%= n %>">
+                     placeholder="<%= item.result === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)' %>" aria-label="Note for item <%= n %>">
             <% } else { %>
               <div class="jt-qc-answer"><% if (item.result) { %><%- include('partials/pill', { text: results[item.result], tone: tone[item.result] }) %><% } else { %><span class="small text-body-tertiary">Not answered</span><% } %></div>
               <% if (item.note) { %><div class="jt-qc-note small text-body-secondary"><%= item.note %></div><% } %>
@@ -97,7 +101,8 @@
 
 <% if (canInspect) { %>
     <div class="jt-savebar">
-      <span class="jt-savebar-note"><i class="bi bi-list-check"></i><span x-text="`${answered} of ${total} answered`"></span><span class="text-danger fw-semibold" x-show="failed" x-cloak x-text="` · ${failed} failed`"></span></span>
+      <span class="jt-savebar-note"><i class="bi bi-list-check"></i><span x-text="`${answered} of ${total} answered`"></span><span class="text-danger fw-semibold" x-show="failed" x-cloak x-text="` · ${failed} failed`"></span>
+        <button class="btn btn-link btn-sm p-0 ms-2" type="button" x-show="flagged || answered < total" x-cloak @click="nextGap()" x-text="flagged ? `Go to the ${flagged === 1 ? 'one' : flagged} left` : 'Next unanswered'"></button></span>
       <div class="jt-savebar-actions">
         <button class="btn btn-outline-secondary" type="submit" name="finish" value="0"><i class="bi bi-save"></i>Save, finish later</button>
         <button class="btn" :class="failed ? 'btn-danger' : 'btn-success'" type="submit" name="finish" value="1">
