@@ -70,13 +70,15 @@ async function resolveType(trx, id) {
   return type?.id ?? null;
 }
 
-/** The job's own copy of its type's steps, with its quality check step marked. */
+/** The job's own copy of its type's steps, with its quality check and customer sign-off steps marked. */
 async function copySteps(trx, jobId, typeId) {
   await trx('job_steps').where({ job_id: jobId }).delete();
   if (!typeId) return;
-  const { qc_step: qcStep } = await trx('job_types').where({ id: typeId }).first('qc_step');
+  const { qc_step: qcStep, signoff_step: signoffStep } = await trx('job_types').where({ id: typeId }).first('qc_step', 'signoff_step');
   const steps = await trx('job_type_steps').where({ job_type_id: typeId }).orderBy('sort_order').pluck('name');
-  if (steps.length) await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name, is_qc: name === qcStep })));
+  if (steps.length) {
+    await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name, is_qc: name === qcStep, is_signoff: name === signoffStep && name !== qcStep })));
+  }
 }
 
 async function writeLines(trx, jobId, lines) {
@@ -249,6 +251,7 @@ export async function finishStep(jobId, stepId, status, actor) {
     const step = await pendingStep(trx, jobId);
     if (step?.id !== stepId) return null;
     if (step.is_qc) throw httpError(409, `${step.name} is ticked off by a passed quality check. Start the quality check on the job.`);
+    if (step.is_signoff) throw httpError(409, `${step.name} is ticked off by the customer’s sign-off. Open Customer sign-off on the job.`);
     await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(3), finished_by: actor.user.id });
     await audit(trx, actor, { entity: 'job', id: jobId, action: status === 'done' ? 'step_done' : 'step_skipped', summary: step.name });
     const next = await pendingStep(trx, jobId);
@@ -262,31 +265,44 @@ export async function finishStep(jobId, stepId, status, actor) {
  * Only while the job is in progress and that step is the current one.
  * @returns {Promise<{ name: string, next: string|null }>}
  */
-export async function passQcStep(trx, jobId, actor) {
+export function passQcStep(trx, jobId, actor) {
+  return passLockedStep(trx, jobId, actor, { flag: 'is_qc', what: 'the quality check', where: 'its quality check step', why: 'quality check passed' });
+}
+
+/** The customer's sign-off (or no one there to sign) ticks off the job's sign-off step, the same way. */
+export function passSignoffStep(trx, jobId, actor, why) {
+  return passLockedStep(trx, jobId, actor, { flag: 'is_signoff', what: 'the sign-off', where: 'its customer sign-off step', why });
+}
+
+async function passLockedStep(trx, jobId, actor, { flag, what, where, why }) {
   const job = await lockJob(trx, jobId);
-  if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}, so the quality check can’t be finished.`);
+  if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}, so ${what} can’t be recorded.`);
   const step = await pendingStep(trx, jobId);
-  if (!step?.is_qc) throw httpError(409, `${job.number} isn’t at its quality check step any more (it is at ${step?.name ?? 'no step'}). Ask the supervisor to check the job.`);
+  if (!step?.[flag]) throw httpError(409, `${job.number} isn’t at ${where} any more (it is at ${step?.name ?? 'no step'}). Ask the supervisor to check the job.`);
   await trx('job_steps').where({ id: step.id }).update({ status: 'done', finished_at: trx.fn.now(3), finished_by: actor.user.id });
-  await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_done', summary: `${step.name} (quality check passed)` });
+  await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_done', summary: `${step.name} (${why})` });
   const next = await pendingStep(trx, jobId);
   if (!next) await markCompleted(trx, jobId, actor);
   return { name: step.name, next: next?.name ?? null };
 }
 
 /**
- * A failed quality check sends the job back: these steps (before the quality check step) are to do
- * again; every other step stays as it is. Inside the inspection's transaction.
+ * Sends the job back: these steps are to do again; every other step stays as it is.
+ * From a failed quality check (`from.qc`) or the customer's concerns at sign-off (`from.signoff`).
+ * Inside the caller's transaction.
+ * @param {{ qc?: { id: number, number: string }, signoff?: { id: number } }} from
  * @returns {Promise<string[]>} the names of the steps reopened, in order
  */
-export async function reworkSteps(trx, jobId, stepIds, qc, actor) {
+export async function reworkSteps(trx, jobId, stepIds, from, actor) {
   if (!stepIds.length) return [];
   const steps = await trx('job_steps').where({ job_id: jobId }).whereIn('id', stepIds).orderBy('sort_order');
+  const source = from.qc ? { rework_qc_id: from.qc.id, rework_signoff_id: null } : { rework_qc_id: null, rework_signoff_id: from.signoff.id };
   for (const step of steps) {
-    await trx('job_steps').where({ id: step.id }).update({ status: 'pending', finished_at: null, finished_by: null, rework_qc_id: qc.id });
+    await trx('job_steps').where({ id: step.id }).update({ status: 'pending', finished_at: null, finished_by: null, ...source });
   }
   const names = steps.map((s) => s.name);
-  await audit(trx, actor, { entity: 'job', id: jobId, action: 'steps_reworked', summary: `${names.join(', ')} (quality check ${qc.number} failed)` });
+  const why = from.qc ? `quality check ${from.qc.number} failed` : 'the customer’s concerns at sign-off';
+  await audit(trx, actor, { entity: 'job', id: jobId, action: 'steps_reworked', summary: `${names.join(', ')} (${why})` });
   return names;
 }
 
@@ -369,8 +385,10 @@ export async function getJob(id) {
   job.lines = await db('job_lines').where({ job_id: id }).orderBy('sort_order');
   job.steps = await db('job_steps as s').leftJoin('users as u', 'u.id', 's.finished_by')
     .leftJoin('qc_inspections as rq', 'rq.id', 's.rework_qc_id')
+    .leftJoin('customer_signoffs as rs', 'rs.id', 's.rework_signoff_id')
     .where('s.job_id', id).orderBy('s.sort_order')
-    .select('s.id', 's.name', 's.status', 's.is_qc', 's.finished_at', 'u.name as finished_by_name', 's.rework_qc_id', 'rq.number as rework_qc_number');
+    .select('s.id', 's.name', 's.status', 's.is_qc', 's.is_signoff', 's.finished_at', 'u.name as finished_by_name', 's.rework_qc_id', 'rq.number as rework_qc_number',
+      's.rework_signoff_id', 'rs.concerns as rework_concerns', 'rs.signer_name as rework_signer_name');
   // A step a failed quality check sent back: what to put right there.
   const reworked = job.steps.filter((s) => s.rework_qc_id && s.status === 'pending');
   if (reworked.length) {

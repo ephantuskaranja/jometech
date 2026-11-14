@@ -8,7 +8,7 @@
 
 <div class="row g-4">
   <div class="col-lg-8">
-    <form method="post" action="<%= type ? `/admin/job-types/${type.id}` : '/admin/job-types' %>" novalidate x-data="jobTypeForm(<%= JSON.stringify({ rows, qcStep: values.qc_step ?? '' }) %>)">
+    <form method="post" action="<%= type ? `/admin/job-types/${type.id}` : '/admin/job-types' %>" novalidate x-data="jobTypeForm(<%= JSON.stringify({ rows, qcStep: values.qc_step ?? '', signoffStep: values.signoff_step ?? '' }) %>)">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
       <section class="card mb-4">
@@ -52,6 +52,13 @@
           </select>
           <% if (errors.qc_step) { %><div class="jt-error-text"><%= errors.qc_step %></div><% } %>
           <div class="form-text">On a job, this step is ticked off only by a passed quality check (the checklist under System → Quality checklist).</div>
+          <label class="form-label mb-0 mt-3" for="f-signoff_step">Customer signs at</label>
+          <select class="form-select<%= errors.signoff_step ? ' is-invalid' : '' %>" id="f-signoff_step" name="signoff_step" x-model="signoffStep" style="max-width: 24rem">
+            <option value="">No customer sign-off</option>
+            <template x-for="name in stepNames" :key="name"><option :value="name" x-text="name" :selected="name === signoffStep"></option></template>
+          </select>
+          <% if (errors.signoff_step) { %><div class="jt-error-text"><%= errors.signoff_step %></div><% } %>
+          <div class="form-text">On a job, this step is ticked off only when the customer (or the driver collecting for them) signs on the device, or staff record that no one was there to sign.</div>
         </div>
       </section>
 
@@ -81,7 +88,7 @@
       <% } %>
       <section class="card">
         <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
-        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', default: 'Default', steps: 'Steps', qc_step: 'Quality check at' } }) %></div>
+        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', default: 'Default', steps: 'Steps', qc_step: 'Quality check at', signoff_step: 'Customer signs at' } }) %></div>
       </section>
     </div>
   <% } %>

@@ -8,6 +8,7 @@ import { check, httpError, optionalId, optionalText } from '../../core/validate.
 import { config } from '../../config.js';
 import * as jobs from './service.js';
 import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
+import { forJob as signoffsForJob, OUTCOMES as SIGNOFF_OUTCOMES } from '../qc/signoff.js';
 import * as customers from '../customers/service.js';
 import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
@@ -72,6 +73,12 @@ async function loadJob(req) {
   return job;
 }
 
+/** A promised date can't be in the past; on an edit, a date already set may stay as it is. */
+function checkDue(data, errors, job = null) {
+  if (!data?.due_on || data.due_on >= localDay() || data.due_on === job?.due_on) return errors;
+  return { ...errors, due_on: 'Promise a date from today on' };
+}
+
 async function renderForm(req, res, { status = 200, job = null, values, rows = [], errors = {} }) {
   const customer = values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
   const supervisors = await jobs.supervisorOptions(job?.site_id ?? req.site.id);
@@ -83,7 +90,7 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
   if (job?.job_type_id && !jobTypes.some((t) => t.value === job.job_type_id)) jobTypes.push({ value: job.job_type_id, label: job.job_type_name });
   res.status(status).render('jobs/views/form', {
     title: job ? `Edit ${job.number}` : 'New job',
-    job, values, errors, supervisors, jobTypes,
+    job, values, errors, supervisors, jobTypes, today: localDay(),
     // No app user can supervise here yet: admins get a link to add one.
     supervisorHelp: noSupervisors ? { site: job?.site_name ?? req.site.name, canAdd: req.user.can('users.manage') } : null,
     rows: rows.length ? rows : [blankRow()],
@@ -129,7 +136,7 @@ router.post('/jobs', manage, async (req, res) => {
   const values = { ...blank(), ...req.body };
   const { data, errors } = check(jobSchema, req.body);
   const { rows, lines, error } = readLines(req.body);
-  const all = { ...errors, ...(error ? { lines: error } : {}) };
+  const all = { ...checkDue(data, errors), ...(error ? { lines: error } : {}) };
   if (Object.keys(all).length) return renderForm(req, res, { status: 422, values, rows, errors: all });
   try {
     const { id, number: jobNumber } = await jobs.createJob({ ...data, lines }, req);
@@ -162,6 +169,7 @@ router.get('/jobs/:id', view, async (req, res) => {
     money: req.user.can('invoices.manage') ? await moneyForJob(job.id) : null,
     paymentMethods: PAYMENT_METHODS,
     qcChecks: await qcForJob(job.id), qcStatuses: QC_STATUSES,
+    signoffs: await signoffsForJob(job.id), signoffOutcomes: SIGNOFF_OUTCOMES,
     canInspect: req.user.can('qc.manage'),
   });
 });
@@ -182,7 +190,7 @@ router.post('/jobs/:id', manage, async (req, res) => {
   const values = { ...blank(), ...body };
   const { data, errors } = check(jobSchema, body);
   const { rows, lines, error } = fixed ? { rows: [], lines: [], error: null } : readLines(body);
-  const all = { ...errors, ...(error ? { lines: error } : {}) };
+  const all = { ...checkDue(data, errors, job), ...(error ? { lines: error } : {}) };
   if (Object.keys(all).length) return renderForm(req, res, { status: 422, job, values, rows, errors: all });
   try {
     await jobs.updateJob(job.id, { ...data, lines }, req);

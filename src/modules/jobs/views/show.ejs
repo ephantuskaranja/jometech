@@ -44,7 +44,11 @@
           <% job.steps.forEach((s) => { const isCurrent = current?.id === s.id; %>
             <li class="list-group-item is-<%= isCurrent ? 'current' : s.status %>">
               <i class="bi bi-<%= isCurrent ? 'arrow-right-circle-fill' : { done: 'check-circle-fill', skipped: 'dash-circle', pending: 'circle' }[s.status] %>" aria-hidden="true"></i>
-              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %>
+              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (s.is_signoff) { %> <i class="bi bi-pen text-body-tertiary" title="Ticked off by the customer’s sign-off"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %>
+                <% if (s.rework_signoff_id && s.status === 'pending') { %>
+                  <span class="d-block small mt-1"><span class="badge text-bg-danger">Rework</span> customer’s concerns</span>
+                  <ul class="jt-rework-list small mb-0"><li><% if (s.rework_signer_name) { %><span class="text-body-secondary"><%= s.rework_signer_name %>:</span> <% } %><%= s.rework_concerns %></li></ul>
+                <% } %>
                 <% if (s.rework) { %>
                   <span class="d-block small mt-1"><span class="badge text-bg-danger">Rework</span> from <a href="/qc/<%= s.rework_qc_id %>"><%= s.rework_qc_number %></a></span>
                   <ul class="jt-rework-list small mb-0">
@@ -60,10 +64,21 @@
       </section>
     <% } %>
 
-    <% if (qcChecks.length) { %>
+    <% if (qcChecks.length || signoffs.length) { %>
       <section class="card">
-        <div class="card-header"><h2 class="h6 mb-0">Quality checks</h2></div>
+        <div class="card-header"><h2 class="h6 mb-0">Quality checks<%= signoffs.length ? ' and sign-off' : '' %></h2></div>
         <ul class="list-group list-group-flush">
+          <% signoffs.forEach((so) => { const o = signoffOutcomes[so.outcome]; %>
+            <li class="list-group-item d-flex flex-wrap gap-2 align-items-center">
+              <span class="me-2"><i class="bi bi-pen"></i> Customer</span>
+              <%- include('partials/pill', { text: o.label, tone: o.tone }) %>
+              <span class="small text-body-secondary me-auto">
+                <% if (so.outcome === 'not_signed') { %><%= so.reason %><% } else { %><%= so.signer_name %><%= so.signer_role === 'driver' ? ' (driver)' : '' %><% if (so.outcome === 'concerns') { %>: <%= so.concerns %><% } %><% } %>
+              </span>
+              <% if (so.signature_path) { %><a href="/signoffs/<%= so.id %>/signature.png" target="_blank" rel="noopener"><img class="jt-signoff-sig" src="/signoffs/<%= so.id %>/signature.png" alt="Signature of <%= so.signer_name %>" height="32"></a><% } %>
+              <span class="small text-body-tertiary"><%= [so.recorded_by_name, fmt.dateTime(so.created_at)].filter(Boolean).join(', ') %></span>
+            </li>
+          <% }) %>
           <% qcChecks.forEach((q) => { %>
             <li class="list-group-item d-flex flex-wrap gap-2 align-items-center">
               <a class="font-monospace me-2" href="/qc/<%= q.id %>"><%= q.number %></a>
@@ -182,6 +197,17 @@
                   </form>
                 <% } %>
               </div>
+            </div>
+          <% } else if (current?.is_signoff) { %>
+            <%# The customer's sign-off step: ticked off only by a sign-off (or no one there to sign). %>
+            <div class="d-grid gap-2" x-show="!step">
+              <a class="btn btn-primary btn-lg w-100" href="/jobs/<%= job.id %>/signoff"><i class="bi bi-pen"></i>Customer sign-off</a>
+              <% if (job.stepsFinished) { %>
+                <form method="post" action="/jobs/<%= job.id %>/steps/undo" class="small">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-link btn-sm p-0 text-body-secondary" type="submit">Undo the last step</button>
+                </form>
+              <% } %>
             </div>
           <% } else if (current) { %>
             <div class="d-grid gap-2" x-show="!step">

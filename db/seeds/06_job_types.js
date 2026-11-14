@@ -25,7 +25,8 @@ export async function seed(knex) {
   const [{ n }] = await knex('job_types').count({ n: '*' });
   if (Number(n) > 0) return;
   for (const { steps, ...type } of TYPES) {
-    const [id] = await knex('job_types').insert(type);
+    // Every starting type has its quality check at Quality Inspection and the customer's sign-off at Customer Inspection.
+    const [id] = await knex('job_types').insert({ ...type, qc_step: QC, signoff_step: CUSTOMER });
     await knex('job_type_steps').insert(steps.map((name, i) => ({ job_type_id: id, sort_order: i + 1, name })));
   }
 }

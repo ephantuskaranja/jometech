@@ -429,12 +429,13 @@ document.addEventListener('alpine:init', () => {
   });
 
   // Job type form (job-types/views/form.ejs): a list of steps to add to, remove from and reorder.
-  Alpine.data('jobTypeForm', ({ rows = [], qcStep = '' } = {}) => {
+  Alpine.data('jobTypeForm', ({ rows = [], qcStep = '', signoffStep = '' } = {}) => {
     let next = 0;
     const row = (name = '') => ({ key: next++, name });
     return {
       rows: rows.map(row),
       qcStep, // the step a passed quality check ticks off (a step name, or '' for none)
+      signoffStep, // the step the customer's sign-off ticks off
       get stepNames() { return this.rows.map((r) => r.name.replace(/\s+/g, ' ').trim()).filter(Boolean); },
       addRow(after) {
         this.rows.splice(after + 1, 0, row());

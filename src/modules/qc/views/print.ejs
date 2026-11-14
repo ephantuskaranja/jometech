@@ -104,8 +104,17 @@
       </div>
       <div>
         <div class="label">Customer</div>
-        <div class="jc-sign-line"></div>
-        <div class="muted small">Name, signature and date, at customer inspection</div>
+        <% const so = locals.signoff; %>
+        <% if (so?.outcome === 'accepted') { %>
+          <div class="jc-sign-line qc-signed"><img src="/signoffs/<%= so.id %>/signature.png" alt="Signature"><span><%= so.signer_name %><%= so.signer_role === 'driver' ? ' (driver, for the customer)' : '' %></span></div>
+          <div class="muted small">Signed <%= fmt.dateTime(so.created_at) %>, at customer inspection</div>
+        <% } else if (so?.outcome === 'not_signed') { %>
+          <div class="jc-sign-line qc-signed"><span>Not signed: <%= so.reason %></span></div>
+          <div class="muted small">Recorded <%= fmt.dateTime(so.created_at) %><%= so.recorded_by_name ? ` by ${so.recorded_by_name}` : '' %></div>
+        <% } else { %>
+          <div class="jc-sign-line"></div>
+          <div class="muted small">Name, signature and date, at customer inspection</div>
+        <% } %>
       </div>
     </div>
 

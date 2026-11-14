@@ -58,6 +58,11 @@ test('a job can start with no proforma and no vehicle; it needs a customer and t
   assert.match(res.text, /Choose the customer/);
   assert.match(res.text, /Say what work is to be done/);
 
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, due_on: '2020-01-01', ...work });
+  assert.equal(res.status, 422, 'a promise can’t be in the past');
+  assert.match(res.text, /Promise a date from today on/);
+  assert.match((await supervisor.get('/jobs/new')).text, new RegExp(`name="due_on"[^>]*min="${localDay()}"`));
+
   res = await post(supervisor, '/jobs', { customer_id: customer.id, due_on: localDay(), ...work });
   assert.equal(res.status, 302, res.text);
   const job = await db('jobs').where({ id: idOf(res.headers.location) }).first();
@@ -215,6 +220,12 @@ test('start, complete, reopen and cancel, in the right order', async () => {
 
   assert.equal((await post(supervisor, `/jobs/${id}/complete`)).status, 409, 'its steps aren’t finished');
   for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) {
+    if (step.is_signoff) {
+      // So is the customer's sign-off step: here, no one was there to sign.
+      assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);
+      await post(supervisor, `/jobs/${id}/signoff/not-signed`, { reason: 'other', other_reason: 'Owner approved by phone' });
+      continue;
+    }
     if (!step.is_qc) { await post(supervisor, `/jobs/${id}/steps/${step.id}/done`); continue; }
     // The quality check step is ticked off by a passed check, not by hand.
     assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);

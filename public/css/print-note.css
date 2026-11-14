@@ -160,3 +160,5 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .qc-remarks { margin-top: 6px; min-height: 12mm; padding: 4px 6px; border: 1px solid #111827; white-space: pre-line; }
 .qc-signoff { margin-top: 8px; }
 .qc-signoff .jc-sign-line { display: flex; align-items: flex-end; padding-bottom: 2px; }
+.qc-signed { gap: 3mm; font-size: 8.5pt; }
+.qc-signed img { height: 10mm; width: auto; max-width: 35mm; object-fit: contain; }

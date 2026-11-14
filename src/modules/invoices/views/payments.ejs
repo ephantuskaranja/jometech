@@ -6,8 +6,19 @@
 <section class="card" x-data="{ adding: false, voiding: null }">
   <div class="card-header d-flex align-items-center gap-3">
     <h2 class="h6 mb-0 me-auto">Payments</h2>
-    <% if (payments.total > 0) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(payments.total) %></span><% } %>
+    <% if (payments.total > 0) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(payments.total) %> received</span><% } %>
   </div>
+  <%# What is left to pay, where nobody can miss it. %>
+  <% if (locals.due) { const owing = due.owed > 0; %>
+    <div class="jt-owed<%= owing ? '' : ' is-paid' %>">
+      <i class="bi <%= owing ? 'bi-hourglass-split' : 'bi-check-circle-fill' %>" aria-hidden="true"></i>
+      <div class="me-auto">
+        <div class="jt-owed-label"><%= owing ? 'Still owed' : 'Paid in full' %></div>
+        <div class="jt-owed-against">on <%= due.against %></div>
+      </div>
+      <% if (owing) { %><div class="jt-owed-amount jt-num">KES <%= fmt.money(due.owed) %></div><% } %>
+    </div>
+  <% } %>
   <% if (!payments.list.length) { %>
     <div class="card-body small text-body-secondary">Nothing received yet. Record deposits here as they come in.</div>
   <% } else { %>
@@ -49,7 +60,9 @@
         <div class="jt-field">
           <label class="form-label" for="pay-amount">Amount (KES)<span class="jt-req" aria-hidden="true">*</span></label>
           <input class="form-control jt-num" id="pay-amount" name="amount" type="text" inputmode="decimal" data-number="decimal" x-ref="amount" autocomplete="off" required @input="confirming = false">
-          <% if (locals.due) { %><div class="form-text">Still owed on <%= due.against %>: KES <%= fmt.money(due.owed) %></div><% } %>
+          <% if (locals.due?.owed > 0) { %>
+            <button type="button" class="btn btn-link btn-sm p-0 mt-1" @click="$refs.amount.value = money(due.owed); confirming = false">Fill in the full KES <%= fmt.money(due.owed) %></button>
+          <% } %>
         </div>
         <div class="jt-warn-box" x-show="confirming" x-cloak role="alert">
           <i class="bi bi-exclamation-triangle"></i>

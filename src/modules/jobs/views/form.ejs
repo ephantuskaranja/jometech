@@ -96,7 +96,8 @@
         </div>
         <%- include('partials/field', { name: 'responsible_name', label: 'Responsible employee', value: values.responsible_name, error: errors.responsible_name,
               placeholder: 'e.g. Otieno (welding foreman)', hint: 'Optional. Someone who doesn’t use the app, e.g. the foreman doing the work.' }) %>
-        <%- include('partials/field', { name: 'due_on', label: 'Promised by', type: 'date', value: values.due_on, error: errors.due_on, hint: 'Optional. The date the customer expects it.' }) %>
+        <%- include('partials/field', { name: 'due_on', label: 'Promised by', type: 'date', value: values.due_on, error: errors.due_on, hint: 'Optional. The date the customer expects it.',
+          attrs: `min="${job?.due_on && job.due_on < today ? job.due_on : today}"` }) %>
       </div>
       <%- include('partials/field', { name: 'instructions', label: 'Instructions', type: 'textarea', rows: 3, value: values.instructions, error: errors.instructions,
             hint: 'Optional. Printed on the job card.', placeholder: 'e.g. Customer supplies the paint. Call before fitting the toolbox.' }) %>

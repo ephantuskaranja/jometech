@@ -3,10 +3,12 @@ import multer from 'multer';
 import { can, canAny } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { config } from '../../config.js';
+import { db } from '../../core/db.js';
 import { storagePath } from '../../core/storage.js';
 import { httpError } from '../../core/validate.js';
 import * as qc from './service.js';
 import { getJob } from '../jobs/service.js';
+import { forCheck as signoffForCheck } from './signoff.js';
 
 // Quality checks: the list (Workshop → Quality checks), an inspection on a job,
 // printed reports (filled in, or blank for paper), and System → Quality checklist.
@@ -48,8 +50,11 @@ function readAnswers(body, items) {
   return Object.fromEntries(items.map((i) => [i.id, { result: body[`result_${i.id}`] ?? '', note: body[`note_${i.id}`] ?? '', redo: body[`redo_${i.id}`] }]));
 }
 
-function renderInspection(req, res, insp, { status = 200, problems = null } = {}) {
+async function renderInspection(req, res, insp, { status = 200, problems = null } = {}) {
+  // A passed check whose job now waits for the customer: offer the sign-off from here too.
+  const current = insp.status === 'passed' ? await db('job_steps').where({ job_id: insp.job_id, status: 'pending' }).orderBy('sort_order').first('is_signoff') : null;
   return res.status(status).render('qc/views/show', {
+    signoffNext: Boolean(current?.is_signoff) && req.user.can('jobs.manage'),
     title: `${insp.number} · ${insp.job_number}`,
     insp, problems, statuses: qc.STATUSES, results: qc.RESULTS, vehicle: vehicleOf(insp), maxPhotos: qc.MAX_ITEM_PHOTOS,
     canInspect: req.user.can('qc.manage') && insp.status === 'in_progress',
@@ -59,7 +64,7 @@ function renderInspection(req, res, insp, { status = 200, problems = null } = {}
 router.get('/qc/:id', view, async (req, res) => {
   const insp = await loadInspection(req);
   insp.entries = await history('qc', insp.id);
-  renderInspection(req, res, insp);
+  await renderInspection(req, res, insp);
 });
 
 router.post('/qc/:id', inspect, async (req, res) => {
@@ -75,6 +80,7 @@ router.post('/qc/:id', inspect, async (req, res) => {
   if (!finish) req.session.flash = { type: 'success', text: `${insp.number} saved. Carry on when you’re ready.` };
   else if (result.status === 'passed') {
     req.session.flash = { type: 'success', text: `${insp.number} passed. ${result.step.name} ticked off${result.step.next ? `; next: ${result.step.next}` : `; ${insp.job_number} is completed`}.` };
+    return res.redirect(`/jobs/${insp.job_id}`); // the next step (usually the customer's sign-off) is there
   } else {
     const back = result.reworked.length
       ? `${insp.job_number} goes back to ${result.reworked.join(', ')}; when that is done it comes back for its next quality check.`
@@ -145,7 +151,8 @@ router.get('/qc/:id/photos/:photoId/thumb.webp', view, (req, res) => sendPhoto(r
 
 router.get('/qc/:id/print', view, async (req, res) => {
   const insp = await loadInspection(req);
-  res.render('qc/views/print', { layout: false, title: `${insp.number} quality inspection`, insp, sections: insp.sections, company: config.company, printedAt: new Date(), vehicle: vehicleOf(insp), results: qc.RESULTS });
+  res.render('qc/views/print', { layout: false, title: `${insp.number} quality inspection`, insp, sections: insp.sections, company: config.company, printedAt: new Date(), vehicle: vehicleOf(insp), results: qc.RESULTS,
+    signoff: await signoffForCheck(insp.id) });
 });
 
 // A blank form for paper, from today's checklist; ?job=ID fills in the job's details.

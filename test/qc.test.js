@@ -8,7 +8,7 @@ import { seed } from '../db/seeds/08_qc_checklist.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
-let admin, supervisor, technician, sales, customer, maintenance, repair, savedChecklist, savedQcStep;
+let admin, supervisor, technician, sales, customer, maintenance, repair, savedChecklist, savedQcStep, savedSignoffStep;
 
 before(async () => {
   admin = await loginAs(app, await makeUser(61, ['admin']));
@@ -20,6 +20,7 @@ before(async () => {
   maintenance = await db('job_types').where({ name: 'Maintenance / other', is_active: true }).first();
   repair = await db('job_types').where({ name: 'Repair', is_active: true }).first();
   savedQcStep = maintenance.qc_step;
+  savedSignoffStep = maintenance.signoff_step;
   savedChecklist = await checklist();
 });
 
@@ -31,7 +32,7 @@ after(async () => {
     await db('qc_checklist_items').insert(s.items.map((text, j) => ({ section_id: id, sort_order: j + 1, text })));
   }
   await db('audit_log').where({ entity: 'qc_checklist' }).where('created_at', '>=', db.raw('NOW() - INTERVAL 1 HOUR')).whereIn('user_id', db('users').where('phone', 'like', '+25470000%').select('id')).delete();
-  await db('job_types').where({ id: maintenance.id }).update({ qc_step: savedQcStep });
+  await db('job_types').where({ id: maintenance.id }).update({ qc_step: savedQcStep, signoff_step: savedSignoffStep });
   await db('audit_log').where({ entity: 'job_type', entity_id: maintenance.id }).whereIn('user_id', db('users').where('phone', 'like', '+25470000%').select('id')).delete();
   await cleanup();
 });
@@ -134,11 +135,13 @@ test('a check saves as you go, needs every item answered and every failure expla
   const repeat = (await supervisor.get(`/qc/${second}`)).text;
   assert.match(repeat, /Failed last time<\/span> <span class="text-body-secondary">Bare patch under the floor/);
   assert.match(repeat, /the 1 item that failed/);
-  await post(supervisor, `/qc/${second}`, { finish: '1', ...answers(await itemsOf(second), 'na', { [`result_${(await itemsOf(second))[0].id}`]: 'pass' }) });
+  res = await post(supervisor, `/qc/${second}`, { finish: '1', ...answers(await itemsOf(second), 'na', { [`result_${(await itemsOf(second))[0].id}`]: 'pass' }) });
+  assert.equal(res.headers.location, `/jobs/${id}`, 'a pass goes to the job, where the next step is');
+  assert.match((await supervisor.get(`/qc/${second}`)).text, new RegExp(`href="/jobs/${id}/signoff"`), 'the customer’s sign-off is offered from the check too');
   assert.equal((await db('qc_inspections').where({ id: second }).first()).status, 'passed');
   assert.equal((await db('job_steps').where({ id: qcStep.id }).first()).status, 'done', 'a passed check ticks the step off');
   const job = (await supervisor.get(`/jobs/${id}`)).text;
-  assert.match(job, /Customer Inspection done/, 'the job moved on to the next step');
+  assert.match(job, /Customer sign-off<\/a>/, 'the job moved on to the customer’s sign-off');
   assert.match(job, /Quality checks[\s\S]*Passed[\s\S]*Failed/);
 });
 

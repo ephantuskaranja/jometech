@@ -7,7 +7,7 @@ import { vehicleLabel } from '../../core/vehicle-format.js';
 
 // Vehicle release: the end of a check-in.
 //
-//   checklist (jobs on this visit completed, invoiced, paid) ──all green──▶ the collector signs ──▶ released (RN-2026-0001)
+//   checklist (jobs on this visit completed, quality checked, invoiced, paid) ──all green──▶ the collector signs ──▶ released (RN-2026-0001)
 //                                                            └─red──▶ a manager allows it, with a reason ──┘
 //
 // Jobs count when they are linked to this check-in and not cancelled. A visit with no jobs has nothing to check.
@@ -25,15 +25,22 @@ export async function checklist(checkinId, trx = db) {
     const inv = await trx('invoices').where({ job_id: job.id, status: 'issued' }).first('id', 'number', 'total');
     const [{ paid }] = await trx('payments').where({ job_id: job.id }).whereNull('voided_at').select(trx.raw('COALESCE(SUM(amount), 0) as paid'));
     job.invoice = inv ? { ...inv, paid: Number(paid), balance: round(Number(inv.total) - Number(paid)) } : null;
+    // Jobs with a quality check step: the latest passed check (finishing the work needs one; shown here for the record).
+    const hasQc = await trx('job_steps').where({ job_id: job.id, is_qc: true }).first('id');
+    job.qc = hasQc ? (await trx('qc_inspections').where({ job_id: job.id, status: 'passed' }).orderBy('id', 'desc').first('id', 'number')) ?? false : null;
   }
   if (!jobs.length) return { jobs, items: [], ok: true };
 
   const numbers = (list) => list.map((j) => j.number).join(', ');
   const unfinished = jobs.filter((j) => j.status !== 'completed');
   const uninvoiced = jobs.filter((j) => !j.invoice);
+  const checked = jobs.filter((j) => j.qc !== null);
+  const unchecked = checked.filter((j) => !j.qc);
   const unpaid = jobs.filter((j) => j.invoice && j.invoice.balance > 0);
   const items = [
     { key: 'work', ok: !unfinished.length, label: 'Work finished', detail: unfinished.length ? `Not finished: ${numbers(unfinished)}` : `${numbers(jobs)} completed` },
+    ...(checked.length ? [{ key: 'qc', ok: !unchecked.length, label: 'Quality check passed',
+      detail: unchecked.length ? `No passed quality check: ${numbers(unchecked)}` : checked.map((j) => `${j.qc.number} passed`).join(', ') }] : []),
     { key: 'invoiced', ok: !uninvoiced.length, label: 'Invoiced', detail: uninvoiced.length ? `No issued invoice: ${numbers(uninvoiced)}` : jobs.map((j) => `Invoice ${j.invoice.number}`).join(', ') },
     { key: 'paid', ok: !uninvoiced.length && !unpaid.length, label: 'Paid in full',
       detail: unpaid.length ? `Balance owing: ${unpaid.map((j) => `invoice ${j.invoice.number}`).join(', ')}` : uninvoiced.length ? 'Can’t be paid before it is invoiced' : 'Nothing owing' },

@@ -109,11 +109,13 @@ test('payments: deposit from the client, the rest from the bank; a mistake is vo
   let page = (await manager.get(`/invoices/${inv.id}`)).text;
   assert.match(page, /Part paid/);
   assert.match(page, /400,000\.00/, 'balance after the deposit');
+  assert.match(page, /jt-owed-label">Still owed<\/div>\s*<div class="jt-owed-against">on invoice [^<]+<\/div>\s*<\/div>\s*<div class="jt-owed-amount jt-num">KES 400,000\.00/, 'shown plainly at the top of Payments');
   assert.match(page, /Voided: Entered twice/);
 
   await post(`/jobs/${job}/payments`, { amount: '400,000', method: 'bank', reference: 'COOP-831', payer: 'financier', paid_on: localDay() });
   page = (await manager.get(`/invoices/${inv.id}`)).text;
   assert.match(page, />Paid</);
+  assert.match(page, /jt-owed-label">Paid in full/);
   const list = (await manager.get('/invoices?show=paid')).text;
   assert.match(list, new RegExp(`>${inv.number}<`));
   assert.doesNotMatch((await manager.get('/invoices?show=unpaid')).text, new RegExp(`>${inv.number}<`));

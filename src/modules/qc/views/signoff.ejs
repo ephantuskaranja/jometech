@@ -1,0 +1,163 @@
+<%#
+  Customer sign-off at the job's Customer Inspection step. Staff hand the phone or tablet to the
+  customer (or the driver collecting for them), who checks the work and signs. Or: they have concerns
+  (the job goes back for rework and a new quality check), or no one is there to sign.
+%>
+<%
+  const vehicle = job.reg_no ?? job.temp_tag ?? job.vehicle_description;
+  const roleField = (prefix) => Object.entries(roles).map(([value, label]) => ({ value, label, id: `${prefix}-role-${value}` }));
+  const chosenRedo = new Set([].concat(values.redo ?? []).map(Number));
+  const earlier = previous.filter((p) => p.outcome === 'concerns');
+%>
+<div class="jt-sign">
+  <div class="jt-sign-head">
+    <div class="jt-crumb">Workshop <i class="bi bi-chevron-right"></i><a href="/jobs">Jobs</a><i class="bi bi-chevron-right"></i><a href="/jobs/<%= job.id %>"><%= job.number %></a><i class="bi bi-chevron-right"></i><span>Customer sign-off</span></div>
+    <h1>Customer sign-off</h1>
+    <p class="jt-page-sub">Please look over the work. If you are happy with it, type your name and sign in the box.</p>
+  </div>
+
+  <section class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+        <% if (job.reg_no) { %><%- include('partials/plate', { reg: job.reg_no, size: 'lg' }) %><% } else if (vehicle) { %><strong class="font-monospace fs-5"><%= vehicle %></strong><% } %>
+        <span class="fs-5"><%= [job.make, job.model].filter(Boolean).join(' ') %></span>
+        <span class="ms-auto font-monospace text-body-secondary"><%= job.number %></span>
+      </div>
+      <dl class="jt-kv mb-0">
+        <div><dt>Customer</dt><dd><%= job.customer_name %></dd></div>
+        <div><dt>Job type</dt><dd><%= job.job_type_name ?? '—' %></dd></div>
+        <div><dt>Quality check</dt><dd>
+          <% if (qc) { %>
+            <%- include('partials/pill', { text: 'Passed', tone: 'ok' }) %> <a class="font-monospace" href="/qc/<%= qc.id %>"><%= qc.number %></a>
+            <span class="d-block small text-body-secondary"><%= fmt.dateTime(qc.finished_at) %> · <%= qc.counts.pass %> checks passed<%= qc.attempt > 1 ? ` · attempt ${qc.attempt}` : '' %></span>
+          <% } else { %><span class="text-body-secondary">None on record</span><% } %>
+        </dd></div>
+      </dl>
+    </div>
+    <div class="border-top">
+      <table class="table jt-table mb-0">
+        <thead><tr><th style="width: 3rem">#</th><th>Work done</th><th class="text-end">Qty</th></tr></thead>
+        <tbody>
+          <% job.lines.forEach((line, i) => { %>
+            <tr><td class="text-body-tertiary"><%= i + 1 %></td><td><%= line.description %></td><td class="text-end jt-num"><%= fmt.qty(line.quantity) %> <%= line.unit ?? '' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% if (earlier.length) { %>
+      <div class="card-body border-top small">
+        <div class="fw-semibold mb-1">Put right since the last look</div>
+        <% earlier.forEach((p) => { %><div class="mb-1"><span class="text-body-secondary"><%= fmt.date(p.created_at) %>, <%= p.signer_name %>:</span> <%= p.concerns %></div><% }) %>
+      </div>
+    <% } %>
+  </section>
+
+  <form method="post" action="/jobs/<%= job.id %>/signoff" novalidate class="card mb-4" x-data="signaturePad" @submit="submit($event)">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="signature" x-ref="output">
+    <div class="card-body d-grid gap-3">
+      <p class="jt-sign-statement mb-0">I have inspected the work listed above and I am satisfied with it.</p>
+      <fieldset class="jt-field">
+        <legend class="form-label">Who is signing?<span class="jt-req" aria-hidden="true">*</span></legend>
+        <div class="jt-choices" style="--jt-cols: 2">
+          <% roleField('a').forEach((r) => { %>
+            <label class="jt-choice" for="<%= r.id %>">
+              <input class="form-check-input" type="radio" id="<%= r.id %>" name="signer_role" value="<%= r.value %>"<%= (form !== 'concerns' ? values.signer_role : 'customer') === r.value ? ' checked' : '' %>>
+              <span class="jt-choice-label"><%= r.label %></span>
+            </label>
+          <% }) %>
+        </div>
+        <% if (form === 'accept' && errors.signer_role) { %><div class="jt-error-text"><%= errors.signer_role %></div><% } %>
+      </fieldset>
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'signer_name', label: 'Full name', value: form === 'accept' ? values.signer_name : '', error: form === 'accept' ? errors.signer_name : null, required: true, autocomplete: 'off', class: 'jt-full' }) %>
+        <%- include('partials/field', { name: 'signer_phone', label: 'Phone number', type: 'tel', value: form === 'accept' ? values.signer_phone : '', error: form === 'accept' ? errors.signer_phone : null, placeholder: '0712 345 678', hint: 'Optional' }) %>
+      </div>
+      <div class="jt-field">
+        <div class="d-flex align-items-end">
+          <span class="form-label mb-2" id="sign-label">Sign here<span class="jt-req" aria-hidden="true">*</span></span>
+          <button type="button" class="btn btn-link btn-sm ms-auto mb-1" @click="clear()" :disabled="empty"><i class="bi bi-eraser"></i>Clear</button>
+        </div>
+        <div class="jt-sign-pad<%= form === 'accept' && errors.signature ? ' is-invalid' : '' %>" :class="{ 'is-invalid': missing }">
+          <canvas x-ref="canvas" role="img" aria-labelledby="sign-label"
+                  @pointerdown="start($event)" @pointermove="move($event)" @pointerup="end()" @pointercancel="end()" @pointerleave="end()"></canvas>
+          <span class="jt-sign-hint" x-show="empty" aria-hidden="true"><i class="bi bi-pen"></i>Sign with your finger</span>
+          <span class="jt-sign-line" aria-hidden="true"></span>
+        </div>
+        <div class="jt-error-text" x-show="missing" x-cloak>Sign in the box above</div>
+        <% if (form === 'accept' && errors.signature) { %><div class="jt-error-text" x-show="!missing"><%= errors.signature %></div><% } %>
+      </div>
+      <button class="btn btn-primary btn-lg w-100" type="submit" :disabled="busy"><i class="bi bi-check2-circle"></i>Accept the work and sign</button>
+    </div>
+  </form>
+
+  <%# For staff: the customer isn't happy. %>
+  <section class="card mb-4" x-data="{ open: <%= form === 'concerns' %> }">
+    <div class="card-body">
+      <button class="btn btn-link p-0 text-danger" type="button" @click="open = !open" :aria-expanded="open">
+        <i class="bi bi-exclamation-octagon"></i>The customer isn’t happy with the work <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      </button>
+      <div x-show="open" x-cloak>
+        <form method="post" action="/jobs/<%= job.id %>/signoff/concerns" novalidate class="d-grid gap-3 mt-3">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <fieldset class="jt-field">
+            <legend class="form-label">Who raised it?<span class="jt-req" aria-hidden="true">*</span></legend>
+            <div class="jt-choices" style="--jt-cols: 2">
+              <% roleField('c').forEach((r) => { %>
+                <label class="jt-choice" for="<%= r.id %>">
+                  <input class="form-check-input" type="radio" id="<%= r.id %>" name="signer_role" value="<%= r.value %>"<%= (form === 'concerns' ? values.signer_role : 'customer') === r.value ? ' checked' : '' %>>
+                  <span class="jt-choice-label"><%= r.label %></span>
+                </label>
+              <% }) %>
+            </div>
+          </fieldset>
+          <%- include('partials/field', { name: 'signer_name', id: 'c-signer_name', label: 'Their name', value: form === 'concerns' ? values.signer_name : '', error: form === 'concerns' ? errors.signer_name : null, required: true, autocomplete: 'off' }) %>
+          <%- include('partials/field', { name: 'concerns', label: 'What isn’t right?', type: 'textarea', rows: 3, value: form === 'concerns' ? values.concerns : '', error: form === 'concerns' ? errors.concerns : null, required: true, placeholder: 'e.g. Tailgate catches on the left side; paint scratched near the rear light' }) %>
+          <fieldset class="jt-field">
+            <legend class="form-label">Steps to do again</legend>
+            <div class="jt-choices" style="--jt-cols: 2">
+              <% redoSteps.forEach((st) => { %>
+                <label class="jt-choice" for="redo-<%= st.id %>">
+                  <input class="form-check-input" type="checkbox" id="redo-<%= st.id %>" name="redo" value="<%= st.id %>"<%= chosenRedo.has(st.id) ? ' checked' : '' %>>
+                  <span class="jt-choice-label"><%= st.name %></span>
+                </label>
+              <% }) %>
+            </div>
+            <div class="form-text">The quality check is done again after these steps, before the customer looks again. Choose none if it only needs checking and putting right at the quality check.</div>
+          </fieldset>
+          <div><button class="btn btn-danger" type="submit"><i class="bi bi-arrow-counterclockwise"></i>Record the concerns and send the job back</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <%# For staff: no one there to sign. %>
+  <section class="card" x-data="{ open: <%= form === 'not_signed' %>, reason: <%= JSON.stringify(form === 'not_signed' ? values.reason ?? '' : '') %> }">
+    <div class="card-body">
+      <button class="btn btn-link p-0 text-body-secondary" type="button" @click="open = !open" :aria-expanded="open">
+        <i class="bi bi-person-x"></i>No one is here to sign <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      </button>
+      <div x-show="open" x-cloak>
+        <form method="post" action="/jobs/<%= job.id %>/signoff/not-signed" novalidate class="d-grid gap-3 mt-3">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <fieldset class="jt-field">
+            <legend class="form-label">Why not?</legend>
+            <div class="jt-choices" style="--jt-cols: 1">
+              <% [...reasons, 'other'].forEach((r, i) => { %>
+                <label class="jt-choice" for="reason-<%= i %>">
+                  <input class="form-check-input" type="radio" id="reason-<%= i %>" name="reason" value="<%= r %>" x-model="reason">
+                  <span class="jt-choice-label"><%= r === 'other' ? 'Something else' : r %></span>
+                </label>
+              <% }) %>
+            </div>
+          </fieldset>
+          <div x-show="reason === 'other'">
+            <%- include('partials/field', { name: 'other_reason', label: 'Reason', value: form === 'not_signed' ? values.other_reason : '', placeholder: 'e.g. Owner approved the work by phone' }) %>
+          </div>
+          <% if (form === 'not_signed' && errors.reason) { %><div class="jt-error-text"><%= errors.reason %></div><% } %>
+          <div><button class="btn btn-outline-secondary" type="submit" :disabled="!reason">Save without a signature</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>

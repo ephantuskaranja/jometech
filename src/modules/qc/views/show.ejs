@@ -17,6 +17,7 @@
   heading: `Quality check ${insp.number}`,
   sub: `${insp.job_number} · ${insp.customer_name}${vehicle ? ` · ${vehicle}` : ''} · attempt ${insp.attempt}`,
   actions: [
+    ...(signoffNext ? [{ label: 'Customer sign-off', href: `/jobs/${insp.job_id}/signoff`, icon: 'pen', primary: true }] : []),
     { label: insp.status === 'in_progress' ? 'Print form' : 'Print report', href: `/qc/${insp.id}/print`, icon: 'printer' },
     { label: `Back to ${insp.job_number}`, href: `/jobs/${insp.job_id}`, icon: 'wrench-adjustable' },
   ],
