@@ -1,0 +1,42 @@
+<%#
+  A small strip of photos on one line of a list (a failed quality check item). Uploads one photo at a
+  time, shrunk in the browser, with the same uploader as a check-in (checkinPhotos in public/js/app.js).
+  photos: { url, max, canEdit, photos: [{ id, full, thumb }] }
+%>
+<div class="jt-item-photos" x-data="checkinPhotos(<%= JSON.stringify({ ...photos, noun: 'An item' }) %>)">
+  <template x-for="p in photos" :key="p.id">
+    <div class="jt-photo">
+      <a :href="p.full" target="_blank" rel="noopener"><img :src="p.thumb" alt="Photo of the defect" width="320" height="320" loading="lazy"></a>
+      <% if (photos.canEdit) { %>
+        <button type="button" class="jt-photo-delete" @click="remove(p)" aria-label="Delete this photo"><i class="bi bi-trash3"></i></button>
+      <% } %>
+    </div>
+  </template>
+  <template x-for="u in queue" :key="u.key">
+    <div class="jt-photo is-busy" :class="{ 'is-failed': u.error }">
+      <img :src="u.preview" alt="" width="320" height="320">
+      <div class="jt-photo-status">
+        <span x-show="!u.error"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span></span>
+        <template x-if="u.error">
+          <span><span x-text="u.error"></span>
+            <span class="d-flex gap-1 justify-content-center mt-1">
+              <button type="button" class="btn btn-sm btn-light py-0" @click="retry(u)">Retry</button>
+              <button type="button" class="btn btn-sm btn-link text-white py-0" @click="drop(u)">Remove</button>
+            </span>
+          </span>
+        </template>
+      </div>
+    </div>
+  </template>
+  <% if (photos.canEdit) { %>
+    <label class="btn btn-sm btn-outline-secondary mb-0" x-show="room > 0" title="Take a photo of the defect">
+      <i class="bi bi-camera"></i>Photo
+      <input type="file" accept="image/*" capture="environment" class="visually-hidden" @change="add($event.target.files); $event.target.value = ''">
+    </label>
+    <label class="btn btn-sm btn-link text-body-secondary mb-0 px-1" x-show="room > 0" title="Choose photos already taken">
+      <i class="bi bi-images"></i><span class="visually-hidden">Choose photos</span>
+      <input type="file" accept="image/*" multiple class="visually-hidden" @change="add($event.target.files); $event.target.value = ''">
+    </label>
+  <% } %>
+  <div class="jt-error-text small w-100" x-show="message" x-cloak x-text="message"></div>
+</div>

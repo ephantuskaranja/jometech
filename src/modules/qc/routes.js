@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { can, canAny } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { config } from '../../config.js';
+import { storagePath } from '../../core/storage.js';
 import { httpError } from '../../core/validate.js';
 import * as qc from './service.js';
 import { getJob } from '../jobs/service.js';
@@ -41,15 +43,15 @@ router.post('/jobs/:id/qc', inspect, async (req, res) => {
   res.redirect(`/qc/${id}`);
 });
 
-/** The answers arrive as result_<itemId> and note_<itemId>. */
+/** The answers arrive as result_<itemId>, note_<itemId> and redo_<itemId> (a step id, or 'here'). */
 function readAnswers(body, items) {
-  return Object.fromEntries(items.map((i) => [i.id, { result: body[`result_${i.id}`] ?? '', note: body[`note_${i.id}`] ?? '' }]));
+  return Object.fromEntries(items.map((i) => [i.id, { result: body[`result_${i.id}`] ?? '', note: body[`note_${i.id}`] ?? '', redo: body[`redo_${i.id}`] }]));
 }
 
 function renderInspection(req, res, insp, { status = 200, problems = null } = {}) {
   return res.status(status).render('qc/views/show', {
     title: `${insp.number} · ${insp.job_number}`,
-    insp, problems, statuses: qc.STATUSES, results: qc.RESULTS, vehicle: vehicleOf(insp),
+    insp, problems, statuses: qc.STATUSES, results: qc.RESULTS, vehicle: vehicleOf(insp), maxPhotos: qc.MAX_ITEM_PHOTOS,
     canInspect: req.user.can('qc.manage') && insp.status === 'in_progress',
   });
 }
@@ -64,17 +66,20 @@ router.post('/qc/:id', inspect, async (req, res) => {
   const insp = await loadInspection(req);
   const finish = req.body.finish === '1';
   const result = await qc.saveInspection(insp.id, readAnswers(req.body, insp.items), req.body.remarks, req, { finish });
-  if (result.missing || result.unexplained) {
+  if (result.missing || result.unexplained || result.unrouted) {
     // Show the form again with the answers kept and the gaps marked.
     const fresh = await qc.getInspection(insp.id);
     fresh.entries = await history('qc', insp.id);
-    return renderInspection(req, res, fresh, { status: 422, problems: { missing: new Set(result.missing), unexplained: new Set(result.unexplained) } });
+    return renderInspection(req, res, fresh, { status: 422, problems: { missing: new Set(result.missing), unexplained: new Set(result.unexplained), unrouted: new Set(result.unrouted) } });
   }
   if (!finish) req.session.flash = { type: 'success', text: `${insp.number} saved. Carry on when you’re ready.` };
   else if (result.status === 'passed') {
     req.session.flash = { type: 'success', text: `${insp.number} passed. ${result.step.name} ticked off${result.step.next ? `; next: ${result.step.next}` : `; ${insp.job_number} is completed`}.` };
   } else {
-    req.session.flash = { type: 'warning', text: `${insp.number} failed on ${result.failed} item${result.failed === 1 ? '' : 's'}. Put the work right, then start a new quality check on ${insp.job_number}.` };
+    const back = result.reworked.length
+      ? `${insp.job_number} goes back to ${result.reworked.join(', ')}; when that is done it comes back for its next quality check.`
+      : `Put the work right, then start a new quality check on ${insp.job_number}.`;
+    req.session.flash = { type: 'warning', text: `${insp.number} failed on ${result.failed} item${result.failed === 1 ? '' : 's'}. ${back}` };
   }
   res.redirect(`/qc/${insp.id}`);
 });
@@ -85,6 +90,56 @@ router.post('/qc/:id/cancel', inspect, async (req, res) => {
   req.session.flash = { type: 'success', text: `${insp.number} cancelled. ${insp.job_number} is still waiting for its quality check.` };
   res.redirect(`/jobs/${insp.job_id}`);
 });
+
+// ---------- photos of an item ----------
+// One photo per request, already shrunk in the browser (as on a check-in). Answers are JSON.
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } }).single('photo');
+const receivePhoto = (req, res) => new Promise((resolve, reject) => upload(req, res, (err) => (err ? reject(err) : resolve(req.file))));
+
+function photoError(req, res, err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'That photo is too large (over 15 MB).' });
+  if (!err.expose) req.log.error(err);
+  res.status(err.status ?? 500).json({ error: err.expose ? err.message : 'The photo couldn’t be saved. Try again.' });
+}
+
+export const photoUrls = (inspectionId, photoId) => ({
+  id: photoId,
+  full: `/qc/${inspectionId}/photos/${photoId}.webp`,
+  thumb: `/qc/${inspectionId}/photos/${photoId}/thumb.webp`,
+});
+
+router.post('/qc/:id/items/:itemId/photos', inspect, async (req, res) => {
+  try {
+    const insp = await loadInspection(req);
+    const file = await receivePhoto(req, res);
+    if (!file) throw httpError(422, 'Choose a photo to add.');
+    const photoId = await qc.addItemPhoto(insp.id, Number(req.params.itemId), file.buffer, req);
+    res.status(201).json(photoUrls(insp.id, photoId));
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+router.post('/qc/:id/items/:itemId/photos/:photoId/delete', inspect, async (req, res) => {
+  try {
+    const insp = await loadInspection(req);
+    await qc.deleteItemPhoto(insp.id, Number(req.params.itemId), Number(req.params.photoId), req);
+    res.json({ ok: true });
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+async function sendPhoto(req, res, which) {
+  const insp = await loadInspection(req);
+  const photo = await qc.getItemPhoto(insp.id, Number(req.params.photoId));
+  if (!photo) throw httpError(404, 'That photo doesn’t exist.');
+  res.set('Cache-Control', 'private, max-age=604800, immutable'); // a photo never changes; a new one gets a new id
+  res.type('image/webp').sendFile(storagePath(photo[which]));
+}
+router.get('/qc/:id/photos/:photoId.webp', view, (req, res) => sendPhoto(req, res, 'path'));
+router.get('/qc/:id/photos/:photoId/thumb.webp', view, (req, res) => sendPhoto(req, res, 'thumb_path'));
 
 // ---------- printing ----------
 

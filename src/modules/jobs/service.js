@@ -221,7 +221,9 @@ export async function completeJob(id, actor) {
 }
 
 const pendingStep = (trx, jobId) => trx('job_steps').where({ job_id: jobId, status: 'pending' }).orderBy('sort_order').first();
-const lastFinishedStep = (trx, jobId) => trx('job_steps').where({ job_id: jobId }).whereNot({ status: 'pending' }).orderBy('sort_order', 'desc').first();
+// The step ticked off most recently (after a failed quality check reopens an earlier step, that need not be the furthest one).
+const lastFinishedStep = (trx, jobId) => trx('job_steps').where({ job_id: jobId }).whereNot({ status: 'pending' })
+  .orderBy('finished_at', 'desc').orderBy('sort_order', 'desc').first();
 
 async function markCompleted(trx, id, actor) {
   await trx('jobs').where({ id }).update({ status: 'completed', completed_at: trx.fn.now() });
@@ -247,7 +249,7 @@ export async function finishStep(jobId, stepId, status, actor) {
     const step = await pendingStep(trx, jobId);
     if (step?.id !== stepId) return null;
     if (step.is_qc) throw httpError(409, `${step.name} is ticked off by a passed quality check. Start the quality check on the job.`);
-    await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(), finished_by: actor.user.id });
+    await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(3), finished_by: actor.user.id });
     await audit(trx, actor, { entity: 'job', id: jobId, action: status === 'done' ? 'step_done' : 'step_skipped', summary: step.name });
     const next = await pendingStep(trx, jobId);
     if (!next) await markCompleted(trx, jobId, actor);
@@ -265,11 +267,27 @@ export async function passQcStep(trx, jobId, actor) {
   if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}, so the quality check can’t be finished.`);
   const step = await pendingStep(trx, jobId);
   if (!step?.is_qc) throw httpError(409, `${job.number} isn’t at its quality check step any more (it is at ${step?.name ?? 'no step'}). Ask the supervisor to check the job.`);
-  await trx('job_steps').where({ id: step.id }).update({ status: 'done', finished_at: trx.fn.now(), finished_by: actor.user.id });
+  await trx('job_steps').where({ id: step.id }).update({ status: 'done', finished_at: trx.fn.now(3), finished_by: actor.user.id });
   await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_done', summary: `${step.name} (quality check passed)` });
   const next = await pendingStep(trx, jobId);
   if (!next) await markCompleted(trx, jobId, actor);
   return { name: step.name, next: next?.name ?? null };
+}
+
+/**
+ * A failed quality check sends the job back: these steps (before the quality check step) are to do
+ * again; every other step stays as it is. Inside the inspection's transaction.
+ * @returns {Promise<string[]>} the names of the steps reopened, in order
+ */
+export async function reworkSteps(trx, jobId, stepIds, qc, actor) {
+  if (!stepIds.length) return [];
+  const steps = await trx('job_steps').where({ job_id: jobId }).whereIn('id', stepIds).orderBy('sort_order');
+  for (const step of steps) {
+    await trx('job_steps').where({ id: step.id }).update({ status: 'pending', finished_at: null, finished_by: null, rework_qc_id: qc.id });
+  }
+  const names = steps.map((s) => s.name);
+  await audit(trx, actor, { entity: 'job', id: jobId, action: 'steps_reworked', summary: `${names.join(', ')} (quality check ${qc.number} failed)` });
+  return names;
 }
 
 /** Ticked by mistake: the last finished step becomes the current one again. */
@@ -350,7 +368,16 @@ export async function getJob(id) {
   job.vehicle_label = job.vehicle_id ? vehicleLabel(job) : null;
   job.lines = await db('job_lines').where({ job_id: id }).orderBy('sort_order');
   job.steps = await db('job_steps as s').leftJoin('users as u', 'u.id', 's.finished_by')
-    .where('s.job_id', id).orderBy('s.sort_order').select('s.id', 's.name', 's.status', 's.is_qc', 's.finished_at', 'u.name as finished_by_name');
+    .leftJoin('qc_inspections as rq', 'rq.id', 's.rework_qc_id')
+    .where('s.job_id', id).orderBy('s.sort_order')
+    .select('s.id', 's.name', 's.status', 's.is_qc', 's.finished_at', 'u.name as finished_by_name', 's.rework_qc_id', 'rq.number as rework_qc_number');
+  // A step a failed quality check sent back: what to put right there.
+  const reworked = job.steps.filter((s) => s.rework_qc_id && s.status === 'pending');
+  if (reworked.length) {
+    const items = await db('qc_inspection_items').whereIn('redo_step_id', reworked.map((s) => s.id)).whereIn('inspection_id', reworked.map((s) => s.rework_qc_id))
+      .where('result', 'fail').orderBy('sort_order').select('id', 'inspection_id', 'redo_step_id', 'text', 'note');
+    for (const s of reworked) s.rework = items.filter((i) => i.redo_step_id === s.id && i.inspection_id === s.rework_qc_id);
+  }
   job.currentStep = job.status === 'in_progress' ? job.steps.find((s) => s.status === 'pending') ?? null : null;
   job.stepsFinished = job.steps.filter((s) => s.status !== 'pending').length;
   return job;

@@ -77,7 +77,7 @@
               <td class="res"><%= tick(item, 'pass') %></td>
               <td class="res"><%= tick(item, 'fail') %></td>
               <td class="res"><%= tick(item, 'na') %></td>
-              <td class="note"><%= item.note ?? '' %></td>
+              <td class="note"><%= item.note ?? '' %><% if (item.result === 'fail' && (item.redo_here || item.redo_step_name)) { %><div class="qc-redo">Put right <%= item.redo_here ? 'at the quality check' : `at ${item.redo_step_name}` %><%= item.photos?.length ? ` · ${item.photos.length} photo${item.photos.length === 1 ? '' : 's'}` : '' %></div><% } %></td>
             </tr>
           <% }) %>
         </tbody>

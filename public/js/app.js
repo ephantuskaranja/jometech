@@ -476,7 +476,8 @@ document.addEventListener('alpine:init', () => {
   });
 
   // A quality check (qc/views/show.ejs). Each row takes the colour of its answer. Finish with gaps
-  // (unanswered, or failed with nothing said) doesn't send: it marks them and takes you to the first.
+  // (unanswered, or failed with nothing said or nowhere chosen to put it right) doesn't send:
+  // it marks them and takes you to the first.
   Alpine.data('qcInspection', (total) => ({
     total, answered: 0, failed: 0, flagged: 0,
     rows() { return [...this.$root.querySelectorAll('.jt-qc-item')]; },
@@ -484,7 +485,12 @@ document.addEventListener('alpine:init', () => {
     gap(row) {
       const r = this.answer(row);
       if (!r) return 'answer';
-      return r === 'fail' && !row.querySelector('.jt-qc-note').value.trim() ? 'note' : null;
+      if (r !== 'fail') return null;
+      if (!row.querySelector('.jt-qc-note').value.trim()) return 'note';
+      return row.querySelector('.jt-qc-redo select').value ? null : 'redo';
+    },
+    field(row, gap) {
+      return { note: row.querySelector('.jt-qc-note'), redo: row.querySelector('.jt-qc-redo select') }[gap] ?? row.querySelector('input.btn-check');
     },
     count() {
       let answered = 0, failed = 0, flagged = 0;
@@ -495,7 +501,10 @@ document.addEventListener('alpine:init', () => {
         if (r) { answered++; row.classList.add(`is-${r}`); }
         if (r === 'fail') failed++;
         note.placeholder = r === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)';
-        if (row.classList.contains('is-flagged') && !this.gap(row)) { row.classList.remove('is-flagged'); note.classList.remove('is-invalid'); }
+        if (row.classList.contains('is-flagged') && !this.gap(row)) {
+          row.classList.remove('is-flagged');
+          row.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+        }
         if (row.classList.contains('is-flagged')) flagged++;
       }
       Object.assign(this, { answered, failed, flagged });
@@ -506,8 +515,7 @@ document.addEventListener('alpine:init', () => {
     },
     goTo(row) {
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const note = this.gap(row) === 'note';
-      (note ? row.querySelector('.jt-qc-note') : row.querySelector('input.btn-check')).focus({ preventScroll: true });
+      this.field(row, this.gap(row)).focus({ preventScroll: true });
       row.classList.remove('is-target'); void row.offsetWidth; row.classList.add('is-target');
     },
     nextGap() { const row = this.rows().find((r) => this.gap(r)); if (row) this.goTo(row); },
@@ -518,7 +526,8 @@ document.addEventListener('alpine:init', () => {
       e.preventDefault();
       for (const row of open) {
         row.classList.add('is-flagged');
-        if (this.gap(row) === 'note') row.querySelector('.jt-qc-note').classList.add('is-invalid');
+        const gap = this.gap(row);
+        if (gap !== 'answer') this.field(row, gap).classList.add('is-invalid');
       }
       this.count();
       this.goTo(open[0]);
@@ -850,14 +859,14 @@ document.addEventListener('alpine:init', () => {
 
   // Check-in photos (checkins/views/photos.ejs): each photo is shrunk, then uploaded on its own,
   // one at a time, so a dropped connection loses one photo and it can be tried again.
-  Alpine.data('checkinPhotos', ({ url, max, photos = [] }) => ({
-    url, max, photos, queue: [], message: '', busy: false,
+  Alpine.data('checkinPhotos', ({ url, max, photos = [], noun = 'A check-in' }) => ({
+    url, max, photos, noun, queue: [], message: '', busy: false,
     get room() { return this.max - this.photos.length - this.queue.length; },
     add(files) {
       this.message = '';
       const chosen = [...files];
       const fits = chosen.slice(0, Math.max(this.room, 0));
-      if (fits.length < chosen.length) this.message = `A check-in can have up to ${this.max} photos, so ${chosen.length - fits.length} weren’t added.`;
+      if (fits.length < chosen.length) this.message = `${this.noun} can have up to ${this.max} photos, so ${chosen.length - fits.length} weren’t added.`;
       for (const file of fits) this.queue.push({ key: `${Date.now()}-${Math.random()}`, file, preview: URL.createObjectURL(file), error: '' });
       this.pump();
     },

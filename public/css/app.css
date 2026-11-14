@@ -558,6 +558,8 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-job-steps .is-skipped .jt-job-step-name { text-decoration: line-through; }
 .jt-job-steps .is-current { font-weight: 600; background: var(--bs-primary-bg-subtle); }
 .jt-job-steps .is-current .bi { color: var(--bs-primary); }
+.jt-rework-list { margin: .25rem 0 0; padding-left: 1.1rem; font-weight: 400; color: var(--bs-body-color); }
+.jt-job-steps .list-group-item:has(.jt-rework-list) { align-items: flex-start; }
 
 /* Plate calculator (items/views/show.ejs) */
 .jt-sheet-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
@@ -646,6 +648,15 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-qc-item:is(.is-pass, .is-fail, .is-na) .btn-check:not(:checked) + .jt-qc-btn:hover { opacity: 1; }
 .btn-check:focus-visible + .jt-qc-btn { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
 .jt-qc-note { grid-column: 1 / -1; }
+/* A failed item: where it is put right, and photos of the defect. */
+.jt-qc-rework { grid-column: 1 / -1; display: none; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.jt-qc-item.is-fail .jt-qc-rework, .jt-qc-rework.has-photos { display: flex; }
+.jt-qc-redo { display: flex; align-items: center; gap: .5rem; flex: 1 1 18rem; }
+.jt-qc-redo .form-select { max-width: 24rem; }
+.jt-item-photos { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; }
+.jt-item-photos .jt-photo { width: 4rem; flex: none; }
+.jt-item-photos .jt-photo-delete { width: 1.5rem; height: 1.5rem; top: .125rem; right: .125rem; font-size: .75rem; }
+.jt-item-photos .jt-photo-status { font-size: .625rem; }
 .jt-qc-item.is-pass { box-shadow: inset 4px 0 0 var(--bs-success); }
 .jt-qc-item.is-na { box-shadow: inset 4px 0 0 var(--bs-secondary-color); }
 .jt-qc-item.is-fail { box-shadow: inset 4px 0 0 var(--bs-danger); --bs-list-group-bg: var(--bs-danger-bg-subtle); }

@@ -1,12 +1,16 @@
 <%#
   One quality check. While in progress (and for those who inspect): each item Pass / Fail / N/A with a
-  note, saved as you go or finished at the end. Otherwise the report as it was signed off.
+  note, saved as you go or finished at the end. A failed item also says where it is put right (a step
+  before the check, reopened when the check fails, or at the check itself) and can have photos.
+  Otherwise the report as it was signed off.
 %>
 <%
   const st = statuses[insp.status];
   const tone = { pass: 'ok', fail: 'bad', na: 'neutral' };
   const missing = problems?.missing ?? new Set();
   const unexplained = problems?.unexplained ?? new Set();
+  const unrouted = problems?.unrouted ?? new Set();
+  const photoUrls = (photoId) => ({ id: photoId, full: `/qc/${insp.id}/photos/${photoId}.webp`, thumb: `/qc/${insp.id}/photos/${photoId}/thumb.webp` });
 %>
 <%- include('partials/page-header', {
   crumb: [{ label: 'Quality checks', href: '/qc' }, insp.number],
@@ -21,7 +25,8 @@
 <% if (problems) { %>
   <div class="alert alert-warning d-flex gap-2" role="alert"><i class="bi bi-exclamation-triangle"></i>
     <div><% if (missing.size) { %><div><%= missing.size %> item<%= missing.size === 1 ? '' : 's' %> not answered yet: Pass, Fail or N/A for each.</div><% } %>
-    <% if (unexplained.size) { %><div>Say what is wrong for every failed item (<%= unexplained.size %>).</div><% } %></div>
+    <% if (unexplained.size) { %><div>Say what is wrong for every failed item (<%= unexplained.size %>).</div><% } %>
+    <% if (unrouted.size) { %><div>Choose where every failed item is put right (<%= unrouted.size %>).</div><% } %></div>
   </div>
 <% } %>
 
@@ -47,7 +52,7 @@
         <% } %>
       </div>
       <ul class="list-group list-group-flush">
-        <% section.items.forEach((item) => { const n = insp.items.indexOf(item) + 1; const flagged = missing.has(item.id) || unexplained.has(item.id); %>
+        <% section.items.forEach((item) => { const n = insp.items.indexOf(item) + 1; const flagged = missing.has(item.id) || unexplained.has(item.id) || unrouted.has(item.id); %>
           <li class="list-group-item jt-qc-item<%= flagged ? ' is-flagged' : '' %><%= item.result ? ` is-${item.result}` : '' %>" id="qc-item-<%= item.id %>">
             <div class="jt-qc-text"><span class="jt-qc-no"><%= n %></span><div><%= item.text %>
               <% if (item.failed_before !== undefined) { %><div class="small mt-1"><span class="badge text-bg-danger">Failed last time</span><% if (item.failed_before) { %> <span class="text-body-secondary"><%= item.failed_before %></span><% } %></div><% } %>
@@ -61,9 +66,26 @@
               </div>
               <input class="form-control form-control-sm jt-qc-note<%= unexplained.has(item.id) ? ' is-invalid' : '' %>" name="note_<%= item.id %>" value="<%= item.note ?? '' %>" maxlength="255"
                      placeholder="<%= item.result === 'fail' ? 'What is wrong? (needed for a failure)' : 'Note (optional)' %>" aria-label="Note for item <%= n %>">
+              <div class="jt-qc-rework<%= item.photos.length ? ' has-photos' : '' %>">
+                <div class="jt-qc-redo">
+                  <label class="small fw-semibold text-nowrap" for="redo-<%= item.id %>"><i class="bi bi-arrow-counterclockwise"></i> Put right at</label>
+                  <select class="form-select form-select-sm<%= unrouted.has(item.id) ? ' is-invalid' : '' %>" name="redo_<%= item.id %>" id="redo-<%= item.id %>">
+                    <option value="">Choose…</option>
+                    <% insp.redoSteps.forEach((step) => { %><option value="<%= step.id %>"<%= !item.redo_here && item.redo_step_id === step.id ? ' selected' : '' %>><%= step.name %>: reopen this step</option><% }) %>
+                    <option value="here"<%= item.redo_here ? ' selected' : '' %>>Here, at the quality check (nothing to reopen)</option>
+                  </select>
+                </div>
+                <%- include('partials/item-photos', { photos: { url: `/qc/${insp.id}/items/${item.id}/photos`, max: maxPhotos, canEdit: true, photos: item.photos.map(photoUrls) } }) %>
+              </div>
             <% } else { %>
               <div class="jt-qc-answer"><% if (item.result) { %><%- include('partials/pill', { text: results[item.result], tone: tone[item.result] }) %><% } else { %><span class="small text-body-tertiary">Not answered</span><% } %></div>
               <% if (item.note) { %><div class="jt-qc-note small text-body-secondary"><%= item.note %></div><% } %>
+              <% if (item.result === 'fail' && (item.redo_here || item.redo_step_name)) { %>
+                <div class="jt-qc-note small"><i class="bi bi-arrow-counterclockwise"></i> Put right <%= item.redo_here ? 'at the quality check' : `at ${item.redo_step_name}` %></div>
+              <% } %>
+              <% if (item.photos.length) { %>
+                <div class="jt-qc-note"><%- include('partials/item-photos', { photos: { url: '', max: maxPhotos, canEdit: false, photos: item.photos.map(photoUrls) } }) %></div>
+              <% } %>
             <% } %>
           </li>
         <% }) %>
@@ -86,7 +108,7 @@
           <div><dt>Started</dt><dd><%= fmt.dateTime(insp.started_at) %><span class="d-block small text-body-secondary"><%= insp.started_by_name ?? '' %></span></dd></div>
           <% if (insp.finished_at) { %><div><dt><%= insp.status === 'cancelled' ? 'Cancelled' : 'Finished' %></dt><dd><%= fmt.dateTime(insp.finished_at) %><span class="d-block small text-body-secondary"><%= insp.finished_by_name ?? '' %></span></dd></div><% } %>
         </dl>
-        <% if (insp.status === 'failed') { %><p class="small mb-0">Put the failed items right, then start a new quality check from the job.</p><% } %>
+        <% if (insp.status === 'failed') { %><p class="small mb-0">The failed items are put right where shown; then the job comes back to its quality check step for a new check.</p><% } %>
       <% } %>
     </div>
   </section>

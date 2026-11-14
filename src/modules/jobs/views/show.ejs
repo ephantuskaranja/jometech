@@ -6,7 +6,8 @@
   const promised = job.due_on ? fmt.date(`${job.due_on}T12:00:00Z`) : null;
   const details = [job.make, job.model].filter(Boolean).join(' ');
   const current = job.currentStep;
-  const nextStep = current ? job.steps[job.steps.findIndex((s) => s.id === current.id) + 1] : null;
+  // The next step still to do (after rework, the steps in between may already be done).
+  const nextStep = current ? job.steps.slice(job.steps.findIndex((s) => s.id === current.id) + 1).find((s) => s.status === 'pending') : null;
   const percent = job.steps.length ? Math.round((job.stepsFinished / job.steps.length) * 100) : 0;
 %>
 <section class="card mb-4">
@@ -43,7 +44,13 @@
           <% job.steps.forEach((s) => { const isCurrent = current?.id === s.id; %>
             <li class="list-group-item is-<%= isCurrent ? 'current' : s.status %>">
               <i class="bi bi-<%= isCurrent ? 'arrow-right-circle-fill' : { done: 'check-circle-fill', skipped: 'dash-circle', pending: 'circle' }[s.status] %>" aria-hidden="true"></i>
-              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %></span>
+              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %>
+                <% if (s.rework) { %>
+                  <span class="d-block small mt-1"><span class="badge text-bg-danger">Rework</span> from <a href="/qc/<%= s.rework_qc_id %>"><%= s.rework_qc_number %></a></span>
+                  <ul class="jt-rework-list small mb-0">
+                    <% s.rework.forEach((i) => { %><li><%= i.text %><% if (i.note) { %>: <span class="text-body-secondary"><%= i.note %></span><% } %></li><% }) %>
+                  </ul>
+                <% } %></span>
               <% if (s.status !== 'pending') { %>
                 <span class="small text-body-tertiary text-end"><%= s.status === 'skipped' ? 'Skipped' : 'Done' %> <%= fmt.dateTime(s.finished_at) %><% if (s.finished_by_name) { %><span class="d-block"><%= s.finished_by_name %></span><% } %></span>
               <% } %>

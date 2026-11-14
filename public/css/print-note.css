@@ -153,6 +153,7 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .qc-list td { height: 6mm; }
 .qc-list .qc-section td { background: #eef0f4; font-weight: 600; height: auto; }
 .qc-list tr.is-fail td { font-weight: 600; }
+.qc-list .qc-redo { font-weight: 400; font-style: italic; font-size: 8pt; }
 .qc-list tbody { break-inside: avoid; }
 .qc-result { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 8px; }
 .qc-choice { display: inline-flex; align-items: center; gap: 5px; }
