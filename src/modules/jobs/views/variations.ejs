@@ -1,0 +1,67 @@
+<%#
+  Variations on the job page: extra work agreed after the job was priced (V1, V2 …).
+  The workshop sees the work; prices and the add / cancel forms only for those who price work.
+  Locals: job, variations, canPriceWork, variationDraft (the form as sent, after a mistake), today
+%>
+<% const openJob = ['open', 'in_progress'].includes(job.status); const agreed = variations.filter((v) => v.status === 'agreed'); %>
+<% if (variations.length || (canPriceWork && openJob)) { const d = variationDraft ?? {}; %>
+  <section class="card" id="variations" x-data="{ adding: <%= Boolean(variationDraft) %>, cancelling: null }">
+    <div class="card-header d-flex align-items-center gap-3">
+      <h2 class="h6 mb-0 me-auto">Extra work agreed <span class="text-body-tertiary fw-normal small">(variations)</span></h2>
+      <% if (canPriceWork && agreed.length) { %><span class="small jt-num fw-semibold text-nowrap">+ KES <%= fmt.money(agreed.reduce((n, v) => n + Number(v.amount), 0)) %></span><% } %>
+    </div>
+    <% if (!variations.length) { %>
+      <div class="card-body small text-body-secondary">None yet. When the customer asks for more work after the price was agreed, record it here: it goes on the job card and the invoice.</div>
+    <% } else { %>
+      <ul class="list-group list-group-flush">
+        <% variations.forEach((v) => { const off = v.status === 'cancelled'; %>
+          <li class="list-group-item d-grid gap-1">
+            <div class="d-flex align-items-baseline gap-2 flex-wrap">
+              <span class="badge <%= off ? 'text-bg-secondary' : 'text-bg-primary' %>">V<%= v.seq %></span>
+              <span class="<%= off ? 'text-decoration-line-through text-body-tertiary' : 'fw-semibold' %>" style="white-space: pre-line"><%= fmt.qty(v.quantity) %> <%= v.unit %>: <%= v.description %></span>
+              <% if (canPriceWork) { %><span class="ms-auto jt-num text-nowrap<%= off ? ' text-body-tertiary text-decoration-line-through' : '' %>">KES <%= fmt.money(v.amount) %></span><% } %>
+            </div>
+            <div class="small text-body-secondary">
+              Agreed by <%= v.agreed_by %> on <%= fmt.date(`${v.agreed_on}T12:00:00Z`) %><%= v.created_by_name ? ` · recorded by ${v.created_by_name}` : '' %>
+              <% if (off) { %><div class="text-danger-emphasis">Cancelled: <%= v.cancelled_reason %></div><% } %>
+            </div>
+            <% if (canPriceWork && !off && openJob) { %>
+              <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary text-start" x-show="cancelling !== <%= v.id %>" @click="cancelling = <%= v.id %>">Cancel V<%= v.seq %></button>
+              <form method="post" action="/jobs/<%= job.id %>/variations/<%= v.id %>/cancel" class="d-flex gap-2 flex-wrap" x-show="cancelling === <%= v.id %>" x-cloak>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input class="form-control form-control-sm" name="reason" required minlength="3" maxlength="255" placeholder="Why? e.g. Customer changed their mind" style="max-width: 22rem" aria-label="Why cancel V<%= v.seq %>">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Cancel it</button>
+                <button class="btn btn-sm btn-link" type="button" @click="cancelling = null">Keep it</button>
+              </form>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+    <% if (canPriceWork && openJob) { %>
+      <div class="card-body border-top">
+        <button type="button" class="btn btn-outline-primary w-100" x-show="!adding" @click="adding = true; $nextTick(() => $refs.vdesc.focus())"><i class="bi bi-plus-lg"></i>Add extra work</button>
+        <form method="post" action="/jobs/<%= job.id %>/variations" class="d-grid gap-3" x-show="adding" x-cloak novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div class="jt-field">
+            <label class="form-label" for="v-desc">What is the extra work?<span class="jt-req" aria-hidden="true">*</span></label>
+            <textarea class="form-control" id="v-desc" name="description" rows="2" maxlength="1000" x-ref="vdesc" placeholder="e.g. Add a toolbox on the left side"><%= d.description ?? '' %></textarea>
+          </div>
+          <div class="row g-2">
+            <div class="col-4 col-sm-2"><label class="form-label" for="v-qty">Qty</label><input class="form-control jt-num" id="v-qty" name="quantity" inputmode="decimal" value="<%= d.quantity ?? '1' %>"></div>
+            <div class="col-8 col-sm-3"><label class="form-label" for="v-unit">Unit</label><input class="form-control" id="v-unit" name="unit" maxlength="20" value="<%= d.unit ?? 'Unit' %>"></div>
+            <div class="col-sm-7"><label class="form-label" for="v-price">Price each, VAT included (KES)<span class="jt-req" aria-hidden="true">*</span></label><input class="form-control jt-num" id="v-price" name="unit_price" inputmode="decimal" data-number="decimal" value="<%= d.unit_price ?? '' %>"></div>
+          </div>
+          <div class="row g-2">
+            <div class="col-sm-7"><label class="form-label" for="v-by">Agreed by (customer’s side)<span class="jt-req" aria-hidden="true">*</span></label><input class="form-control" id="v-by" name="agreed_by" maxlength="100" value="<%= d.agreed_by ?? '' %>" placeholder="e.g. Peter Mwangi, fleet manager"></div>
+            <div class="col-sm-5"><label class="form-label" for="v-on">On</label><input class="form-control" id="v-on" name="agreed_on" type="date" max="<%= today %>" value="<%= d.agreed_on ?? today %>"></div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save extra work</button>
+            <button class="btn btn-link" type="button" @click="adding = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    <% } %>
+  </section>
+<% } %>

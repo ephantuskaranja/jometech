@@ -7,6 +7,7 @@ import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import { config } from '../../config.js';
 import * as jobs from './service.js';
+import * as variations from './variations.js';
 import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
 import { forJob as signoffsForJob, OUTCOMES as SIGNOFF_OUTCOMES } from '../qc/signoff.js';
 import { jobCosting } from '../costing/service.js';
@@ -174,6 +175,10 @@ router.get('/jobs/:id', view, async (req, res) => {
     canInspect: req.user.can('qc.manage'),
     // What the job earned: managers and admins.
     costing: req.user.can('costing.view') ? await jobCosting(job) : null,
+    // Extra work agreed after pricing; its price only for those who price work.
+    variations: await variations.forJob(job.id),
+    canPriceWork: req.user.can('quotations.manage') || req.user.can('invoices.manage'),
+    variationDraft: (() => { const d = req.session.variationDraft ?? null; delete req.session.variationDraft; return d; })(),
   });
 });
 
@@ -265,6 +270,7 @@ router.get('/jobs/:id/print', view, async (req, res) => {
   res.render('jobs/views/print', {
     layout: false, title: `Job card ${job.number}`, job,
     company: config.company, printedAt: new Date(),
+    variations: (await variations.forJob(job.id)).filter((v) => v.status === 'agreed'),
   });
 });
 
@@ -282,4 +288,45 @@ router.post('/proformas/:id/job', fromProforma, async (req, res) => {
 router.get('/api/jobs/vehicles', manage, async (req, res) => {
   const id = Number(req.query.customer_id);
   res.json(id ? await vehicleOptions(id) : []);
+});
+
+// ---------- variations: extra work agreed after the job was priced (sales, managers, admins) ----------
+
+const priceWork = canAny('quotations.manage', 'invoices.manage');
+
+const variationSchema = z.object({
+  description: z.string().trim().min(3, 'Say what the extra work is').max(1000, 'Use 1000 characters or fewer'),
+  quantity: z.preprocess((v) => (String(v ?? '').trim() === '' ? 1 : number(v)), z.number({ message: 'Check the quantity' }).positive('Check the quantity').max(100_000, 'Check the quantity')),
+  unit: z.string().trim().max(20).transform((v) => v || 'Unit'),
+  unit_price: z.preprocess((v) => (String(v ?? '').trim() === '' ? NaN : number(v)), z.number({ message: 'Enter the price' }).min(0, 'Check the price').max(999_999_999, 'Check the price')),
+  agreed_by: z.string().trim().min(2, 'Who at the customer agreed it?').max(100, 'Use 100 characters or fewer'),
+  agreed_on: z.string().trim().refine(isDay, 'Check the date'),
+});
+
+router.post('/jobs/:id/variations', priceWork, async (req, res) => {
+  const job = await loadJob(req);
+  const { data, errors } = check(variationSchema, req.body);
+  const problem = errors ? Object.values(errors)[0] : data.agreed_on > localDay() ? 'The day it was agreed can’t be in the future' : null;
+  if (problem) {
+    req.session.flash = { type: 'warning', text: `Variation not saved: ${problem}.` };
+    req.session.variationDraft = req.body;
+    return res.redirect(`/jobs/${job.id}#variations`);
+  }
+  const added = await variations.addVariation(job.id, data, req);
+  const invoiceNote = added.invoice === 'draft' ? ' It is on the draft invoice too.'
+    : added.invoice === 'issued' ? ` Invoice ${added.invoiceNumber} is already issued: cancel it and invoice again to include it.` : ' The invoice will include it.';
+  req.session.flash = { type: added.invoice === 'issued' ? 'warning' : 'success', text: `${added.label} added to ${job.number}.${invoiceNote}` };
+  res.redirect(`/jobs/${job.id}#variations`);
+});
+
+router.post('/jobs/:id/variations/:vid/cancel', priceWork, async (req, res) => {
+  const job = await loadJob(req);
+  const reason = String(req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'warning', text: 'Say why the variation is cancelled (3 to 255 characters).' };
+    return res.redirect(`/jobs/${job.id}#variations`);
+  }
+  const name = await variations.cancelVariation(job.id, Number(req.params.vid), reason, req);
+  req.session.flash = { type: 'success', text: `${name} cancelled. It no longer counts in the price.` };
+  res.redirect(`/jobs/${job.id}#variations`);
 });

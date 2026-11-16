@@ -92,6 +92,18 @@
       </tbody>
     </table>
 
+    <% if (locals.variations?.length) { %>
+      <h2>Extra work agreed (variations)</h2>
+      <table class="jc-work">
+        <thead><tr><th class="qty">Qty</th><th>Description</th><th class="tick">Done</th></tr></thead>
+        <tbody>
+          <% variations.forEach((v) => { %>
+            <tr><td class="qty"><%= fmt.qty(v.quantity) %> <%= v.unit %></td><td><strong>V<%= v.seq %>:</strong> <span style="white-space: pre-line"><%= v.description %></span></td><td class="tick"></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
     <% if (job.instructions) { %>
       <div class="jc-instructions"><span class="label">Instructions:</span> <%= job.instructions %></div>
     <% } %>

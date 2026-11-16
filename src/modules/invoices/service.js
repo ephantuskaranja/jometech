@@ -5,6 +5,7 @@ import { nextNumber } from '../../core/numbering.js';
 import { httpError } from '../../core/validate.js';
 import { localDay } from '../../core/dates.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
+import { invoiceLines as variationLines, agreedTotal as variationsTotal } from '../jobs/variations.js';
 
 // Invoices (one per job) and payments received for jobs.
 //
@@ -67,13 +68,17 @@ async function checkFinancier(trx, financierId, customerId) {
   if (!(await trx('customers').where({ id: financierId }).first('id'))) throw err(422, 'That bank no longer exists.', 'financier_id');
 }
 
-/** What a new invoice for this job starts with: the proforma's lines and prices, or the job's work with no prices. */
+/**
+ * What a new invoice for this job starts with: the proforma's lines and prices (or the job's work
+ * with no prices), then the agreed variations with theirs.
+ */
 export async function startFor(job) {
+  const extra = await variationLines(job.id);
   if (job.proforma_id) {
     const lines = await db('proforma_lines').where({ proforma_id: job.proforma_id }).orderBy('sort_order');
-    if (lines.length) return lines.map((l) => ({ quantity: Number(l.quantity), unit: l.unit, description: l.description, unit_price: Number(l.unit_price) }));
+    if (lines.length) return [...lines.map((l) => ({ quantity: Number(l.quantity), unit: l.unit, description: l.description, unit_price: Number(l.unit_price) })), ...extra];
   }
-  return job.lines.map((l) => ({ quantity: Number(l.quantity), unit: l.unit, description: l.description, unit_price: '' }));
+  return [...job.lines.map((l) => ({ quantity: Number(l.quantity), unit: l.unit, description: l.description, unit_price: '' })), ...extra];
 }
 
 /** @returns {Promise<{ id: number }>} */
@@ -169,7 +174,7 @@ export async function setEtims(id, etimsNumber, actor) {
 
 /**
  * What a job's payments are checked against: its invoice (a draft counts), else the accepted
- * proforma it was made from (deposits before invoicing). Null when it has neither.
+ * proforma it was made from plus agreed variations (deposits before invoicing). Null when it has neither.
  * @returns {Promise<{ total: number, against: string } | null>}
  */
 export async function amountDue(jobId, trx = db) {
@@ -177,7 +182,9 @@ export async function amountDue(jobId, trx = db) {
   if (inv) return { total: Number(inv.total), against: inv.number ? `invoice ${inv.number}` : 'the draft invoice' };
   const pf = await trx('jobs as j').join('proformas as p', 'p.id', 'j.proforma_id')
     .where({ 'j.id': jobId, 'p.status': 'accepted' }).first('p.number', 'p.total');
-  return pf ? { total: Number(pf.total), against: `proforma ${pf.number}` } : null;
+  if (!pf) return null;
+  const extra = await variationsTotal(jobId, trx);
+  return extra ? { total: round(Number(pf.total) + extra), against: `proforma ${pf.number} and variations` } : { total: Number(pf.total), against: `proforma ${pf.number}` };
 }
 
 /**
