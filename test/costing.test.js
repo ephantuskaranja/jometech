@@ -40,6 +40,8 @@ after(async () => {
     await db('sites').where({ id: site.id }).delete();
   }
   await db('audit_log').where({ entity: 'running_costs' }).whereIn('user_id', ids).delete();
+  await db('settings').where({ key: 'costing.target_margin' }).delete();
+  await db('audit_log').where({ entity: 'setting' }).whereIn('user_id', ids).delete();
   await cleanup();
 });
 
@@ -180,4 +182,32 @@ test('wages (approved weekly payroll) and running costs (monthly) are shared acr
   assert.equal(xlsx.status, 200);
   assert.match(xlsx.headers['content-disposition'], /job-costing-2026-09-TSTCST\.xlsx/);
   assert.equal((await sales.get('/reports/job-costing')).status, 403);
+});
+
+test('pricing advice: what similar past jobs cost, and the price for the admins’ target margin', async () => {
+  // The previous test's JOB-T-CST1: sold for 50,000 without VAT; cost 14,750 = wages 12,000 + running 2,750
+  // (September's 11,000 now over 6 + 3 + 15 job-days, since JOB-T-CST3 ran on into October).
+  const a = await db('jobs').where({ number: 'JOB-T-CST1' }).first('id');
+  await db('job_lines').insert({ job_id: a.id, sort_order: 1, quantity: 1, unit: 'Unit', description: 'Zyxcanopy for a pickup' });
+  const guide = async (agent, q) => (await agent.get(`/api/pricing-guide?${new URLSearchParams({ q })}`)).body;
+
+  let g = await guide(manager, 'zyxcanopy');
+  assert.equal(g.count, 1);
+  assert.equal(g.avgCost, 14750);
+  assert.equal(g.avgPrice, 50000);
+  assert.equal(g.target, 30, 'the default target margin');
+  assert.equal(g.suggestedExVat, 21071.43, '14,750 ÷ (1 − 30%)');
+  assert.equal(g.suggestedWithVat, 24442.86);
+  assert.equal((await guide(manager, 'zyxcanopy nothing-like-this')).count, 0);
+  assert.equal((await sales.get('/api/pricing-guide')).status, 403);
+
+  assert.equal((await manager.get('/admin/pricing')).status, 403);
+  assert.equal((await post(admin, '/admin/pricing', { target_margin: '95' })).status, 422);
+  assert.equal((await post(admin, '/admin/pricing', { target_margin: '40' })).status, 302);
+  g = await guide(manager, 'zyxcanopy');
+  assert.equal(g.target, 40);
+  assert.equal(g.suggestedExVat, 24583.33, '14,750 ÷ (1 − 40%)');
+
+  assert.match((await manager.get('/proformas/new')).text, /Pricing guide/);
+  assert.doesNotMatch((await sales.get('/proformas/new')).text, /Pricing guide/, 'sales prepare proformas without seeing costs');
 });

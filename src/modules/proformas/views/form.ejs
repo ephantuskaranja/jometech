@@ -89,6 +89,8 @@
     </div>
   </section>
 
+  <% if (locals.guide) { %><div class="mb-4"><%- include('costing/views/pricing-guide', { guide }) %></div><% } %>
+
   <section class="card mb-4">
     <div class="card-body">
       <%- include('partials/field', { name: 'notes', label: 'Notes on the proforma', type: 'textarea', rows: 3, value: values.notes, error: errors.notes,

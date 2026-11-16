@@ -9,6 +9,8 @@ import { listSites } from '../sites/service.js';
 import * as costing from './service.js';
 import { makeShares } from './service.js';
 import * as running from './running-costs.js';
+import { guide } from './pricing.js';
+import { getSetting, setSetting } from '../../core/settings.js';
 
 // System → Closed days: the days the workshop didn't work (Christmas …). Left out of a job's work days.
 // Running costs: entered once a month per site, shared across that month's jobs by work days.
@@ -153,3 +155,24 @@ export function missingText(c) {
     c.running?.missing.length && `running costs for ${c.running.missing.map(running.monthLabel).join(', ')}`,
   ].filter(Boolean).join('; ');
 }
+
+// ---------- pricing advice (proformas) and System → Pricing ----------
+
+router.get('/api/pricing-guide', seeCosts, async (req, res) => {
+  const jobTypeId = Number(req.query.type) || null;
+  res.json(await guide({ jobTypeId, q: String(req.query.q ?? '').slice(0, 80), siteIds: req.user.sites.map((s) => s.id) }));
+});
+
+router.get('/admin/pricing', can('system.settings'), async (req, res) => {
+  res.render('costing/views/pricing', { title: 'Pricing', values: { target_margin: await getSetting('costing.target_margin') }, errors: {} });
+});
+
+router.post('/admin/pricing', can('system.settings'), async (req, res) => {
+  const margin = Number(String(req.body.target_margin ?? '').replace('%', '').trim());
+  if (!Number.isFinite(margin) || margin < 0 || margin > 90 || String(req.body.target_margin ?? '').trim() === '') {
+    return res.status(422).render('costing/views/pricing', { title: 'Pricing', values: req.body, errors: { target_margin: 'Use a margin from 0 to 90%' } });
+  }
+  await setSetting('costing.target_margin', Math.round(margin * 10) / 10, req);
+  req.session.flash = { type: 'success', text: `Target margin set to ${Math.round(margin * 10) / 10}%. Pricing advice on proformas uses it now.` };
+  res.redirect('/admin/pricing');
+});

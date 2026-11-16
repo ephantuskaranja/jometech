@@ -48,6 +48,12 @@ async function loadProforma(req) {
   return proforma;
 }
 
+/** The pricing guide (managers and admins): job types to compare with; `fixedTotal` on a saved proforma. */
+async function guideFor(user, fixedTotal = null) {
+  // On the saved proforma it sits in the narrow side column.
+  return user?.can('costing.view') ? { types: await typeOptions(), type: '', fixedTotal, vatRate: config.vatRate, narrow: fixedTotal !== null } : null;
+}
+
 async function renderForm(res, { status = 200, proforma = null, values, rows, errors = {}, copiedFrom = null }) {
   const customer = values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
   const enquiry = values.enquiry_id ? await enquiries.getEnquiry(Number(values.enquiry_id)) : null;
@@ -59,6 +65,7 @@ async function renderForm(res, { status = 200, proforma = null, values, rows, er
     vehicleOptions: customer ? await enquiries.vehicleOptions(customer.id) : [],
     categories: customers.CATEGORIES, // "Add new customer" window
     vatRate: config.vatRate,
+    guide: await guideFor(res.locals.user),
   });
 }
 
@@ -117,6 +124,8 @@ router.get('/proformas/:id', manage, async (req, res) => {
     vat: proformas.vatIn(proforma.total), vatRate: config.vatRate,
     entries: await history('proforma', proforma.id),
     jobTypes: proforma.status === 'accepted' && !proforma.job ? await typeOptions() : [],
+    // Pricing advice while it can still change (managers and admins).
+    guide: ['draft', 'sent'].includes(proforma.status) ? await guideFor(req.user, Number(proforma.total)) : null,
   });
 });
 

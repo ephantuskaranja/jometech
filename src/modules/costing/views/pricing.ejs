@@ -1,0 +1,17 @@
+<%# System → Pricing: the target profit margin that pricing advice on proformas aims for. %>
+<%- include('partials/page-header', {
+  crumb: ['System', 'Pricing'],
+  heading: 'Pricing',
+  sub: 'What pricing advice on proformas aims for. Managers see the advice while preparing a proforma; sales don’t.',
+}) %>
+
+<div class="row"><div class="col-lg-6">
+  <form method="post" action="/admin/pricing" novalidate class="card">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="card-body d-grid gap-3">
+      <%- include('partials/field', { name: 'target_margin', label: 'Target profit margin (%)', value: values.target_margin, error: errors.target_margin, inputmode: 'decimal', required: true,
+            hint: 'Net profit as a share of the price without VAT, after materials, wages and running costs. At 30%, a job that usually costs KES 70,000 is priced at KES 100,000 without VAT.' }) %>
+      <div><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save</button></div>
+    </div>
+  </form>
+</div></div>

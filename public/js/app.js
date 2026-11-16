@@ -540,6 +540,28 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
+  // Pricing advice on a proforma (costing/views/pricing-guide.ejs): what similar past jobs cost and
+  // the price for the target margin. Inside the proforma form it reads the form's live total.
+  Alpine.data('pricingGuide', ({ type = '', fixedTotal = null, vatRate = 16 } = {}) => ({
+    type: String(type), q: '', data: null, loading: false, failed: false, timer: null,
+    money: (n) => Number(n ?? 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    init() { this.load(); },
+    later() { clearTimeout(this.timer); this.timer = setTimeout(() => this.load(), 400); },
+    async load() {
+      this.loading = true; this.failed = false;
+      try {
+        this.data = await getJson(`/api/pricing-guide?${new URLSearchParams({ type: this.type, q: this.q })}`);
+      } catch { this.failed = true; } finally { this.loading = false; }
+    },
+    // This proforma's price, with VAT: fixed on the proforma page, the form's running total while editing.
+    get price() { return fixedTotal ?? (typeof this.total === 'number' ? this.total : 0); },
+    get expectedMargin() {
+      if (!this.data?.count || !this.price) return null;
+      const exVat = this.price / (1 + vatRate / 100);
+      return Math.round(((exVat - this.data.avgCost) / exVat) * 1000) / 10;
+    },
+  }));
+
   // Item page (items/views/show.ejs): what a plate of any size comes to. The server does the sums.
   Alpine.data('sheetCalc', ({ url }) => ({
     length: '', width: '', unit: 'ft', pieces: '1', result: null, timer: null,
