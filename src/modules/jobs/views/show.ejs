@@ -319,8 +319,7 @@
 
     <% if (requests.length || canAskMaterials) { %>
       <section class="card">
-        <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Materials asked for</h2>
-          <% if (canAskMaterials) { %><a class="btn btn-sm btn-outline-primary" href="/purchase-requests/new?job=<%= encodeURIComponent(job.number) %>"><i class="bi bi-inbox"></i>Ask for materials</a><% } %></div>
+        <div class="card-header"><h2 class="h6 mb-0">Materials asked for</h2></div>
         <% if (requests.length) { %>
           <ul class="list-group list-group-flush">
             <% requests.forEach((r) => { const rs = requestStatuses[r.status]; %>
@@ -332,6 +331,9 @@
           </ul>
         <% } else { %>
           <div class="card-body small text-body-secondary">Nothing yet. Ask stores for anything this job needs that isn’t in stock.</div>
+        <% } %>
+        <% if (canAskMaterials) { %>
+          <div class="card-body border-top"><a class="btn btn-outline-primary w-100" href="/purchase-requests/new?job=<%= encodeURIComponent(job.number) %>"><i class="bi bi-inbox"></i>Ask for materials</a></div>
         <% } %>
       </section>
     <% } %>

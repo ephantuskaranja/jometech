@@ -19,6 +19,25 @@
       <% if (owing) { %><div class="jt-owed-amount jt-num">KES <%= fmt.money(due.owed) %></div><% } %>
     </div>
   <% } %>
+  <%# The customer overpaid on another job: offer it here, before anything else is recorded. %>
+  <% if (canRecord && locals.due?.credit && due.owed > 0) { const use = Math.min(due.credit.total, due.owed); %>
+    <div class="jt-credit-offer">
+      <div class="d-flex gap-2 align-items-start">
+        <i class="bi bi-piggy-bank" aria-hidden="true"></i>
+        <div><strong>The customer has KES <%= fmt.money(due.credit.total) %> of credit</strong>
+          <div class="small">Paid more than invoiced on <% due.credit.jobs.forEach((j, i) => { %><%= i ? ', ' : '' %><a class="font-monospace" href="/jobs/<%= j.id %>"><%= j.number %></a><% }) %>.</div></div>
+      </div>
+      <form method="post" action="/jobs/<%= jobId %>/payments/credit" class="d-flex flex-wrap gap-2 align-items-end">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <div class="jt-field flex-grow-1" style="max-width: 14rem">
+          <label class="form-label" for="credit-amount">Use (KES)</label>
+          <input class="form-control jt-num" id="credit-amount" name="amount" type="text" inputmode="decimal" data-number="decimal" value="<%= fmt.money(use) %>" autocomplete="off">
+        </div>
+        <button class="btn btn-success" type="submit"><i class="bi bi-check2"></i>Use credit</button>
+      </form>
+    </div>
+  <% } %>
   <% if (!payments.list.length) { %>
     <div class="card-body small text-body-secondary">Nothing received yet. Record deposits here as they come in.</div>
   <% } else { %>
@@ -27,11 +46,11 @@
         <li class="list-group-item d-grid gap-1">
           <div class="d-flex align-items-baseline gap-2">
             <span class="jt-num fw-semibold text-nowrap<%= voided ? ' text-decoration-line-through text-body-tertiary' : '' %>">KES <%= fmt.money(p.amount) %></span>
-            <span class="small text-body-secondary"><%= methods[p.method] %><%= p.reference ? ` · ${p.reference}` : '' %></span>
+            <span class="small text-body-secondary"><%= p.method !== 'credit' ? methods[p.method] : Number(p.amount) < 0 ? 'Credit moved to another job' : 'From the customer’s credit' %><%= p.reference ? ` · ${p.reference}` : '' %></span>
             <span class="ms-auto small text-nowrap"><%= fmt.date(`${p.paid_on}T12:00:00Z`) %></span>
           </div>
           <div class="small text-body-secondary">
-            <span class="font-monospace"><%= p.number %></span> · from <%= p.payer === 'financier' ? (financierName ?? 'the bank') : 'the client' %><%= p.received_name ? ` · entered by ${p.received_name}` : '' %>
+            <span class="font-monospace"><%= p.number %></span><% if (p.method !== 'credit') { %> · from <%= p.payer === 'financier' ? (financierName ?? 'the bank') : 'the client' %><% } %><%= p.received_name ? ` · entered by ${p.received_name}` : '' %>
             <% if (p.notes) { %><div><%= p.notes %></div><% } %>
             <% if (voided) { %><div class="text-danger-emphasis">Voided: <%= p.void_reason %></div><% } %>
           </div>

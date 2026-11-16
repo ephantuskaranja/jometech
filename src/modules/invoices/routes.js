@@ -215,6 +215,21 @@ router.post('/jobs/:id/payments', manage, async (req, res) => {
   res.redirect(back);
 });
 
+// The customer's credit from their other jobs, towards what is owed on this one.
+router.post('/jobs/:id/payments/credit', manage, async (req, res) => {
+  const back = backTo(req.body.back, `/jobs/${req.params.id}`);
+  const amount = Number(String(req.body.amount ?? '').replace(/[,s]/g, ''));
+  const money = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
+  try {
+    const used = await invoices.useCredit(Number(req.params.id), Math.round(amount * 100) / 100, req);
+    req.session.flash = { type: 'success', text: `${money(used.amount)} of the customer’s credit used (from ${used.from.join(', ')}).` };
+  } catch (err) {
+    if (!err.field) throw err;
+    req.session.flash = { type: 'warning', text: `Credit not used: ${err.message}` };
+  }
+  res.redirect(back);
+});
+
 router.post('/payments/:id/void', manage, async (req, res) => {
   const reason = String(req.body.reason ?? '').trim();
   const back = backTo(req.body.back, '/invoices');

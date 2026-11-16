@@ -27,7 +27,7 @@ export async function sales({ month, siteIds }) {
     .orderBy('i.invoice_date').orderBy('i.id')
     .select('i.id', 'i.number', 'i.invoice_date', 'i.total', 'c.id as customer_id', 'c.name as customer_name', 'j.number as job_number', paid.as('paid')))
     .map((i) => ({ ...i, total: Number(i.total), paid: Math.min(Number(i.paid), Number(i.total)), owed: round(Math.max(Number(i.total) - Number(i.paid), 0)) }));
-  const received = await db('payments as p').join('jobs as j', 'j.id', 'p.job_id').whereNull('p.voided_at').whereBetween('p.paid_on', [from, to]).whereIn('j.site_id', siteIds)
+  const received = await db('payments as p').join('jobs as j', 'j.id', 'p.job_id').whereNull('p.voided_at').whereNot('p.method', 'credit').whereBetween('p.paid_on', [from, to]).whereIn('j.site_id', siteIds)
     .groupBy('p.method').select('p.method', db.raw('SUM(p.amount) AS amount'), db.raw('COUNT(*) AS n'));
 
   const byCustomer = new Map();

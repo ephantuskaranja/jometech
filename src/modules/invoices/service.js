@@ -29,6 +29,8 @@ export const PAID_STATES = {
 };
 
 export const METHODS = { mpesa: 'M-Pesa', bank: 'Bank transfer', cheque: 'Cheque', cash: 'Cash' };
+/** A payment's 'how', for showing it: the four above, and credit moved between the customer's jobs. */
+export const methodLabel = (p) => (p.method !== 'credit' ? METHODS[p.method] : Number(p.amount) < 0 ? 'Credit moved to another job' : 'From the customer’s credit');
 
 /** List tabs. "unpaid" = issued with something still to pay. */
 export const TABS = ['draft', 'unpaid', 'paid', 'all'];
@@ -190,6 +192,7 @@ export async function amountDue(jobId, trx = db) {
 /**
  * For the payment form: what is still owed on the job and against what (null: nothing to check),
  * and where extra work would be added to the invoice instead of holding the money as credit.
+ * `credit`: what the customer overpaid on their other jobs, which can go towards this one (only while something is owed).
  */
 export async function owedOn(jobId) {
   const due = await amountDue(jobId);
@@ -198,7 +201,14 @@ export async function owedOn(jobId) {
   const extraWork = !inv ? { href: `/jobs/${jobId}/invoice`, text: 'make the invoice with it' }
     : inv.status === 'draft' ? { href: `/invoices/${inv.id}/edit`, text: 'add it to the draft invoice' }
       : { href: `/invoices/${inv.id}`, text: `cancel invoice ${inv.number} and invoice again with it` };
-  return { owed: round(Math.max(due.total - (await paidOn(db, jobId)), 0)), against: due.against, extraWork };
+  const owed = round(Math.max(due.total - (await paidOn(db, jobId)), 0));
+  let credit = null;
+  if (owed > 0) {
+    const { customer_id: customerId } = await db('jobs').where({ id: jobId }).first('customer_id');
+    credit = await creditOf(customerId, { except: jobId });
+    if (!credit.total) credit = null;
+  }
+  return { owed, against: due.against, extraWork, credit };
 }
 
 const paidOn = async (trx, jobId) => Number((await trx('payments').where({ job_id: jobId }).whereNull('voided_at').sum({ s: 'amount' }).first()).s ?? 0);
@@ -246,28 +256,72 @@ export async function recordPayment(jobId, input, actor) {
  * proforma before invoicing). For the customer's page.
  * @returns {Promise<{ total: number, jobs: { id: number, number: string, credit: number }[] }>}
  */
-export async function creditOf(customerId) {
-  const rows = await db('jobs as j')
-    .join(db('payments').whereNull('voided_at').groupBy('job_id').select('job_id').sum({ paid: 'amount' }).as('p'), 'p.job_id', 'j.id')
+export async function creditOf(customerId, { except = null, q = db, lock = false } = {}) {
+  if (lock) await q('jobs').where({ customer_id: customerId }).forUpdate().select('id'); // two people using the same credit at once
+  const rows = await q('jobs as j')
+    .join(q('payments').whereNull('voided_at').groupBy('job_id').select('job_id').sum({ paid: 'amount' }).as('p'), 'p.job_id', 'j.id')
     .leftJoin('invoices as i', (q) => q.on('i.job_id', 'j.id').andOnVal('i.status', '<>', 'cancelled'))
     .leftJoin('proformas as pf', (q) => q.on('pf.id', 'j.proforma_id').andOnVal('pf.status', 'accepted'))
     .where('j.customer_id', customerId)
     .whereNot('j.status', 'cancelled')
-    .select('j.id', 'j.number', 'p.paid', db.raw('COALESCE(i.total, pf.total) as due'));
+    .modify((x) => { if (except) x.whereNot('j.id', except); })
+    .orderBy('j.id')
+    .select('j.id', 'j.number', 'p.paid', q.raw('COALESCE(i.total, pf.total) as due'));
   const jobs = rows.filter((r) => r.due !== null)
     .map((r) => ({ id: r.id, number: r.number, credit: round(Number(r.paid) - Number(r.due)) }))
     .filter((r) => r.credit > 0);
   return { total: round(jobs.reduce((s, j) => s + j.credit, 0)), jobs };
 }
 
-/** A payment entered by mistake. It stays on record, crossed out. */
+/**
+ * Uses the customer's credit (overpaid on their other jobs) towards what is owed on this job: for each
+ * job the credit is on, oldest first, a minus payment there and a plus payment here, linked.
+ * @returns {Promise<{ amount: number, from: string[] }>}
+ */
+export async function useCredit(jobId, amount, actor) {
+  return db.transaction(async (trx) => {
+    const job = await trx('jobs').where({ id: jobId }).forUpdate().first('id', 'number', 'status', 'customer_id');
+    if (!job) throw httpError(404, 'That job doesn’t exist.');
+    if (job.status === 'cancelled') throw httpError(409, `${job.number} was cancelled.`);
+    const due = await amountDue(jobId, trx);
+    if (!due) throw err(422, `${job.number} has no invoice or accepted proforma yet, so there is nothing to put the credit against.`, 'amount');
+    const owed = round(Math.max(due.total - (await paidOn(trx, jobId)), 0));
+    const credit = await creditOf(job.customer_id, { except: jobId, q: trx, lock: true });
+    if (!(amount > 0)) throw err(422, 'Enter how much of the credit to use.', 'amount');
+    if (amount > owed) throw err(422, `Only ${kes(owed)} is owed on ${due.against}.`, 'amount');
+    if (amount > credit.total) throw err(422, `The customer has ${kes(credit.total)} of credit.`, 'amount');
+
+    let left = round(amount);
+    const from = [];
+    for (const source of credit.jobs) {
+      if (left <= 0) break;
+      const part = round(Math.min(left, source.credit));
+      left = round(left - part);
+      const base = { paid_on: localDay(), method: 'credit', payer: 'client', received_by: actor.user.id };
+      const outNumber = await nextNumber(trx, 'payment');
+      const [outId] = await trx('payments').insert({ ...base, number: outNumber, job_id: source.id, amount: -part, notes: `Credit moved to ${job.number}` });
+      const inNumber = await nextNumber(trx, 'payment');
+      const [inId] = await trx('payments').insert({ ...base, number: inNumber, job_id: jobId, amount: part, notes: `Credit from ${source.number}`, linked_payment_id: outId });
+      await trx('payments').where({ id: outId }).update({ linked_payment_id: inId });
+      await audit(trx, actor, { entity: 'job', id: source.id, action: 'credit_moved', summary: `${outNumber}: ${kes(part)} of the customer’s credit used on ${job.number}` });
+      await audit(trx, actor, { entity: 'job', id: jobId, action: 'credit_used', summary: `${inNumber}: ${kes(part)} from the customer’s credit on ${source.number}` });
+      from.push(source.number);
+    }
+    return { amount: round(amount), from };
+  });
+}
+
+/** A payment entered by mistake. It stays on record, crossed out. A credit move is voided as a pair. */
 export async function voidPayment(paymentId, reason, actor) {
   return db.transaction(async (trx) => {
     const p = await trx('payments').where({ id: paymentId }).forUpdate().first();
     if (!p) throw httpError(404, 'That payment doesn’t exist.');
     if (p.voided_at) throw httpError(409, `${p.number} is already voided.`);
-    await trx('payments').where({ id: paymentId }).update({ voided_at: trx.fn.now(), voided_by: actor.user.id, void_reason: reason });
-    await audit(trx, actor, { entity: 'job', id: p.job_id, action: 'payment_voided', summary: `${p.number} (${kes(p.amount)}) voided: ${reason}` });
+    const pair = p.linked_payment_id ? await trx('payments').where({ id: p.linked_payment_id }).whereNull('voided_at').forUpdate().first() : null;
+    for (const row of [p, pair].filter(Boolean)) {
+      await trx('payments').where({ id: row.id }).update({ voided_at: trx.fn.now(), voided_by: actor.user.id, void_reason: reason });
+      await audit(trx, actor, { entity: 'job', id: row.job_id, action: 'payment_voided', summary: `${row.number} (${kes(row.amount)}) voided: ${reason}` });
+    }
     return p;
   });
 }
@@ -355,7 +409,7 @@ export async function forPeriod({ start, end, from, to }, siteId) {
     .modify((q) => { if (siteId) q.where('i.site_id', siteId); })
     .orderBy('i.issued_at').select('i.id', 'i.number', 'i.status', 'i.total', 'i.issued_at', 'c.name as customer_name', 'j.number as job_number');
   const received = await db('payments as p').join('jobs as j', 'j.id', 'p.job_id').join('customers as c', 'c.id', 'j.customer_id')
-    .whereNull('p.voided_at').whereBetween('p.paid_on', [from, to])
+    .whereNull('p.voided_at').whereNot('p.method', 'credit').whereBetween('p.paid_on', [from, to]) // credit moved between jobs isn't money received
     .modify((q) => { if (siteId) q.where('j.site_id', siteId); })
     .orderBy('p.paid_on').orderBy('p.id').select('p.number', 'p.paid_on', 'p.amount', 'p.method', 'p.payer', 'p.reference', 'j.id as job_id', 'j.number as job_number', 'c.name as customer_name');
   const live = issued.filter((i) => i.status === 'issued');
