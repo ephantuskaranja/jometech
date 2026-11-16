@@ -76,8 +76,8 @@ async function stores(user, siteIds, known) {
     items.push({ label: 'Low stock', value: low, foot: 'at or below reorder level', icon: 'stack', href: '/inventory?show=low', tone: 'warn' });
   }
   if (can(user, 'purchasing.manage', 'purchasing.approve')) {
-    const o = await orders.countByTab(siteIds);
-    const pending = await count(db('purchase_orders').whereIn('site_id', siteIds).where('status', 'pending'));
+    const o = await orders.countByTab(siteIds, ['open', 'sent', 'pending']);
+    const pending = o.pending;
     items.push({ label: 'Orders to approve', value: pending, foot: 'sent for approval', icon: 'patch-check', href: '/purchase-orders', tone: can(user, 'purchasing.approve') ? 'warn' : null });
     items.push({ label: 'Open orders', value: o.open, foot: 'draft, pending or approved', icon: 'cart', href: '/purchase-orders' });
     items.push({ label: 'Goods to receive', value: o.sent, foot: 'ordered, not all delivered', icon: 'box-seam', href: '/purchase-orders?show=sent', tone: 'info' });
@@ -165,6 +165,7 @@ export function quickActions(user) {
     can(user, 'enquiries.manage') && { label: 'New enquiry', href: '/enquiries/new', icon: 'inbox' },
     can(user, 'quotations.manage') && { label: 'New proforma', href: '/proformas/new', icon: 'file-earmark-plus' },
     can(user, 'purchasing.manage') && { label: 'New purchase order', href: '/purchase-orders/new', icon: 'cart-plus' },
+    can(user, 'purchasing.request') && !can(user, 'purchasing.manage') && { label: 'Ask for materials', href: '/purchase-requests/new', icon: 'inbox' },
     can(user, 'attendance.manage') && { label: 'Mark attendance', href: '/attendance', icon: 'calendar-check' },
     can(user, 'visitors.gate', 'visitors.receive') && { label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: !can(user, 'checkin.manage', 'enquiries.manage', 'quotations.manage', 'purchasing.manage', 'attendance.manage') },
     can(user, 'visitors.book') && { label: 'Book a visitor', href: '/visitors/expected/new', icon: 'calendar-plus' },

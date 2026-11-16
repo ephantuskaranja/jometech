@@ -83,6 +83,9 @@ export async function cleanup() {
   await db('audit_log').where({ entity: 'visitor' }).whereIn('entity_id', visitorIds).delete();
   await db('visitors').whereIn('id', visitorIds).delete();
   const ids = await db('users').where('phone', 'like', '+25470000%').pluck('id');
+  const requestIds = await db('purchase_requests').whereIn('requested_by', ids).pluck('id');
+  await db('audit_log').where({ entity: 'purchase_request' }).whereIn('entity_id', requestIds).delete();
+  await db('purchase_requests').whereIn('id', requestIds).delete(); // lines go with them
   const bookingIds = await db('visitor_bookings').whereIn('booked_by', ids).pluck('id');
   await db('audit_log').where({ entity: 'visitor_booking' }).whereIn('entity_id', bookingIds).delete();
   await db('visitor_bookings').whereIn('id', bookingIds).delete();

@@ -3,6 +3,7 @@ import { localDay, nextDay } from '../../core/dates.js';
 import { fmt } from '../../core/format.js';
 import { waiting as qcWaiting } from '../qc/service.js';
 import { monthLabel } from '../costing/running-costs.js';
+import { openRequests } from '../purchasing/requests.js';
 
 // "Needs attention" at the top of the dashboard: the actual things that are late or waiting, named,
 // each with a link. Only what this person deals with (by permission); nothing shows when all is well.
@@ -74,6 +75,18 @@ async function qcToDo(site) {
   })), '/qc');
 }
 
+/** Purchase requests: waiting for approval (approvers), approved but not ordered (stores). One query for both. */
+async function purchaseRequests(user, siteIds, today) {
+  const rows = await openRequests(siteIds);
+  const row = (r) => ({ text: `${r.number} · ${r.requested_name ?? 'a removed user'}`, sub: r.needed_by ? `Needed by ${day(r.needed_by)}${r.needed_by < today ? ': late' : ''}` : `Asked ${fmt.dateTime(r.created_at)}`, href: `/purchase-requests/${r.id}` });
+  const pending = rows.filter((r) => r.status === 'pending');
+  const approved = rows.filter((r) => r.status === 'approved');
+  return [
+    can(user, 'purchasing.approve') ? group('requests', 'warn', 'inbox', `${plural(pending.length, 'purchase request')} waiting for approval`, pending.map(row), '/purchase-requests?show=pending') : null,
+    can(user, 'purchasing.manage') ? group('to_order', approved.some((r) => r.needed_by && r.needed_by < today) ? 'bad' : 'warn', 'cart-plus', `${plural(approved.length, 'approved request')} to order`, approved.map(row), '/purchase-requests?show=approved') : null,
+  ];
+}
+
 const lastMonth = (today) => addDays(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
 const lastWorkDay = (from) => { let d = addDays(from, -1); while (new Date(`${d}T12:00:00Z`).getUTCDay() === 0) d = addDays(d, -1); return d; };
 
@@ -126,10 +139,11 @@ export async function alertsFor(user, site) {
     site && can(user, 'qc.manage') ? qcToDo(site) : null,
     can(user, 'payroll.approve') ? payrollToApprove(siteIds) : null,
     can(user, 'inventory.approve') ? adjustmentsToApprove(siteIds) : null,
+    can(user, 'purchasing.approve', 'purchasing.manage') ? purchaseRequests(user, siteIds, today) : null,
     can(user, 'inventory.manage', 'stores.issue', 'purchasing.manage', 'purchasing.approve') ? lowStock() : null,
     site && can(user, 'attendance.manage') ? attendanceNotConfirmed(site, state) : null,
     site && can(user, 'costing.view') ? runningCostsMissing(site, today, state) : null,
   ]);
-  const done = list.filter(Boolean);
+  const done = list.flat().filter(Boolean);
   return { groups: done.filter((g) => g.total > 0), totals: Object.fromEntries(done.map((g) => [g.key, g.total])) };
 }

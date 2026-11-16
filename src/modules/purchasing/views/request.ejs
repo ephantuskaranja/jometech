@@ -1,0 +1,108 @@
+<%# One purchase request: what was asked for, and where it is (approval, then the order). %>
+<%
+  const st = statuses[request.status];
+  const qty = (l) => (l.priced_by === 'area' ? `${fmt.qty(l.quantity)} ${Number(l.quantity) === 1 ? 'pc' : 'pcs'}` : `${fmt.qty(l.quantity)} ${l.item_unit}`);
+  const size = (l) => (l.size_unit ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : '');
+  const day = (d) => fmt.date(`${d}T12:00:00Z`);
+%>
+<section class="card mb-4">
+  <div class="card-body jt-record">
+    <div class="jt-crumb">Stores <i class="bi bi-chevron-right"></i><a href="/purchase-requests">Purchase requests</a><i class="bi bi-chevron-right"></i><span><%= request.number %></span></div>
+    <div class="jt-record-top">
+      <div class="jt-record-title">
+        <h1 class="h3"><%= request.number %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %></h1>
+        <div class="jt-meta">
+          <span><i class="bi bi-person"></i><%= request.requested_name ?? 'A removed user' %></span>
+          <span><i class="bi bi-calendar"></i><%= fmt.dateTime(request.created_at) %></span>
+          <span><i class="bi bi-geo-alt"></i><%= request.site_name %></span>
+          <% if (request.needed_by) { %><span><i class="bi bi-alarm"></i>Needed by <%= day(request.needed_by) %></span><% } %>
+        </div>
+      </div>
+      <div class="jt-page-actions">
+        <% if (canChange && request.status === 'pending') { %><a class="btn btn-outline-secondary" href="/purchase-requests/<%= request.id %>/edit"><i class="bi bi-pencil"></i>Edit</a><% } %>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="row g-4">
+  <div class="col-lg-8 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Materials</h2></div>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th>Item</th><th>For</th><th class="text-end">Qty</th><th class="text-end">Sq ft</th></tr></thead>
+          <tbody>
+            <% request.lines.forEach((l) => { %>
+              <tr>
+                <td><%= l.item_name %><% if (size(l)) { %><span class="jt-sub"><%= size(l) %></span><% } %><% if (!l.item_active) { %><span class="jt-sub text-danger">Switched off since</span><% } %></td>
+                <td><% if (l.job_id) { %><% if (canSeeJobs) { %><a class="font-monospace small text-nowrap" href="/jobs/<%= l.job_id %>"><%= l.job_number %></a><% } else { %><span class="font-monospace small text-nowrap"><%= l.job_number %></span><% } %><% } else { %><%= l.for_text ?? '—' %><% } %></td>
+                <td class="text-end text-nowrap"><%= qty(l) %></td>
+                <td class="text-end jt-num"><%= l.area_sq_ft === null ? '—' : fmt.money(Number(l.area_sq_ft) * Number(l.quantity)) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <% if (request.notes) { %><div class="card-body border-top small" style="white-space: pre-line"><%= request.notes %></div><% } %>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card" x-data="{ step: '' }">
+      <div class="card-header"><h2 class="h6 mb-0">Next step</h2></div>
+      <div class="card-body d-grid gap-3">
+        <% if (request.status === 'pending') { %>
+          <p class="small mb-0"><%= canApprove ? 'Waiting for your approval.' : 'Waiting for a manager to approve it.' %></p>
+        <% } else if (request.status === 'approved') { %>
+          <p class="small mb-0">Approved by <%= request.decided_name ?? 'a removed user' %>, <%= fmt.dateTime(request.decided_at) %>. <%= canOrder ? 'Put it on a purchase order.' : 'Waiting for stores to order it.' %></p>
+        <% } else if (request.status === 'ordered') { %>
+          <p class="small mb-0">On purchase order
+            <% if (canSeeOrders) { %><a class="font-monospace" href="/purchase-orders/<%= request.order_id %>"><%= request.order_number %></a><% } else { %><span class="font-monospace"><%= request.order_number %></span><% } %>
+            <%- include('partials/pill', { text: orderStatuses[request.order_status].label, tone: orderStatuses[request.order_status].tone }) %></p>
+        <% } else if (request.status === 'declined') { %>
+          <div class="small">Declined by <%= request.decided_name ?? 'a removed user' %>, <%= fmt.dateTime(request.decided_at) %><div class="mt-1"><%= request.reason %></div></div>
+        <% } else { %>
+          <div class="small">Cancelled<div class="mt-1"><%= request.reason %></div></div>
+        <% } %>
+
+        <div class="d-grid gap-2" x-show="!step">
+          <% if (canApprove && request.status === 'pending') { %>
+            <form method="post" action="/purchase-requests/<%= request.id %>/approve">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-success w-100" type="submit"><i class="bi bi-check2-circle"></i>Approve</button>
+            </form>
+            <button type="button" class="btn btn-outline-secondary" @click="step = 'decline'">Decline</button>
+          <% } %>
+          <% if (canOrder && request.status === 'approved') { %>
+            <a class="btn btn-primary" href="/purchase-orders/new?requests=<%= request.id %>"><i class="bi bi-cart-plus"></i>Make a purchase order</a>
+            <a class="small text-body-secondary" href="/purchase-requests?show=approved">Or order it together with other requests</a>
+          <% } %>
+          <% if (canChange && ['pending', 'approved'].includes(request.status)) { %>
+            <button type="button" class="btn btn-link btn-sm p-0 text-body-secondary" @click="step = 'cancel'">No longer needed: cancel it</button>
+          <% } %>
+        </div>
+
+        <div x-show="step === 'decline'" x-cloak>
+          <form method="post" action="/purchase-requests/<%= request.id %>/decline" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'reason', id: 'decline-reason', label: 'Why is it declined?', required: true, placeholder: 'e.g. Use the offcuts in stock' }) %>
+            <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit">Decline</button><button class="btn btn-link" type="button" @click="step = ''">Back</button></div>
+          </form>
+        </div>
+        <div x-show="step === 'cancel'" x-cloak>
+          <form method="post" action="/purchase-requests/<%= request.id %>/cancel" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'reason', id: 'cancel-reason', label: 'Why is it no longer needed?', required: true, placeholder: 'e.g. Customer changed the design' }) %>
+            <div class="d-flex gap-2"><button class="btn btn-secondary" type="submit">Cancel the request</button><button class="btn btn-link" type="button" @click="step = ''">Keep it</button></div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

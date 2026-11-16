@@ -24,7 +24,8 @@ export const PERMISSIONS = [
   ['Sales', 'invoices.manage', 'Raise invoices and record payments'],
   ['Stores', 'stores.issue', 'Issue and return materials'],
   ['Stores', 'inventory.manage', 'Manage items, stock counts and transfers'],
-  ['Stores', 'purchasing.manage', 'Raise purchase requests and orders, receive goods'],
+  ['Stores', 'purchasing.request', 'Ask stores for materials (purchase requests)'],
+  ['Stores', 'purchasing.manage', 'Raise purchase orders from requests, receive goods'],
   ['Stores', 'purchasing.approve', 'Approve purchase requests and orders'],
   ['Stores', 'inventory.approve', 'Approve stock adjustments and counts'],
   ['People', 'attendance.manage', 'Mark attendance'],
@@ -52,7 +53,7 @@ export const ROLES = [
   {
     key: 'supervisor', name: 'Supervisor',
     description: 'Jobs, check-in, attendance and quality checks at their sites',
-    permissions: ['checkin.manage', 'checkin.gate', 'goods.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view', 'visitors.book'],
+    permissions: ['checkin.manage', 'checkin.gate', 'goods.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view', 'visitors.book', 'purchasing.request'],
   },
   {
     key: 'sales', name: 'Sales',
@@ -62,7 +63,7 @@ export const ROLES = [
   {
     key: 'storekeeper', name: 'Storekeeper',
     description: 'Inventory, issuing materials and receiving goods',
-    permissions: ['stores.issue', 'inventory.manage', 'purchasing.manage', 'jobs.view'],
+    permissions: ['stores.issue', 'inventory.manage', 'purchasing.request', 'purchasing.manage', 'jobs.view'],
   },
   {
     key: 'technician', name: 'Technician',

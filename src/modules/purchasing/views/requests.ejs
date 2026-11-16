@@ -1,0 +1,71 @@
+<%# Purchase requests. On "To order", stores tick the requests going to one supplier and start an order with them. %>
+<%
+  const tabs = [['pending', 'Waiting for approval'], ['approved', 'To order'], ['ordered', 'Ordered'], ['all', 'All']];
+  const empty = {
+    pending: { icon: 'hourglass', heading: 'Nothing waiting for approval', text: 'New requests wait here until a manager approves them.' },
+    approved: { icon: 'cart', heading: 'Nothing to order', text: 'Approved requests wait here until stores put them on a purchase order.' },
+    ordered: { icon: 'cart-check', heading: 'Nothing ordered yet', text: 'Requests move here once they are on a purchase order.' },
+    all: { icon: 'inbox', heading: 'No purchase requests yet', text: 'Ask for materials when a job needs them.' },
+  };
+  const picking = canOrder && tab === 'approved' && !q && list.length > 0;
+%>
+<%- include('partials/page-header', {
+  crumb: ['Stores', 'Purchase requests'],
+  heading: 'Purchase requests',
+  sub: 'Materials the workshop has asked for.',
+  actions: canAsk ? [{ label: 'Ask for materials', href: '/purchase-requests/new', icon: 'plus-lg', primary: true }] : [],
+}) %>
+
+<section class="card" x-data="{ picked: [] }">
+  <nav class="nav nav-tabs jt-tabs">
+    <% tabs.forEach(([key, label]) => { %>
+      <a class="nav-link<%= tab === key && !q ? ' active' : '' %>" href="/purchase-requests?show=<%= key %>"<%- tab === key && !q ? ' aria-current="page"' : '' %>><%= label %> <span class="badge rounded-pill"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="jt-toolbar" method="get" action="/purchase-requests">
+    <input type="hidden" name="show" value="<%= tab %>">
+    <div class="jt-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Number, item or job" aria-label="Search purchase requests">
+    </div>
+    <% if (q) { %><a class="btn btn-link" href="/purchase-requests?show=<%= tab %>">Clear search</a><% } %>
+    <span class="jt-count"><%= list.length %> <%= list.length === 1 ? 'request' : 'requests' %></span>
+  </form>
+
+  <% if (picking) { %>
+    <form method="get" action="/purchase-orders/new" class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom">
+      <input type="hidden" name="requests" :value="picked.join(',')">
+      <span class="small text-body-secondary me-auto" x-text="picked.length ? `${picked.length} ticked: they go on one order, to one supplier` : 'Tick the requests to order from the same supplier'"></span>
+      <button class="btn btn-primary btn-sm" type="submit" :disabled="!picked.length"><i class="bi bi-cart-plus"></i>Make a purchase order</button>
+    </form>
+  <% } %>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', q ? { icon: 'search', heading: `Nothing matches “${q}”`, text: 'Try the number, an item, or a job number.' } : empty[tab]) %>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table">
+        <thead><tr>
+          <% if (picking) { %><th class="jt-check-col"><span class="visually-hidden">Order</span></th><% } %>
+          <th>Request</th><th>Materials</th><th class="d-none d-md-table-cell">Asked by</th><th class="text-nowrap">Needed by</th>
+        </tr></thead>
+        <tbody>
+          <% list.forEach((r) => { const st = statuses[r.status]; %>
+            <tr>
+              <% if (picking) { %>
+                <td class="jt-check-col"><label><input class="form-check-input" type="checkbox" value="<%= r.id %>" x-model="picked" aria-label="Order <%= r.number %>"></label></td>
+              <% } %>
+              <td><a class="jt-row-link font-monospace text-nowrap" href="/purchase-requests/<%= r.id %>"><%= r.number %></a>
+                <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
+              <td><%= r.items %>
+                <% if (r.jobs) { %><span class="jt-sub font-monospace"><%= r.jobs.split(',').join(', ') %></span><% } %>
+                <% if (r.order_number) { %><span class="jt-sub">On <span class="font-monospace"><%= r.order_number %></span></span><% } %></td>
+              <td class="d-none d-md-table-cell"><%= r.requested_name ?? '—' %><span class="jt-sub"><%= fmt.date(r.created_at) %></span></td>
+              <td class="text-nowrap"><%= r.needed_by ? fmt.date(`${r.needed_by}T12:00:00Z`) : '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

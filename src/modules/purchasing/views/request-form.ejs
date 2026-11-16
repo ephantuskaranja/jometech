@@ -1,0 +1,37 @@
+<%# Ask stores for materials, or change a request still waiting for approval. No prices: stores add them on the order. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Purchase requests', href: '/purchase-requests' }, request ? request.number : 'New'],
+  heading: request ? `Edit ${request.number}` : 'Ask for materials',
+  sub: 'What is needed, how many, and what it is for. Stores order it once it is approved.',
+}) %>
+
+<form method="post" action="<%= request ? `/purchase-requests/${request.id}` : '/purchase-requests' %>" novalidate
+      x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items }) %>)">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card mb-4">
+    <div class="card-header"><h2 class="h6 mb-0">Materials</h2></div>
+    <div class="card-body d-grid gap-3">
+      <%- include('purchasing/views/lines', { errors, jobs, canAddItems, prices: false }) %>
+    </div>
+  </section>
+
+  <section class="card mb-4">
+    <div class="card-body d-grid gap-3">
+      <div class="jt-fields">
+        <%- include('partials/field', { name: 'needed_by', label: 'Needed by', type: 'date', value: values.needed_by, error: errors.needed_by, hint: 'Optional.', attrs: `min="${today}"` }) %>
+      </div>
+      <%- include('partials/field', { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, value: values.notes, error: errors.notes, hint: 'Optional. e.g. a preferred supplier, or why it is urgent.' }) %>
+    </div>
+  </section>
+
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-inbox"></i><%= willApprove ? 'You can approve requests, so this one is approved as it is saved.' : 'Goes to a manager for approval.' %></span>
+    <div class="jt-savebar-actions">
+      <a class="btn btn-outline-secondary" href="<%= request ? `/purchase-requests/${request.id}` : '/purchase-requests' %>">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i><%= request ? 'Save changes' : willApprove ? 'Save' : 'Send for approval' %></button>
+    </div>
+  </div>
+</form>
+
+<% if (canAddItems) { %><%- include('purchasing/views/quick-add-item', { categories }) %><% } %>

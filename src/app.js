@@ -45,6 +45,7 @@ import { router as jobTypeRoutes } from './modules/job-types/routes.js';
 import { router as itemRoutes } from './modules/items/routes.js';
 import { router as supplierRoutes } from './modules/suppliers/routes.js';
 import { router as purchasingRoutes } from './modules/purchasing/routes.js';
+import { router as requestRoutes } from './modules/purchasing/request-routes.js';
 import { router as stockRoutes } from './modules/stock/routes.js';
 import { router as issueRoutes } from './modules/issues/routes.js';
 import { router as siteRoutes } from './modules/sites/routes.js';
@@ -179,6 +180,7 @@ export function createApp() {
   app.use(itemRoutes);
   app.use(supplierRoutes);
   app.use(purchasingRoutes);
+  app.use(requestRoutes);
   app.use(adjustmentRoutes);
   app.use(countRoutes);
   app.use(transferRoutes);

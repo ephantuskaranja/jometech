@@ -8,6 +8,13 @@
 <form method="post" action="<%= order ? `/purchase-orders/${order.id}` : '/purchase-orders' %>" novalidate
       x-data="purchaseOrderForm(<%= JSON.stringify({ rows, items, orderDate: values.order_date }) %>)">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <% requests.forEach((r) => { %><input type="hidden" name="request_id" value="<%= r.id %>"><% }) %>
+  <% if (requests.length) { %>
+    <div class="alert alert-info d-flex gap-2 align-items-start"><i class="bi bi-inbox"></i>
+      <div>From <%= requests.length === 1 ? 'purchase request' : 'purchase requests' %> <% requests.forEach((r, i) => { %><%= i ? ', ' : '' %><a class="font-monospace" href="/purchase-requests/<%= r.id %>"><%= r.number %></a><% }) %>.
+        Their materials are filled in below: choose the supplier and add prices. Saving marks <%= requests.length === 1 ? 'it' : 'them' %> as ordered.</div>
+    </div>
+  <% } %>
 
   <section class="card mb-4">
     <div class="card-body d-grid gap-3">
@@ -28,35 +35,7 @@
     <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto">Materials</h2>
       <span class="small text-body-secondary" x-show="total > 0" x-cloak x-text="`KES ${money(total)} excl. VAT`"></span></div>
     <div class="card-body d-grid gap-3">
-      <% if (errors.lines) { %><div class="jt-error-text"><%= errors.lines %></div><% } %>
-      <datalist id="po-for"><option value="Trailer"><% jobs.forEach((j) => { %><option value="<%= j.number %> <%= j.customer_name %>"><% }) %></datalist>
-      <datalist id="line-units"><option value="Pc"><option value="Set"><option value="Pair"><option value="Length"><option value="m"><option value="kg"><option value="Litre"><option value="Box"></datalist>
-
-      <template x-for="(row, i) in rows" :key="row.key">
-        <div class="jt-po-line">
-          <div class="jt-po-item">
-            <label class="form-label" :for="`po-item-${row.key}`" x-text="`Item ${i + 1}`"></label>
-            <select class="form-select" :id="`po-item-${row.key}`" x-init="$nextTick(() => picker($el, row))"<%= canAddItems ? ' data-can-add' : '' %>></select>
-            <input type="hidden" name="line_item_name" :value="row.item_name">
-            <input type="hidden" name="line_item_id" :value="row.item_id">
-          </div>
-          <button type="button" class="btn jt-icon-btn" @click="removeRow(i)" :aria-label="`Remove line ${i + 1}`"><i class="bi bi-x-lg"></i></button>
-          <div class="jt-po-fields">
-            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-l-${row.key}`">Length</label><input class="form-control text-end jt-num" :id="`po-l-${row.key}`" name="line_length" inputmode="decimal" data-number="decimal" x-model="row.length"></div>
-            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-w-${row.key}`">Width</label><input class="form-control text-end jt-num" :id="`po-w-${row.key}`" name="line_width" inputmode="decimal" data-number="decimal" x-model="row.width"></div>
-            <div x-show="isArea(row)" x-cloak><label class="form-label" :for="`po-u-${row.key}`">In</label><select class="form-select" :id="`po-u-${row.key}`" name="line_size_unit" x-model="row.size_unit"><option value="ft">feet</option><option value="mm">mm</option></select></div>
-            <div><label class="form-label" :for="`po-q-${row.key}`" x-text="isArea(row) ? 'Pieces' : `Qty${unitOf(row) ? ` (${unitOf(row)})` : ''}`"></label><input class="form-control text-end jt-num" :id="`po-q-${row.key}`" name="line_quantity" inputmode="decimal" data-number="decimal" x-model="row.quantity"></div>
-            <div class="jt-po-for"><label class="form-label" :for="`po-f-${row.key}`">For</label><input class="form-control" :id="`po-f-${row.key}`" name="line_for" list="po-for" maxlength="60" autocomplete="off" x-model="row.for" placeholder="Job or e.g. Trailer"></div>
-            <div><label class="form-label" :for="`po-p-${row.key}`" x-text="isArea(row) ? 'Price per sq ft' : 'Price'"></label><input class="form-control text-end jt-num" :id="`po-p-${row.key}`" name="line_price" inputmode="decimal" data-number="decimal" x-model="row.price"></div>
-          </div>
-          <div class="jt-po-sums small text-body-secondary">
-            <span x-show="isArea(row) && area(row)" x-text="`${money(area(row))} sq ft`"></span>
-            <a href="#" x-show="lastPrice(row) !== null && !row.price" @click.prevent="useLast(row)" x-text="`Use last price: ${money(lastPrice(row))}`"></a>
-            <span class="ms-auto fw-semibold text-body" x-show="amount(row)" x-text="`KES ${money(amount(row))}`"></span>
-          </div>
-        </div>
-      </template>
-      <div><button type="button" class="btn btn-outline-secondary btn-sm" @click="addRow()"><i class="bi bi-plus-lg"></i>Add another line</button></div>
+      <%- include('purchasing/views/lines', { errors, jobs, canAddItems, prices: true }) %>
     </div>
   </section>
 

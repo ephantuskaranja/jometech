@@ -410,6 +410,8 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-table .jt-row-link::after { content: ""; position: absolute; inset: 0; } /* whole row is clickable */
 /* …except its own buttons, forms and links, which sit above that and do their own thing (Clear out, Received, Arrived). */
 .jt-table tr :is(form, button, input, select, textarea, .btn, a:not(.jt-row-link)) { position: relative; z-index: 1; }
+.jt-table .jt-check-col { width: 1%; }
+.jt-table .jt-check-col label { position: relative; z-index: 1; display: block; padding: .5rem; margin: -.5rem; cursor: pointer; } /* a bigger target than the box, above the row link */
 .jt-sub { display: block; font-size: .8rem; color: var(--bs-tertiary-color); font-weight: 400; }
 
 /* Sticky save bar at the bottom of long forms */

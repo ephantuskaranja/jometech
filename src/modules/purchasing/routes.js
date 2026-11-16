@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
-import { sheetSize, SHEET_UNITS } from '../../core/sheet.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import { config } from '../../config.js';
 import * as orders from './service.js';
+import { readLines, blankRow, rowsOf } from './lines.js';
+import { forOrdering, requestsOnOrder } from './requests.js';
 import { getSupplier } from '../suppliers/service.js';
 import { listCategories } from '../items/service.js';
 import { receiptsForOrder, RECEIVABLE } from '../stock/service.js';
@@ -29,63 +30,7 @@ const orderSchema = z.object({
 }).refine((v) => !v.expected_on || !isDay(v.order_date) || v.expected_on >= v.order_date,
   { path: ['expected_on'], message: 'Delivery can’t be before the order date' });
 
-const number = (v) => Number(String(v ?? '').replace(/[,\s]/g, ''));
-const decimals = (n, places) => Math.abs(n * 10 ** places - Math.round(n * 10 ** places)) < 1e-6;
-const JOB_NUMBER = /^(JOB-\d{4}-\d+)/i;
-
-/**
- * Lines arrive as lists, one entry per row. A row with no item and no quantity is skipped.
- * "For" is free text ("Trailer"), or starts with a job number (chosen from the suggestions) to link that job.
- */
-async function readLines(body) {
-  const list = (key) => [].concat(body[key] ?? []).map((v) => String(v ?? '').trim());
-  const [ids, names, quantities, lengths, widths, units, fors, prices] = ['line_item_id', 'line_item_name', 'line_quantity', 'line_length', 'line_width', 'line_size_unit', 'line_for', 'line_price'].map(list);
-  const rows = names.map((item_name, i) => ({
-    item_id: ids[i] ?? '', item_name, quantity: quantities[i] ?? '', length: lengths[i] ?? '', width: widths[i] ?? '',
-    size_unit: units[i] || 'ft', for: fors[i] ?? '', price: prices[i] ?? '',
-  }));
-  const items = await orders.activeItems(rows.map((r) => Number(r.item_id)).filter(Boolean));
-  const lines = [];
-  let error = null;
-  for (const [i, row] of rows.entries()) {
-    if (!row.item_name && !row.item_id && !row.quantity) continue;
-    const n = i + 1;
-    const item = items.find((it) => it.id === Number(row.item_id));
-    const qty = number(row.quantity);
-    const price = row.price === '' ? null : number(row.price);
-    if (!item) { error ??= `Line ${n}: choose an item from the list, or add it`; continue; }
-    if (!Number.isFinite(qty) || qty <= 0 || qty > 9_999_999 || !decimals(qty, 3)) { error ??= `Line ${n}: check the quantity`; continue; }
-    if (price !== null && (!Number.isFinite(price) || price < 0 || price > 999_999_999 || !decimals(price, 2))) { error ??= `Line ${n}: check the price`; continue; }
-
-    const line = { item_id: item.id, quantity: qty, length: null, width: null, size_unit: null, area_sq_ft: null, job_id: null, for_text: null, unit_price: price, amount: null };
-    let billed = qty;
-    if (item.priced_by === 'area') {
-      const [length, width] = [number(row.length), number(row.width)];
-      const fine = (v) => Number.isFinite(v) && v > 0 && v <= 100_000 && decimals(v, 2);
-      if (!fine(length) || !fine(width) || !SHEET_UNITS.includes(row.size_unit)) { error ??= `Line ${n}: enter the plate’s length and width`; continue; }
-      if (!Number.isInteger(qty)) { error ??= `Line ${n}: plates are ordered in whole pieces`; continue; }
-      const { sqFt } = sheetSize({ length, width, unit: row.size_unit });
-      Object.assign(line, { length, width, size_unit: row.size_unit, area_sq_ft: Math.round(sqFt * 10_000) / 10_000 });
-      billed = qty * sqFt;
-    }
-    if (price !== null) line.amount = Math.round(billed * price * 100) / 100;
-
-    const jobNumber = JOB_NUMBER.exec(row.for)?.[1];
-    if (jobNumber) {
-      const job = await orders.jobIdFor(jobNumber.toUpperCase());
-      if (!job) { error ??= `Line ${n}: there is no job ${jobNumber}`; continue; }
-      line.job_id = job.id;
-    } else if (row.for.length > 60) { error ??= `Line ${n}: keep “for” to 60 characters`; continue; } else {
-      line.for_text = row.for || null;
-    }
-    lines.push(line);
-  }
-  if (!error && !lines.length) error = 'Add at least one item';
-  return { rows, lines, error };
-}
-
 const blank = () => ({ supplier_id: '', order_date: localDay(), expected_on: '', notes: '' });
-const blankRow = () => ({ item_id: '', item_name: '', quantity: '', length: '', width: '', size_unit: 'ft', for: '', price: '' });
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
 function needSite(req) {
@@ -100,11 +45,11 @@ async function loadOrder(req) {
   return order;
 }
 
-async function renderForm(req, res, { status = 200, order = null, values, rows = [], errors = {} }) {
+async function renderForm(req, res, { status = 200, order = null, values, rows = [], errors = {}, requests = [] }) {
   const supplier = values.supplier_id ? await getSupplier(Number(values.supplier_id)) : null;
   res.status(status).render('purchasing/views/form', {
     title: order ? `Edit ${order.number}` : 'New purchase order',
-    order, values, errors,
+    order, values, errors, requests,
     rows: rows.length ? rows : [blankRow()],
     supplierOption: supplier ? [{ value: supplier.id, label: `${supplier.name} (${supplier.number})` }] : [],
     items: await orders.itemOptions(),
@@ -135,26 +80,49 @@ router.get('/purchase-orders', view, async (req, res) => {
   });
 });
 
+/** Approved purchase requests to put on the order: ?requests=3,5 (from the list), or request_id fields (the form). */
+const requestIds = (v) => [...new Set([].concat(v ?? []).flatMap((x) => String(x).split(',')).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 50);
+async function requestsFor(req, ids) {
+  const found = await forOrdering(ids, req.user.sites.map((s) => s.id));
+  if (found.length !== ids.length) throw httpError(409, 'One of those purchase requests has already been ordered, or is no longer approved. Go back to the requests and choose again.');
+  return found;
+}
+
+/** The same item, size and purpose asked for in several requests: one line, quantities added. */
+function combine(lines) {
+  const out = new Map();
+  for (const l of lines) {
+    const key = [l.item_id, l.length, l.width, l.size_unit, l.job_id, l.for_text].join('|');
+    const seen = out.get(key);
+    if (seen) seen.quantity = Math.round((Number(seen.quantity) + Number(l.quantity)) * 1000) / 1000;
+    else out.set(key, { ...l });
+  }
+  return [...out.values()];
+}
+
 router.get('/purchase-orders/new', manage, async (req, res) => {
   needSite(req);
   const values = blank();
   const supplier = req.query.supplier_id ? await getSupplier(Number(req.query.supplier_id)) : null;
   if (supplier) values.supplier_id = supplier.id;
-  await renderForm(req, res, { values });
+  const requests = await requestsFor(req, requestIds(req.query.requests));
+  await renderForm(req, res, { values, requests, rows: rowsOf(combine(requests.flatMap((r) => r.lines))) });
 });
 
 router.post('/purchase-orders', manage, async (req, res) => {
   needSite(req);
   const values = { ...blank(), ...req.body };
+  const requests = await requestsFor(req, requestIds(req.body.request_id));
   const { data, rows, errors } = await validate(req.body);
-  if (Object.keys(errors).length) return renderForm(req, res, { status: 422, values, rows, errors });
+  if (Object.keys(errors).length) return renderForm(req, res, { status: 422, values, rows, errors, requests });
+  data.request_ids = requests.map((r) => r.id);
   try {
     const { id, number: orderNumber } = await orders.createOrder(data, req);
     req.session.flash = { type: 'success', text: `${orderNumber} saved as a draft.` };
     res.redirect(`/purchase-orders/${id}`);
   } catch (err) {
     if (!err.field) throw err;
-    await renderForm(req, res, { status: 422, values, rows, errors: { [err.field]: err.message } });
+    await renderForm(req, res, { status: 422, values, rows, requests, errors: { [err.field]: err.message } });
   }
 });
 
@@ -163,6 +131,7 @@ router.get('/purchase-orders/:id', view, async (req, res) => {
   res.render('purchasing/views/show', {
     title: order.number, order, statuses: orders.STATUSES,
     entries: await history('purchase_order', order.id),
+    requests: await requestsOnOrder(order.id),
     canManage: req.user.can('purchasing.manage'),
     canApprove: req.user.can('purchasing.approve'),
     canSeeJobs: req.user.can('jobs.view') || req.user.can('jobs.progress') || req.user.can('jobs.manage'),
@@ -173,16 +142,12 @@ router.get('/purchase-orders/:id', view, async (req, res) => {
   });
 });
 
-const plain = (v) => (v === null || v === undefined ? '' : String(Number(v)));
 
 router.get('/purchase-orders/:id/edit', manage, async (req, res) => {
   const order = await loadOrder(req);
   if (order.status !== 'draft') throw httpError(409, `${order.number} is ${orders.STATUSES[order.status].label.toLowerCase()}. Take it back to draft to change it.`);
   const values = { supplier_id: order.supplier_id, order_date: order.order_date, expected_on: order.expected_on ?? '', notes: order.notes ?? '' };
-  const rows = order.lines.map((l) => ({
-    item_id: l.item_id, item_name: l.item_name, quantity: plain(l.quantity), length: plain(l.length), width: plain(l.width), size_unit: l.size_unit ?? 'ft',
-    for: l.job_number ?? l.for_text ?? '', price: plain(l.unit_price),
-  }));
+  const rows = rowsOf(order.lines);
   await renderForm(req, res, { order, values, rows });
 });
 

@@ -3,6 +3,7 @@ import { countTabs } from '../../core/count-tabs.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { httpError } from '../../core/validate.js';
+import { markOrdered, orderCancelled } from './requests.js';
 
 // Purchase orders.
 //
@@ -50,6 +51,7 @@ export async function createOrder(input, actor) {
     const number = await nextNumber(trx, 'order');
     const [id] = await trx('purchase_orders').insert({ ...details(input), number, site_id: actor.site.id, created_by: actor.user.id });
     await writeLines(trx, id, input.lines);
+    await markOrdered(trx, input.request_ids ?? [], { id, number }, actor);
     await audit(trx, actor, { entity: 'purchase_order', id, action: 'create', summary: `${input.lines.length} line${input.lines.length === 1 ? '' : 's'}` });
     return { id, number };
   });
@@ -118,6 +120,7 @@ export async function cancelOrder(id, reason, actor) {
     const order = await lock(trx, id);
     if (['cancelled', 'partly_received', 'received'].includes(order.status)) throw wrongStatus(order, 'cancelled');
     await trx('purchase_orders').where({ id }).update({ status: 'cancelled', cancelled_at: trx.fn.now(), cancelled_reason: reason });
+    await orderCancelled(trx, order, actor);
     await audit(trx, actor, { entity: 'purchase_order', id, action: 'po_cancelled', summary: reason });
   });
 }
@@ -163,8 +166,9 @@ export function listOrders({ siteIds, tab = 'open', q = '' }) {
   return query;
 }
 
-export async function countByTab(siteIds) {
-  return countTabs(TABS, (tab) => { const q = db('purchase_orders as o').whereIn('o.site_id', siteIds); tabFilter(q, tab); return q; });
+/** Counts per tab; `tabs` may also name a status ('pending'). */
+export async function countByTab(siteIds, tabs = TABS) {
+  return countTabs(tabs, (tab) => { const q = db('purchase_orders as o').whereIn('o.site_id', siteIds); tabFilter(q, tab); return q; });
 }
 
 export function ordersForSupplier(supplierId, siteIds) {

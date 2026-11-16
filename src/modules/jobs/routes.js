@@ -19,6 +19,7 @@ import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
 import { typeOptions } from '../job-types/service.js';
 import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.js';
+import { requestsForJob, STATUSES as REQUEST_STATUSES } from '../purchasing/requests.js';
 import { materialsForJob } from '../issues/service.js';
 import { moneyForJob, METHODS as PAYMENT_METHODS } from '../invoices/service.js';
 
@@ -165,6 +166,10 @@ router.get('/jobs/:id', view, async (req, res) => {
     // Purchase orders with a line for this job, for those who can open them.
     orders: req.user.can('purchasing.manage') || req.user.can('purchasing.approve') ? await ordersForJob(job.id, req.user.sites.map((s) => s.id)) : [],
     orderStatuses: ORDER_STATUSES,
+    // Materials asked for, for this job; and a button to ask, while the job is open.
+    requests: req.user.can('purchasing.request') || req.user.can('purchasing.manage') || req.user.can('purchasing.approve') ? await requestsForJob(job.id, req.user.sites.map((s) => s.id)) : [],
+    requestStatuses: REQUEST_STATUSES,
+    canAskMaterials: (req.user.can('purchasing.request') || req.user.can('purchasing.manage')) && ['open', 'in_progress'].includes(job.status),
     materials: await materialsForJob(job.id),
     canIssue: req.user.can('stores.issue') && ['open', 'in_progress'].includes(job.status),
     // What materials cost: for those who run the stores and managers, not the workshop floor.

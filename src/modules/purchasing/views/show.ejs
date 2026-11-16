@@ -164,6 +164,7 @@
           <div><dt>Expected</dt><dd><%= order.expected_on ? fmt.date(`${order.expected_on}T12:00:00Z`) : '—' %></dd></div>
           <div><dt>Prepared by</dt><dd><%= order.created_name ?? '—' %></dd></div>
           <div><dt>Approved by</dt><dd><%= order.approved_name ?? '—' %></dd></div>
+          <% if (requests.length) { %><div><dt>Asked for in</dt><dd><% requests.forEach((r, i) => { %><%= i ? ', ' : '' %><a class="font-monospace small" href="/purchase-requests/<%= r.id %>"><%= r.number %></a><% }) %></dd></div><% } %>
         </dl>
       </div>
     </section>
