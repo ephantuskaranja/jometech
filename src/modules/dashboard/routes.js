@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { config } from '../../config.js';
 import { quickActions, sectionsFor } from './service.js';
+import { alertsFor } from './alerts.js';
 
 export const router = Router();
 
@@ -13,11 +14,13 @@ function greeting(now) {
 
 router.get('/', async (req, res) => {
   const now = new Date();
+  const alerts = await alertsFor(req.user, req.site);
   res.render('dashboard/views/index', {
     title: 'Dashboard',
     greeting: `${greeting(now)}, ${req.user.name.split(' ')[0]}`,
     today: now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: config.timezone }),
-    sections: await sectionsFor(req.user, req.site),
+    alerts: alerts.groups,
+    sections: await sectionsFor(req.user, req.site, alerts.totals),
     actions: quickActions(req.user),
   });
 });

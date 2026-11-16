@@ -703,3 +703,15 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-guide.is-narrow .jt-costing dd { white-space: normal; }
 .jt-guide.is-narrow .jt-guide-jobs li { flex-wrap: wrap; }
 .jt-guide.is-narrow .jt-guide-jobs .text-nowrap { white-space: normal !important; width: 100%; }
+
+/* Dashboard: Needs attention. */
+.jt-alert-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.jt-alert-group { padding: .875rem 1rem; border-top: 1px solid var(--bs-border-color); box-shadow: inset 4px 0 0 var(--bs-warning); }
+.jt-alert-group.is-bad { box-shadow: inset 4px 0 0 var(--bs-danger); }
+.jt-alert-title { font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-bottom: .375rem; }
+.jt-alert-group.is-warn .jt-alert-title .bi { color: var(--bs-warning-text-emphasis); }
+.jt-alert-group.is-bad .jt-alert-title .bi { color: var(--bs-danger-text-emphasis); }
+.jt-alert-group li { padding: .25rem 0; }
+.jt-alert-group li + li { border-top: 1px dashed var(--bs-border-color-translucent); }
+.jt-alert-group li a { font-weight: 600; }
+.jt-alert-sub { display: block; font-size: .8125rem; color: var(--bs-secondary-color); }

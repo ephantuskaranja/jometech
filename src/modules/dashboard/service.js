@@ -23,13 +23,13 @@ import { waitingAtGate } from '../checkins/release.js';
 const count = async (q) => Number((await q.count({ n: '*' }))[0].n);
 const can = (user, ...perms) => perms.some((p) => user.can(p));
 
-async function workshop(user, site) {
+async function workshop(user, site, known) {
   const today = localDay();
   const active = (q) => q.where('site_id', site.id).whereIn('status', ['open', 'in_progress']);
   const [inWorkshop, byTab, overdue, dueWeek, coming] = await Promise.all([
     countInWorkshop(site.id),
     jobs.countByTab(site.id),
-    count(active(db('jobs')).where('due_on', '<', today)),
+    known.jobs ?? count(active(db('jobs')).where('due_on', '<', today)),
     count(active(db('jobs')).whereBetween('due_on', [today, new Date(Date.parse(today + 'T00:00:00Z') + 6 * 86_400_000).toISOString().slice(0, 10)])),
     arriving(site.id),
   ]);
@@ -69,10 +69,10 @@ async function sales(user) {
   return items.length ? { title: 'Sales', icon: 'graph-up', items } : null;
 }
 
-async function stores(user, siteIds) {
+async function stores(user, siteIds, known) {
   const items = [];
   if (can(user, 'inventory.manage', 'stores.issue', 'purchasing.manage', 'purchasing.approve')) {
-    const { low } = await stockTotals();
+    const low = known.stock ?? (await stockTotals()).low;
     items.push({ label: 'Low stock', value: low, foot: 'at or below reorder level', icon: 'stack', href: '/inventory?show=low', tone: 'warn' });
   }
   if (can(user, 'purchasing.manage', 'purchasing.approve')) {
@@ -86,7 +86,7 @@ async function stores(user, siteIds) {
   return items.length ? { title: 'Stores', icon: 'box-seam', items } : null;
 }
 
-async function people(user, site, siteIds) {
+async function people(user, site, siteIds, known) {
   const items = [];
   if (can(user, 'attendance.manage')) {
     const today = localDay();
@@ -100,7 +100,7 @@ async function people(user, site, siteIds) {
   if (can(user, 'payroll.manage', 'payroll.approve')) {
     const [drafts, checked] = await Promise.all([
       count(db('payrolls').whereIn('site_id', siteIds).where('status', 'draft')),
-      count(db('payrolls').whereIn('site_id', siteIds).where('status', 'checked')),
+      known.payroll ?? count(db('payrolls').whereIn('site_id', siteIds).where('status', 'checked')),
     ]);
     if (can(user, 'payroll.manage')) items.push({ label: 'Payroll drafts', value: drafts, foot: 'to check', icon: 'cash-stack', href: '/payroll', hideZero: true });
     items.push({ label: 'Payroll to approve', value: checked, foot: 'checked, waiting', icon: 'patch-check', href: '/payroll', tone: can(user, 'payroll.approve') ? 'warn' : null });
@@ -140,15 +140,18 @@ async function visitors(user, site) {
   return { title: `Visitors at ${site.name}`, icon: 'person-badge', items, byPurpose: c.byPurpose };
 }
 
-/** The sections this person sees, in the order they appear. */
-export async function sectionsFor(user, site) {
+/**
+ * The sections this person sees, in the order they appear. `known`: totals the alerts already
+ * counted (alerts.js), so they aren't counted twice.
+ */
+export async function sectionsFor(user, site, known = {}) {
   const siteIds = user.sites.map((s) => s.id);
   const list = await Promise.all([
     // Workshop for those who work in it: "see jobs" alone (sales, stores) isn't enough.
-    site && can(user, 'jobs.manage', 'jobs.progress', 'checkin.manage') ? workshop(user, site) : null,
+    site && can(user, 'jobs.manage', 'jobs.progress', 'checkin.manage') ? workshop(user, site, known) : null,
     sales(user),
-    stores(user, siteIds),
-    site ? people(user, site, siteIds) : null,
+    stores(user, siteIds, known),
+    site ? people(user, site, siteIds, known) : null,
     site ? visitors(user, site) : null,
   ]);
   // A card marked hideZero only matters when there is something in it.
