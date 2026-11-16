@@ -1,0 +1,69 @@
+<%#
+  An uploaded file, checked: per sheet, every row with what will happen to it (add, skip, problem).
+  While it waits: Import (adds only the rows marked Add) or Discard. Afterwards: what was added.
+%>
+<%
+  const STATUS = { add: { text: 'Add', tone: 'ok' }, skip: { text: 'Skip', tone: 'neutral' }, error: { text: 'Problem', tone: 'bad' } };
+  const waiting = imp.status === 'preview';
+%>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Import data', href: '/admin/import' }, imp.file_name],
+  heading: kind.TITLE,
+  sub: `${imp.file_name} · uploaded ${fmt.dateTime(imp.created_at)}${imp.by ? ` by ${imp.by}` : ''}`,
+}) %>
+
+<% if (!waiting) { %>
+  <div class="alert <%= imp.status === 'done' ? 'alert-success' : 'alert-secondary' %> d-flex gap-2"><i class="bi <%= imp.status === 'done' ? 'bi-check-circle' : 'bi-x-circle' %>"></i>
+    <div><%= imp.status === 'done' ? `Imported ${fmt.dateTime(imp.finished_at)}: ${imp.summary ?? ''}.` : `Discarded ${fmt.dateTime(imp.finished_at)}. Nothing was added.` %></div></div>
+<% } %>
+
+<div class="jt-kpis mb-4">
+  <div class="card jt-kpi is-ok"><span class="jt-kpi-label"><i class="bi bi-plus-circle"></i><%= waiting ? 'Will be added' : 'Marked to add' %></span><span class="jt-kpi-value"><%= counts.add %></span></div>
+  <div class="card jt-kpi"><span class="jt-kpi-label"><i class="bi bi-skip-forward"></i>Skipped: already in the app</span><span class="jt-kpi-value"><%= counts.skip %></span></div>
+  <div class="card jt-kpi<%= counts.error ? ' is-warn' : '' %>"><span class="jt-kpi-label"><i class="bi bi-exclamation-triangle"></i>Problems: not added</span><span class="jt-kpi-value"><%= counts.error %></span></div>
+</div>
+
+<% if (waiting && counts.error) { %>
+  <div class="alert alert-warning small">Rows with a problem won’t be added. Fix them in the Excel file and upload it again (rows already added are then skipped), or import the rest now.</div>
+<% } %>
+
+<% kind.SHEETS.forEach((s) => { const rows = imp.rows[s.name] ?? []; %>
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <h2 class="h6 mb-0 me-auto"><%= s.name %></h2>
+      <span class="small text-body-secondary"><%= rows.length %> row<%= rows.length === 1 ? '' : 's' %></span>
+    </div>
+    <% if (!rows.length) { %>
+      <div class="card-body small text-body-secondary">Nothing on this sheet.</div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0">
+          <thead><tr><th class="text-end">Row</th><th></th><th>Details</th><th>Note</th></tr></thead>
+          <tbody>
+            <% rows.forEach((r) => { const st = STATUS[r.status]; const shown = r.show.filter(Boolean); if (!shown.length) shown.push('—'); %>
+              <tr>
+                <td class="text-end text-body-tertiary jt-num"><%= r.row %></td>
+                <td><%- include('partials/pill', { text: st.text, tone: st.tone }) %></td>
+                <td><strong><%= shown[0] %></strong><% shown.slice(1).forEach((x) => { %> <span class="text-body-secondary">· <%= x %></span><% }) %></td>
+                <td class="small <%= r.status === 'error' ? 'text-danger-emphasis' : 'text-body-secondary' %>"><%= r.message %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+<% }) %>
+
+<% if (waiting) { %>
+  <div class="jt-savebar">
+    <span class="jt-savebar-note"><i class="bi bi-info-circle"></i>Only rows marked Add are added. You can’t undo an import.</span>
+    <div class="jt-savebar-actions">
+      <form method="post" action="/admin/import/<%= imp.id %>/discard"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-outline-secondary" type="submit">Discard</button></form>
+      <form method="post" action="/admin/import/<%= imp.id %>/run" x-data @submit="if (!confirm('Import <%= counts.add %> row<%= counts.add === 1 ? '' : 's' %> now?')) $event.preventDefault()">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn btn-primary" type="submit"<%= counts.add ? '' : ' disabled' %>><i class="bi bi-database-add"></i>Import <%= counts.add %> row<%= counts.add === 1 ? '' : 's' %></button>
+      </form>
+    </div>
+  </div>
+<% } %>

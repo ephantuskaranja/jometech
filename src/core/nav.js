@@ -64,6 +64,7 @@ export const nav = [
       { label: 'Quality checklist', href: '/admin/qc-checklist', icon: 'clipboard-check', permission: 'system.settings', ready: true },
       { label: 'Closed days', href: '/admin/closed-days', icon: 'calendar-x', permission: 'system.settings', ready: true },
       { label: 'Pricing', href: '/admin/pricing', icon: 'tags', permission: 'system.settings', ready: true },
+      { label: 'Import data', href: '/admin/import', icon: 'file-earmark-arrow-up', permission: 'system.settings', ready: true },
       { label: 'Backups', href: '/admin/backups', icon: 'database-check', permission: 'system.backup.manage', ready: true },
     ],
   },

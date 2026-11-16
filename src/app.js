@@ -30,6 +30,7 @@ import { router as jobRoutes } from './modules/jobs/routes.js';
 import { router as qcRoutes } from './modules/qc/routes.js';
 import { router as signoffRoutes } from './modules/qc/signoff-routes.js';
 import { router as costingRoutes } from './modules/costing/routes.js';
+import { router as importRoutes } from './modules/imports/routes.js';
 import { router as invoiceRoutes } from './modules/invoices/routes.js';
 import { router as employeeRoutes } from './modules/employees/routes.js';
 import { router as attendanceRoutes } from './modules/attendance/routes.js';
@@ -168,6 +169,7 @@ export function createApp() {
   app.use(qcRoutes);
   app.use(signoffRoutes);
   app.use(costingRoutes);
+  app.use(importRoutes);
   app.use(invoiceRoutes);
   app.use(employeeRoutes);
   app.use(attendanceRoutes);
