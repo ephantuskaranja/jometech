@@ -271,6 +271,8 @@ router.get('/jobs/:id/print', view, async (req, res) => {
     layout: false, title: `Job card ${job.number}`, job,
     company: config.company, printedAt: new Date(),
     variations: (await variations.forJob(job.id)).filter((v) => v.status === 'agreed'),
+    // What was issued to the job, less returns (sheet row 28). No costs: the card goes to the floor.
+    materials: (await materialsForJob(job.id)).lines.filter((l) => Number(l.quantity) - Number(l.returned_qty) > 0),
   });
 });
 

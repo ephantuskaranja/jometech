@@ -4,6 +4,12 @@
 /** Seeing customers and vehicles: anyone who deals with them. */
 export const VIEW_CUSTOMERS = ['customers.manage', 'checkin.manage', 'jobs.view', 'quotations.manage', 'invoices.manage'];
 
+/**
+ * The Customers and Vehicles menu items: for those who work with customers. Seeing jobs alone
+ * (storekeepers) still shows a job's customer and vehicle, but not the menus (sheet row 27).
+ */
+export const MENU_CUSTOMERS = VIEW_CUSTOMERS.filter((p) => p !== 'jobs.view');
+
 /** Adding / editing customers. */
 export const EDIT_CUSTOMERS = ['customers.manage'];
 

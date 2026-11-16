@@ -123,6 +123,20 @@ test('issuing: whole sheets, only what is in stock, and only to an active job', 
   await db('jobs').where({ id: job.id }).update({ status: 'in_progress' });
 });
 
+test('a switched-off item isn’t offered for issuing, and can’t be issued (sheet row 26)', async () => {
+  const b = await balanceOf(plate, '12x4ft');
+  await db('items').where({ id: plate.id }).update({ is_active: false });
+  try {
+    assert.doesNotMatch((await store.get(`/jobs/${job.id}/issue`)).text, /Test Plate 4 mm/, 'not in the list');
+    const res = await issue([[b, 1]]);
+    assert.equal(res.status, 422, 'a form opened before it was switched off');
+    assert.match(res.text, /switched off, so it can’t be issued/);
+    assert.equal(num((await balanceOf(plate, '12x4ft')).quantity), 10, 'nothing left the store');
+  } finally {
+    await db('items').where({ id: plate.id }).update({ is_active: true });
+  }
+});
+
 test('an issue charges the job the average that day, and the job keeps that cost', async () => {
   const b = await balanceOf(plate, '12x4ft');
   let res = await issue([[b, 2]]);
@@ -187,10 +201,18 @@ test('returns go back at the cost they left at, and come off the job', async () 
   assert.equal(num(back.returned_value), 14400);
   assert.match((await store.get(`/jobs/${job.id}`)).text, /29,376\.00/, '43,776 − 14,400');
 
+  // The printed job card lists what was used, less returns, without prices (sheet row 28).
+  const card = (await technician.get(`/jobs/${job.id}/print`)).text;
+  assert.match(card, new RegExp(`Test Plate 4 mm, 12 × 4 ft <span class="muted small">${issueRow.number}</span>`));
+  assert.match(card, /<td class="hrs">1 sheet<\/td>/, 'two issued, one back');
+  assert.match(card, /<td class="sign">Kamau<\/td>/, 'who received it');
+  assert.doesNotMatch(card, /29,376|14,400|43,776/, 'no costs on the floor’s copy');
+
   // The other sheet too: the line nets to exactly nothing.
   await post(store, `/stores/issue/${issueRow.id}/return`, { line_id: [line.id], line_quantity: ['1'] });
   const done = await db('material_issue_lines').where({ id: line.id }).first();
   assert.equal(num(done.value) - num(done.returned_value), 0);
+  assert.doesNotMatch((await technician.get(`/jobs/${job.id}/print`)).text, new RegExp(`12 × 4 ft <span class="muted small">${issueRow.number}`), 'all back: off the job card');
   assert.doesNotMatch((await store.get(`/stores/issue/${issueRow.id}`)).text, /Return to store<\/button>/);
 });
 

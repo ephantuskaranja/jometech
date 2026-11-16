@@ -28,6 +28,15 @@ test('the storekeeper sees stores numbers only: no sales, no build progress', as
   assert.doesNotMatch(html, /Unpaid invoices|Open enquiries|Proformas/);
   assert.doesNotMatch(html, /Workshop at|Active jobs/, 'seeing jobs isn’t working in the workshop');
   assert.match(html, /New purchase order/);
+  // Sheet row 27: no Customers or Vehicles in the storekeeper's menu.
+  assert.doesNotMatch(html, /class="jt-nav-link[^"]*" href="\/(customers|vehicles)"/);
+  assert.match(html, /class="jt-nav-link[^"]*" href="\/jobs"/, 'jobs are still there');
+});
+
+test('sales still have Customers and Vehicles in the menu', async () => {
+  const html = await page('sales');
+  assert.match(html, /class="jt-nav-link[^"]*" href="\/customers"/);
+  assert.match(html, /class="jt-nav-link[^"]*" href="\/vehicles"/);
 });
 
 test('sales see enquiries and proformas; not invoices, stores or people', async () => {

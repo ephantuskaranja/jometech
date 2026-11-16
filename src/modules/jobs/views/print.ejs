@@ -124,7 +124,19 @@
     <h2>Materials used</h2>
     <table class="jc-fill">
       <thead><tr><th class="date">Date</th><th>Item</th><th class="hrs">Qty</th><th class="who">Issued by</th><th class="sign">Received by</th></tr></thead>
-      <tbody><% for (let i = 0; i < 3; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+      <tbody>
+        <% (locals.materials ?? []).forEach((l) => { const used = Number(l.quantity) - Number(l.returned_qty); const sheet = l.size_unit ? `${Number(l.length)} × ${Number(l.width)} ${l.size_unit}` : ''; %>
+          <tr>
+            <td class="date"><%= fmt.date(`${l.issued_on}T12:00:00Z`) %></td>
+            <td><%= l.item_name %><%= sheet ? `, ${sheet}` : '' %> <span class="muted small"><%= l.issue_number %></span></td>
+            <td class="hrs"><%= fmt.qty(used) %> <%= l.area_sq_ft !== null ? (used === 1 ? 'sheet' : 'sheets') : l.item_unit %></td>
+            <td class="who"><%= l.issued_by_name ?? '' %></td>
+            <td class="sign"><%= l.received_by ?? '' %></td>
+          </tr>
+        <% }) %>
+        <%# Room to write in anything taken without an issue. %>
+        <% for (let i = 0; i < ((locals.materials ?? []).length ? 2 : 3); i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %>
+      </tbody>
     </table>
 
     <div class="jc-signoff">

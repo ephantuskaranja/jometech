@@ -16,10 +16,10 @@ const num = Number;
 
 const sizeLabel = (l) => (l.size_unit ? `${num(l.length)} × ${num(l.width)} ${l.size_unit}` : '');
 
-/** What can be issued from a site: one choice per item and sheet size. */
+/** What can be issued from a site: one choice per item and sheet size. Switched-off items can't be issued. */
 export async function availableStock(siteId) {
   const rows = await db('stock_balances as b').join('items as i', 'i.id', 'b.item_id')
-    .where('b.site_id', siteId).where('b.quantity', '>', 0).orderBy('i.name').orderBy('b.area_sq_ft', 'desc')
+    .where('b.site_id', siteId).where('b.quantity', '>', 0).where('i.is_active', true).orderBy('i.name').orderBy('b.area_sq_ft', 'desc')
     .select('b.id', 'b.quantity', 'b.length', 'b.width', 'b.size_unit', 'b.area_sq_ft', 'i.name', 'i.unit', 'i.priced_by', 'i.avg_cost');
   return rows.map((b) => {
     const size = sizeLabel(b);
@@ -59,6 +59,8 @@ export async function issueMaterials(jobId, input, actor) {
       const item = await trx('items').where({ id: balance.item_id }).forUpdate().first();
       const size = sizeLabel(balance);
       const label = size ? `${item.name}, ${size}` : item.name;
+      // Switched off (Items): not to be used any more, even if some is still on the racks.
+      if (!item.is_active) throw err(422, `${label} is switched off, so it can’t be issued. Switch it back on under Items if it’s still in use.`, 'lines');
       if (row.quantity > num(balance.quantity) + 1e-9) throw err(422, `${label}: only ${num(balance.quantity)} in stock here.`, 'lines');
       if (balance.area_sq_ft !== null && !Number.isInteger(row.quantity)) throw err(422, `${label}: plates are issued as whole sheets.`, 'lines');
 
@@ -165,8 +167,9 @@ export async function materialsForJob(jobId) {
   const lines = await db('material_issue_lines as l')
     .join('material_issues as m', 'm.id', 'l.issue_id')
     .join('items as i', 'i.id', 'l.item_id')
+    .leftJoin('users as u', 'u.id', 'm.created_by')
     .where('m.job_id', jobId).orderBy('l.id')
-    .select('l.*', 'm.number as issue_number', 'm.issued_on', 'i.name as item_name', 'i.unit as item_unit', 'i.priced_by');
+    .select('l.*', 'm.number as issue_number', 'm.issued_on', 'm.received_by', 'u.name as issued_by_name', 'i.name as item_name', 'i.unit as item_unit', 'i.priced_by');
   return { lines, total: lines.reduce((sum, l) => sum + num(l.value) - num(l.returned_value), 0) };
 }
 
