@@ -17,7 +17,7 @@
   crumb: ['Reports', report.title],
   heading: report.title,
   sub: `${report.sub}${site ? ` · ${site.name}` : sites.length > 1 ? ' · all your sites' : ''}`,
-  actions: [{ label: 'Download Excel', href: `/reports/${path}.xlsx?${qs}`, icon: 'file-earmark-spreadsheet' }],
+  actions: [{ label: 'Download Excel', href: `/reports/${reportPath}.xlsx?${qs}`, icon: 'file-earmark-spreadsheet' }],
 }) %>
 
 <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">

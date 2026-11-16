@@ -156,7 +156,8 @@ for (const [key, path] of Object.entries(PATHS)) {
     const data = await report.fn({ month, siteIds });
     const qs = new URLSearchParams({ ...(report.monthly ? { month } : {}), ...(site ? { site: site.id } : {}) }).toString();
     res.render('reports/views/table-report', {
-      title: report.title, report, path, data, month, site, sites: req.user.sites, qs,
+      // reportPath, not path: path is the page's address the menu uses to light up the current item.
+      title: report.title, report, reportPath: path, data, month, site, sites: req.user.sites, qs,
       label: report.monthly ? monthName(month) : 'Now', prev: shiftMonth(month, -1), next: shiftMonth(month, 1), thisMonth: more.thisMonth(),
     });
   });

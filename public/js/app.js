@@ -1,6 +1,21 @@
 // Small behaviours shared by every page.
 
 // Press "/" anywhere (outside a text box) to jump to the global search.
+// The menu keeps its scroll position from page to page, and the page you're on is always in view
+// (Reports and System sit low in a long menu). Stored for this tab only.
+(() => {
+  const panel = document.querySelector('.jt-side-panel');
+  if (!panel) return;
+  const KEY = 'jt-menu-scroll';
+  try { panel.scrollTop = Number(sessionStorage.getItem(KEY) ?? 0); } catch { /* storage blocked: start at the top */ }
+  const active = panel.querySelector('.jt-nav-link.active');
+  if (active) {
+    const top = active.getBoundingClientRect().top - panel.getBoundingClientRect().top;
+    if (top < 0 || top + active.offsetHeight > panel.clientHeight) panel.scrollTop += top - panel.clientHeight / 3;
+  }
+  window.addEventListener('pagehide', () => { try { sessionStorage.setItem(KEY, String(panel.scrollTop)); } catch { /* ignore */ } });
+})();
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
   const el = document.activeElement;
