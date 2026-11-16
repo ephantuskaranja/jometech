@@ -1,0 +1,87 @@
+<%#
+  Reports → Job costing: jobs completed in a month (or in progress now), at one site or all:
+  price without VAT, materials, shares of wages and running costs, net profit and margin.
+%>
+<%
+  const link = (o) => `?${new URLSearchParams({ month, show: tab, ...(site ? { site: site.id } : {}), ...o })}`;
+  const tone = (c) => (c.netMargin === null ? 'neutral' : c.net < 0 ? 'bad' : c.netMargin < 15 ? 'warn' : 'ok');
+  const money = (n) => (n === null || n === undefined ? '—' : fmt.money(n));
+%>
+<%- include('partials/page-header', {
+  crumb: ['Reports', 'Job costing'],
+  heading: 'Job costing',
+  sub: 'What each job earned: its price without VAT, less materials and its share of wages and running costs.',
+  actions: [{ label: 'Download Excel', href: `/reports/job-costing.xlsx?${qs}`, icon: 'file-earmark-spreadsheet' }],
+}) %>
+
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <div class="btn-group btn-group-sm" role="group" aria-label="Which jobs">
+    <a class="btn <%= tab === 'completed' ? 'btn-primary' : 'btn-outline-secondary' %>" href="<%= link({ show: 'completed' }) %>">Completed in the month</a>
+    <a class="btn <%= tab === 'open' ? 'btn-primary' : 'btn-outline-secondary' %>" href="<%= link({ show: 'open' }) %>">In progress now</a>
+  </div>
+  <% if (tab === 'completed') { %>
+    <a class="btn btn-outline-secondary btn-sm ms-2" href="<%= link({ month: prev }) %>" aria-label="Previous month"><i class="bi bi-chevron-left"></i></a>
+    <strong class="px-1"><%= label %></strong>
+    <% if (month < thisMonth) { %><a class="btn btn-outline-secondary btn-sm" href="<%= link({ month: next }) %>" aria-label="Next month"><i class="bi bi-chevron-right"></i></a><% } %>
+  <% } %>
+  <% if (sites.length > 1) { %>
+    <form method="get" class="ms-auto d-flex gap-2 align-items-center">
+      <input type="hidden" name="month" value="<%= month %>"><input type="hidden" name="show" value="<%= tab %>">
+      <select class="form-select form-select-sm" name="site" aria-label="Site" onchange="this.form.submit()">
+        <option value="">All my sites</option>
+        <% sites.forEach((s) => { %><option value="<%= s.id %>"<%= site?.id === s.id ? ' selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+    </form>
+  <% } %>
+</div>
+
+<% if (jobs.length) { %>
+  <div class="jt-kpis jt-kpis-money mb-3">
+    <div class="card jt-kpi"><div class="jt-kpi-label">Jobs</div><div class="jt-kpi-value"><%= jobs.length %></div></div>
+    <div class="card jt-kpi"><div class="jt-kpi-label">Price, without VAT</div><div class="jt-kpi-value jt-num">KES <%= fmt.money(totals.price) %></div></div>
+    <div class="card jt-kpi"><div class="jt-kpi-label">Costs</div><div class="jt-kpi-value jt-num">KES <%= fmt.money(totals.materials + totals.wages + totals.running) %></div></div>
+    <div class="card jt-kpi"><div class="jt-kpi-label"><%= totals.net < 0 ? 'Loss' : 'Net profit' %></div><div class="jt-kpi-value jt-num <%= totals.net < 0 ? 'text-danger-emphasis' : 'text-success-emphasis' %>">KES <%= fmt.money(Math.abs(totals.net)) %><% if (totals.margin !== null) { %> <span class="small">· <%= totals.margin %>%</span><% } %></div></div>
+  </div>
+  <% if (totals.unpriced || totals.incomplete) { %>
+    <div class="alert alert-warning small d-flex gap-2"><i class="bi bi-exclamation-triangle"></i>
+      <div><% if (totals.unpriced) { %><div><%= totals.unpriced %> job<%= totals.unpriced === 1 ? ' has' : 's have' %> no price yet (no invoice or accepted proforma), so <%= totals.unpriced === 1 ? 'it isn’t' : 'they aren’t' %> in the profit.</div><% } %>
+      <% if (totals.incomplete) { %><div><%= totals.incomplete %> job<%= totals.incomplete === 1 ? ' doesn’t' : 's don’t' %> yet carry all their wages or running costs (payroll not approved, or the month’s running costs not entered), so profit is shown higher than it will be.</div><% } %></div>
+    </div>
+  <% } %>
+<% } %>
+
+<section class="card">
+  <% if (!jobs.length) { %>
+    <div class="card-body text-body-secondary small"><%= tab === 'open' ? 'No jobs in progress.' : `No jobs completed in ${label}.` %></div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table jt-table mb-0">
+        <thead><tr>
+          <th>Job</th><th class="text-end">Days</th><th class="text-end">Price</th><th class="text-end">Materials</th><th class="text-end">Wages</th><th class="text-end">Running</th><th class="text-end">Net profit</th><th class="text-end">Margin</th>
+        </tr></thead>
+        <tbody>
+          <% jobs.forEach((j) => { const c = j.costing; const gap = missingText(c); %>
+            <tr>
+              <td><a class="jt-row-link font-monospace" href="/jobs/<%= j.id %>"><%= j.number %></a>
+                <div class="small text-body-secondary"><%= j.customer_name %><%= sites.length > 1 && !site ? ` · ${j.site_name}` : '' %></div>
+                <% if (gap) { %><div class="small text-warning-emphasis"><i class="bi bi-exclamation-circle"></i> Not counted yet: <%= gap %></div><% } %></td>
+              <td class="text-end jt-num"><%= c.days?.days ?? 0 %></td>
+              <td class="text-end jt-num"><%= money(c.price?.exVat) %></td>
+              <td class="text-end jt-num"><%= money(c.materials) %></td>
+              <td class="text-end jt-num"><%= money(c.wages?.amount ?? 0) %></td>
+              <td class="text-end jt-num"><%= money(c.running?.amount ?? 0) %></td>
+              <td class="text-end jt-num fw-semibold <%= c.price && c.net < 0 ? 'text-danger-emphasis' : '' %>"><%= c.price ? money(c.net) : '—' %></td>
+              <td class="text-end"><% if (c.netMargin !== null) { %><%- include('partials/pill', { text: `${c.netMargin}%`, tone: tone(c) }) %><% } else { %>—<% } %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+        <tfoot><tr class="fw-semibold">
+          <td>Total</td><td></td>
+          <td class="text-end jt-num"><%= fmt.money(totals.price) %></td><td class="text-end jt-num"><%= fmt.money(totals.materials) %></td>
+          <td class="text-end jt-num"><%= fmt.money(totals.wages) %></td><td class="text-end jt-num"><%= fmt.money(totals.running) %></td>
+          <td class="text-end jt-num"><%= fmt.money(totals.net) %></td><td class="text-end"><%= totals.margin !== null ? `${totals.margin}%` : '—' %></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  <% } %>
+</section>

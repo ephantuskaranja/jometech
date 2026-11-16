@@ -1,0 +1,90 @@
+<%#
+  Running costs: one month at the site chosen at the top, entered by managers and admins.
+  The month's total is shared across the site's jobs by their work days that month.
+%>
+<%
+  const val = (c, field) => (values ? values[`${field}_${c.key}`] ?? '' : field === 'amount' ? (c.amount === null ? '' : fmt.money(c.amount)) : c.note);
+  const total = saved.total;
+%>
+<%- include('partials/page-header', {
+  crumb: ['Reports', 'Running costs'],
+  heading: 'Running costs',
+  sub: `${site.name}. Enter the month’s bills once; each job that month carries a share by the days it was worked on.`,
+}) %>
+
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+  <a class="btn btn-outline-secondary btn-sm" href="?month=<%= prev %>" aria-label="Previous month"><i class="bi bi-chevron-left"></i></a>
+  <h2 class="h5 mb-0 px-2"><%= label %></h2>
+  <% if (month < thisMonth) { %><a class="btn btn-outline-secondary btn-sm" href="?month=<%= next %>" aria-label="Next month"><i class="bi bi-chevron-right"></i></a><% } %>
+  <% if (month !== thisMonth) { %><a class="btn btn-link btn-sm" href="?month=<%= thisMonth %>">This month</a><% } %>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <form method="post" action="/costing/running-costs" novalidate class="card">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="month" value="<%= month %>">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">Bills for <%= label %></h2>
+        <% if (saved.entered) { %><span class="small jt-num fw-semibold">KES <%= fmt.money(total) %></span><% } %>
+      </div>
+      <div class="table-responsive">
+        <table class="table jt-table mb-0 jt-running">
+          <thead><tr><th>Cost</th><th style="width: 11rem">Amount (KES)</th><th>Note</th></tr></thead>
+          <tbody>
+            <% saved.lines.forEach((c) => { %>
+              <tr>
+                <td class="fw-semibold"><label for="amt-<%= c.key %>"><%= c.label %></label></td>
+                <td>
+                  <input class="form-control form-control-sm jt-num<%= errors[`amount_${c.key}`] ? ' is-invalid' : '' %>" id="amt-<%= c.key %>" name="amount_<%= c.key %>" value="<%= val(c, 'amount') %>" inputmode="decimal" data-number="decimal" autocomplete="off" placeholder="0.00">
+                  <% if (errors[`amount_${c.key}`]) { %><div class="invalid-feedback"><%= errors[`amount_${c.key}`] %></div><% } %>
+                </td>
+                <td>
+                  <input class="form-control form-control-sm<%= errors[`note_${c.key}`] ? ' is-invalid' : '' %>" name="note_<%= c.key %>" value="<%= val(c, 'note') %>" maxlength="150" aria-label="Note for <%= c.label %>" placeholder="<%= c.key === 'other' ? 'What was it? (needed)' : 'Optional, e.g. KPLC token' %>">
+                  <% if (errors[`note_${c.key}`]) { %><div class="invalid-feedback"><%= errors[`note_${c.key}`] %></div><% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body border-top d-flex align-items-center gap-3 flex-wrap">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i>Save <%= label %></button>
+        <span class="small text-body-secondary">Leave a cost empty if there was none. Wages come from the approved weekly payroll, not from here.</span>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-lg-5">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">How it’s shared</h2></div>
+      <div class="card-body">
+        <% if (!share.days) { %>
+          <p class="small text-body-secondary mb-0">No job had work days at <%= site.name %> in <%= label %>, so these costs aren’t charged to any job.</p>
+        <% } else { %>
+          <dl class="jt-costing mb-0">
+            <div><dt>Running costs</dt><dd class="jt-num"><%= share.total === null ? 'Not entered' : `KES ${fmt.money(share.total)}` %></dd></div>
+            <div><dt>Work days on jobs</dt><dd class="jt-num"><%= share.days %></dd><dd class="jt-costing-note">Each job’s days this month added up, Sundays and closed days left out</dd></div>
+            <% if (share.perDay !== null) { %><div class="jt-costing-total"><dt>Per job-day</dt><dd class="jt-num">KES <%= fmt.money(share.perDay) %></dd></div><% } %>
+          </dl>
+        <% } %>
+      </div>
+      <% if (jobs.length) { %>
+        <div class="table-responsive border-top">
+          <table class="table jt-table mb-0">
+            <thead><tr><th>Job</th><th class="text-end">Days</th><th class="text-end">Share (KES)</th></tr></thead>
+            <tbody>
+              <% jobs.forEach((j) => { %>
+                <tr>
+                  <td><a class="jt-row-link font-monospace" href="/jobs/<%= j.id %>"><%= j.number %></a><div class="small text-body-secondary"><%= j.customer_name %></div></td>
+                  <td class="text-end jt-num"><%= j.days %></td>
+                  <td class="text-end jt-num"><%= share.perDay === null ? '—' : fmt.money(j.days * share.perDay) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </div>
+</div>

@@ -254,11 +254,15 @@
       </div>
     </section>
 
-    <% if (costing) { const c = costing; const loss = c.gross !== null && c.gross < 0; %>
+    <% if (costing) {
+         const c = costing;
+         const loss = c.net !== null && c.net < 0;
+         const monthName = (m) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+         const weeks = (n) => `${n} week${n === 1 ? '' : 's'}`; %>
       <section class="card">
         <div class="card-header d-flex align-items-center gap-2">
           <h2 class="h6 mb-0 me-auto">Job costing</h2>
-          <% if (c.margin !== null) { %><%- include('partials/pill', { text: `${c.margin}% margin`, tone: loss ? 'bad' : c.margin < 15 ? 'warn' : 'ok' }) %><% } %>
+          <% if (c.netMargin !== null) { %><%- include('partials/pill', { text: `${c.netMargin}% margin`, tone: loss ? 'bad' : c.netMargin < 15 ? 'warn' : 'ok' }) %><% } %>
         </div>
         <div class="card-body">
           <dl class="jt-costing mb-0">
@@ -267,16 +271,22 @@
               <% if (c.price) { %><dd class="jt-costing-note">From <%= c.price.against %>: KES <%= fmt.money(c.price.total) %> with VAT</dd><% } else { %><dd class="jt-costing-note">No price yet: make the invoice, or start the job from a proforma.</dd><% } %>
             </div>
             <div><dt>Materials</dt><dd class="jt-num">− KES <%= fmt.money(c.materials) %></dd><dd class="jt-costing-note">Issued less returns, at cost (transport included)</dd></div>
-            <div class="jt-costing-total<%= loss ? ' is-loss' : '' %>"><dt><%= loss ? 'Loss' : 'Gross profit' %></dt><dd class="jt-num"><%= c.gross === null ? '—' : `KES ${fmt.money(Math.abs(c.gross))}` %></dd></div>
+            <div class="jt-costing-sub"><dt>Gross profit</dt><dd class="jt-num"><%= c.gross === null ? '—' : `KES ${fmt.money(c.gross)}` %><%= c.margin !== null ? ` · ${c.margin}%` : '' %></dd></div>
+            <% if (c.wages) { %>
+              <div><dt>Wages, its share</dt><dd class="jt-num">− KES <%= fmt.money(c.wages.amount) %></dd>
+                <dd class="jt-costing-note">Approved weekly payroll at <%= job.site_name %>, shared by work days<% if (c.wages.missing.length) { %>. <span class="text-warning-emphasis">No approved payroll yet for <%= weeks(c.wages.missing.length) %></span><% } %></dd></div>
+              <div><dt>Running costs, its share</dt><dd class="jt-num">− KES <%= fmt.money(c.running.amount) %></dd>
+                <dd class="jt-costing-note">Power, rent and other bills at <%= job.site_name %>, shared by work days<% if (c.running.missing.length) { %>. <a class="text-warning-emphasis" href="/costing/running-costs?month=<%= c.running.missing[0] %>">Not entered for <%= c.running.missing.map(monthName).join(', ') %></a><% } %></dd></div>
+            <% } %>
+            <div class="jt-costing-total<%= loss ? ' is-loss' : '' %>"><dt><%= loss ? 'Loss' : 'Net profit' %></dt><dd class="jt-num"><%= c.net === null ? '—' : `KES ${fmt.money(Math.abs(c.net))}` %></dd></div>
           </dl>
           <div class="small text-body-secondary mt-3">
             <i class="bi bi-calendar3"></i>
             <% if (c.days) { %>
               <strong class="text-body"><%= c.days.days %> work day<%= c.days.days === 1 ? '' : 's' %></strong><%= c.days.open ? ' so far' : '' %>,
               <%= fmt.date(`${c.days.from}T12:00:00Z`) %> to <%= c.days.open ? 'today' : fmt.date(`${c.days.to}T12:00:00Z`) %>. Sundays and closed days are left out.
-            <% } else { %>Work days start counting when the job is started.<% } %>
+            <% } else { %>Work days, wages and running costs start counting when the job is started.<% } %>
           </div>
-          <div class="small text-body-tertiary mt-1">Wages and running costs (power, rent …) are not included yet.</div>
         </div>
       </section>
     <% } %>
