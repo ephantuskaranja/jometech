@@ -427,8 +427,16 @@ const photoUrls = (checkinId, photoId) => ({
   thumb: `/check-in/${checkinId}/photos/${photoId}/thumb.webp`,
 });
 
+/** Photos are added and deleted only by staff at the vehicle's site. */
+async function loadForPhotos(req) {
+  const checkin = await loadCheckin(req);
+  if (!worksAt(req, checkin.site_id)) throw httpError(403, `Only staff at ${checkin.site_name} can change these photos.`);
+  return checkin;
+}
+
 router.post('/check-in/:id/photos', manage, async (req, res) => {
   try {
+    await loadForPhotos(req);
     const file = await receivePhoto(req, res);
     if (!file) throw httpError(422, 'Choose a photo to add.');
     const photoId = await checkins.addPhoto(Number(req.params.id), file.buffer, req);
@@ -440,6 +448,7 @@ router.post('/check-in/:id/photos', manage, async (req, res) => {
 
 router.post('/check-in/:id/photos/:photoId/delete', manage, async (req, res) => {
   try {
+    await loadForPhotos(req);
     await checkins.deletePhoto(Number(req.params.id), Number(req.params.photoId), req);
     res.json({ ok: true });
   } catch (err) {
@@ -448,6 +457,7 @@ router.post('/check-in/:id/photos/:photoId/delete', manage, async (req, res) => 
 });
 
 async function sendPhoto(req, res, which) {
+  await loadCheckin(req); // only staff who may see the check-in
   const photo = await checkins.getPhoto(Number(req.params.id), Number(req.params.photoId));
   if (!photo) throw httpError(404, 'That photo doesn’t exist.');
   res.set('Cache-Control', 'private, max-age=604800, immutable'); // a photo never changes; a new one gets a new id

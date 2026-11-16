@@ -5,7 +5,8 @@
     moves: ['Movements', `Vehicles sent from or to ${site.name}, most recent first.`],
   };
   const moveStatus = { in_transit: ['On the way', 'warn'], received: ['Received', 'ok'], cancelled: ['Cancelled', 'neutral'] };
-  const vehicleCell = (v) => v.reg_no ? include('partials/plate', { reg: v.reg_no }) : `<span class="font-monospace small">${vehicleLabel(v)}</span>`;
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const vehicleCell = (v) => v.reg_no ? include('partials/plate', { reg: v.reg_no }) : `<span class="font-monospace small">${esc(vehicleLabel(v))}</span>`;
 %>
 <%- include('partials/page-header', {
   crumb: ['Workshop', 'Check-in'],

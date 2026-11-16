@@ -10,6 +10,7 @@ import { config } from '../../config.js';
 import * as invoices from './service.js';
 import * as customers from '../customers/service.js';
 import { getJob } from '../jobs/service.js';
+import { db } from '../../core/db.js';
 import { vatIn } from '../proformas/service.js';
 
 // Invoices: from a job (its proforma's lines and prices), then issued, printed, paid.
@@ -50,15 +51,21 @@ const backTo = (value, fallback) => (/^\/(invoices|jobs)\/\d+$/.test(String(valu
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '', unit_price: '' });
 const asRows = (lines) => lines.map((l) => ({ quantity: String(Number(l.quantity)), unit: l.unit, description: l.description, unit_price: l.unit_price === '' ? '' : String(Number(l.unit_price)) }));
 
+// Invoices and payments belong to a job at a site: staff see their own sites' (managers and admins: all).
+const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
+const siteIdsOf = (req) => req.user.sites.map((s) => s.id);
+
 async function loadInvoice(req) {
   const invoice = await invoices.getInvoice(Number(req.params.id));
   if (!invoice) throw httpError(404, 'That invoice doesn’t exist.');
+  if (!worksAt(req, invoice.site_id)) throw httpError(403, 'That invoice is for a job at a site that isn’t one of yours.');
   return invoice;
 }
 
 async function loadJob(req) {
   const job = await getJob(Number(req.params.id));
   if (!job) throw httpError(404, 'That job doesn’t exist.');
+  if (!worksAt(req, job.site_id)) throw httpError(403, `${job.number} is at ${job.site_name}, which isn’t one of your sites.`);
   return job;
 }
 
@@ -79,8 +86,8 @@ router.get('/invoices', manage, async (req, res) => {
   const tab = invoices.TABS.includes(req.query.show) ? req.query.show : 'unpaid';
   res.render('invoices/views/index', {
     title: 'Invoices', tab, q,
-    list: await invoices.listInvoices({ tab, q }),
-    counts: await invoices.countByTab(),
+    list: await invoices.listInvoices({ tab, q, siteIds: siteIdsOf(req) }),
+    counts: await invoices.countByTab(siteIdsOf(req)),
     statuses: invoices.STATUSES, paidStates: invoices.PAID_STATES,
   });
 });
@@ -198,6 +205,7 @@ router.get('/invoices/:id/print', manage, async (req, res) => {
 // ---------- Payments, on the job ----------
 
 router.post('/jobs/:id/payments', manage, async (req, res) => {
+  await loadJob(req);
   const back = backTo(req.body.back, `/jobs/${req.params.id}`);
   const { data, errors } = check(paymentSchema, req.body);
   if (errors) {
@@ -217,6 +225,7 @@ router.post('/jobs/:id/payments', manage, async (req, res) => {
 
 // The customer's credit from their other jobs, towards what is owed on this one.
 router.post('/jobs/:id/payments/credit', manage, async (req, res) => {
+  await loadJob(req);
   const back = backTo(req.body.back, `/jobs/${req.params.id}`);
   const amount = Number(String(req.body.amount ?? '').replace(/[,s]/g, ''));
   const money = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
@@ -231,6 +240,9 @@ router.post('/jobs/:id/payments/credit', manage, async (req, res) => {
 });
 
 router.post('/payments/:id/void', manage, async (req, res) => {
+  const payment = await db('payments as p').join('jobs as j', 'j.id', 'p.job_id').where('p.id', Number(req.params.id)).first('j.site_id');
+  if (!payment) throw httpError(404, 'That payment doesn’t exist.');
+  if (!worksAt(req, payment.site_id)) throw httpError(403, 'That payment is for a job at a site that isn’t one of yours.');
   const reason = String(req.body.reason ?? '').trim();
   const back = backTo(req.body.back, '/invoices');
   if (reason.length < 3 || reason.length > 255) {

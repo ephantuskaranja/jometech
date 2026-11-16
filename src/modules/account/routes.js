@@ -4,6 +4,7 @@ import { db } from '../../core/db.js';
 import { audit } from '../../core/audit.js';
 import { hashPassword, safeNextUrl, verifyPassword } from '../../core/auth.js';
 import { check } from '../../core/validate.js';
+import { endSessionsOf } from '../../core/session.js';
 
 // The logged-in user's own settings: password, theme, current site.
 export const router = Router();
@@ -38,6 +39,7 @@ router.post('/account/password', async (req, res) => {
     await trx('users').where({ id: req.user.id }).update({ password_hash: newHash, must_change_password: false });
     await audit(trx, req, { entity: 'user', id: req.user.id, action: 'password_changed', summary: 'Chose their own password' });
   });
+  await endSessionsOf(req.user.id, req.sessionID); // other devices log in again with the new password
   req.session.flash = { type: 'success', text: 'Password changed. Use the new one next time you log in.' };
   res.redirect('/');
 });

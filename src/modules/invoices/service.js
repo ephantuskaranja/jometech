@@ -377,8 +377,9 @@ function tabFilter(q, tab) {
   else if (tab === 'paid') q.where('i.status', 'issued').whereRaw('i.total <= (?)', [paidSub('i.job_id')]);
 }
 
-export async function listInvoices({ tab = 'unpaid', q = '' } = {}) {
+export async function listInvoices({ tab = 'unpaid', q = '', siteIds = null } = {}) {
   const query = db('invoices as i')
+    .modify((x) => { if (siteIds) x.whereIn('i.site_id', siteIds); })
     .join('customers as c', 'c.id', 'i.customer_id')
     .join('jobs as j', 'j.id', 'i.job_id')
     .leftJoin('customers as f', 'f.id', 'i.financier_id')
@@ -398,8 +399,8 @@ export async function listInvoices({ tab = 'unpaid', q = '' } = {}) {
   return rows.map((r) => ({ ...r, vehicle_label: r.reg_no || r.chassis_no || r.temp_tag ? vehicleLabel(r) : r.vehicle_description, balance: round(Number(r.total) - Number(r.paid)) }));
 }
 
-export async function countByTab() {
-  return countTabs(TABS, (tab) => { const q = db('invoices as i'); tabFilter(q, tab); return q; });
+export async function countByTab(siteIds = null) {
+  return countTabs(TABS, (tab) => { const q = db('invoices as i'); if (siteIds) q.whereIn('i.site_id', siteIds); tabFilter(q, tab); return q; });
 }
 
 /** For the period summary: invoices issued and payments received between two moments. */

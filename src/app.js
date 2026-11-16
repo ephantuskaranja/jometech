@@ -61,7 +61,7 @@ const assetVersion = Date.now().toString(36);
 export function createApp() {
   const app = express();
 
-  // On the server, Caddy sits in front and handles https. Trusting it lets
+  // On the server, nginx (or Caddy) sits in front and handles https. Trusting it lets
   // secure cookies work and gives the real client IP to the login rate limit.
   if (config.isProd) app.set('trust proxy', 1);
 

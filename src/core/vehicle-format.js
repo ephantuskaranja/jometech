@@ -11,10 +11,10 @@ export function formatReg(input) {
   return m ? `${m[1]} ${m[2]}${m[3]}` : input.toUpperCase().trim().replace(/\s+/g, ' ');
 }
 
-/** Chassis / VIN: uppercase, no spaces or dashes. */
+/** Chassis / VIN: uppercase letters and digits only (spaces, dashes and anything else dropped). */
 export function formatChassis(input) {
   if (typeof input !== 'string') return null;
-  const clean = input.toUpperCase().replace(/[\s-]/g, '');
+  const clean = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
   return clean || null;
 }
 

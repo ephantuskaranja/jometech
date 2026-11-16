@@ -4,6 +4,7 @@ import { can, generateTempPassword } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { normalizePhone } from '../../core/phone.js';
 import { check, httpError } from '../../core/validate.js';
+import { endSessionsOf } from '../../core/session.js';
 import * as users from './service.js';
 
 // Admin → Users: list, add, edit, reset password, switch on/off.
@@ -47,6 +48,10 @@ async function extraErrors(req, data, account) {
   const seesAllSites = data.roles.some((key) => roles.find((r) => r.key === key)?.all_sites);
   if (!seesAllSites && data.sites.length === 0) errors.sites = 'Choose at least one site';
 
+  // Someone given users.manage who isn't an admin can't make admins (themselves included).
+  if (!req.user.isAdmin && data.roles.includes('admin') !== Boolean(account?.roleKeys.includes('admin'))) {
+    errors.roles = 'Only an admin can give or take away the Admin role.';
+  }
   if (account && account.roleKeys.includes('admin') && !data.roles.includes('admin')) {
     if (account.id === req.user.id) errors.roles = 'You can’t remove your own Admin role. Ask another admin to do it.';
     else if ((await users.otherActiveAdmins(account.id)) === 0) errors.roles = 'This is the only admin. Make someone else an admin first.';
@@ -96,6 +101,13 @@ async function loadAccount(req) {
   return account;
 }
 
+/** For changes: an admin's account is changed only by an admin. */
+async function loadForChange(req) {
+  const account = await loadAccount(req);
+  if (account.roleKeys.includes('admin') && !req.user.isAdmin) throw httpError(403, 'Only an admin can change an admin’s account.');
+  return account;
+}
+
 router.get('/admin/users/:id', async (req, res) => {
   const account = await loadAccount(req);
   // A new temporary password is shown once, right after it was made.
@@ -109,7 +121,7 @@ router.get('/admin/users/:id', async (req, res) => {
 });
 
 router.post('/admin/users/:id', async (req, res) => {
-  const account = await loadAccount(req);
+  const account = await loadForChange(req);
   const { data, errors } = check(userSchema, req.body);
   const values = { ...req.body, roles: asArray(req.body.roles), sites: asArray(req.body.sites) };
   if (errors) return renderForm(req, res, { status: 422, user: account, values, errors });
@@ -129,16 +141,17 @@ router.post('/admin/users/:id', async (req, res) => {
 // ---------- Actions on the edit page ----------
 
 router.post('/admin/users/:id/reset-password', async (req, res) => {
-  const account = await loadAccount(req);
+  const account = await loadForChange(req);
   const password = generateTempPassword();
   await users.resetPassword(account.id, password, req, { mustChangePassword: true });
+  await endSessionsOf(account.id, account.id === req.user.id ? req.sessionID : null); // logged out everywhere
   req.session.tempPassword = { userId: account.id, password };
   req.session.flash = { type: 'success', text: `New temporary password made for ${account.name}. Any lock on the account is cleared.` };
   res.redirect(`/admin/users/${account.id}`);
 });
 
 router.post('/admin/users/:id/status', async (req, res) => {
-  const account = await loadAccount(req);
+  const account = await loadForChange(req);
   const active = req.body.active === '1';
 
   if (!active && account.id === req.user.id) {
@@ -147,6 +160,7 @@ router.post('/admin/users/:id/status', async (req, res) => {
     req.session.flash = { type: 'warning', text: 'This is the only admin. Make someone else an admin first.' };
   } else {
     await users.setActive(account.id, active, req);
+    if (!active) await endSessionsOf(account.id); // switching back on later doesn't revive old logins
     req.session.flash = { type: 'success', text: active ? `${account.name} can log in again.` : `${account.name} is switched off and logged out. Their history is kept.` };
   }
   res.redirect(`/admin/users/${account.id}`);

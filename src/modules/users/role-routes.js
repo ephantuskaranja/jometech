@@ -4,9 +4,10 @@ import { history } from '../../core/audit.js';
 import { httpError } from '../../core/validate.js';
 import * as roles from './roles.js';
 
-// System → Roles: what each role may do. Admins only (users.manage).
+// System → Roles: what each role may do. Admins only: whoever can change roles can give
+// themselves anything, so users.manage alone isn't enough.
 export const router = Router();
-router.use('/admin/roles', can('users.manage'));
+router.use('/admin/roles', can('users.manage'), (req, res, next) => (req.user.isAdmin ? next() : next(httpError(403, 'Only admins can change what roles can do.'))));
 
 async function loadRole(req) {
   const id = Number(req.params.id);

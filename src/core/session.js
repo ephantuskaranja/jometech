@@ -2,6 +2,7 @@ import session from 'express-session';
 import MySQLStoreFactory from 'express-mysql-session';
 import { csrfSync } from 'csrf-sync';
 import { config } from '../config.js';
+import { db } from './db.js';
 
 const MySQLStore = MySQLStoreFactory(session);
 
@@ -43,3 +44,13 @@ const csrf = csrfSync({
 });
 export const csrfProtection = csrf.csrfSynchronisedProtection;
 export const generateCsrfToken = csrf.generateToken;
+
+/**
+ * Logs someone out everywhere (their sessions are deleted), except `keepSessionId` (the device
+ * they are using now). Used after a password change or reset, so a stolen session stops working.
+ */
+export async function endSessionsOf(userId, keepSessionId = null) {
+  const q = db('sessions').whereRaw("JSON_EXTRACT(`data`, '$.userId') = ?", [userId]);
+  if (keepSessionId) q.whereNot('session_id', keepSessionId);
+  return q.delete();
+}
