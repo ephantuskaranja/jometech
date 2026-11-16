@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { VIEW_CUSTOMERS } from '../../core/access.js';
@@ -8,6 +9,8 @@ import { check, httpError, optionalId, optionalText } from '../../core/validate.
 import { config } from '../../config.js';
 import * as jobs from './service.js';
 import * as variations from './variations.js';
+import * as jobPhotos from './photos.js';
+import { storagePath } from '../../core/storage.js';
 import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
 import { forJob as signoffsForJob, OUTCOMES as SIGNOFF_OUTCOMES } from '../qc/signoff.js';
 import { jobCosting } from '../costing/service.js';
@@ -179,6 +182,8 @@ router.get('/jobs/:id', view, async (req, res) => {
     variations: await variations.forJob(job.id),
     canPriceWork: req.user.can('quotations.manage') || req.user.can('invoices.manage'),
     variationDraft: (() => { const d = req.session.variationDraft ?? null; delete req.session.variationDraft; return d; })(),
+    photos: await jobPhotos.forJob(job.id, job.steps), maxPhotos: jobPhotos.MAX_JOB_PHOTOS,
+    canTakePhotos: (req.user.can('jobs.manage') || req.user.can('jobs.progress')) && ['open', 'in_progress'].includes(job.status),
   });
 });
 
@@ -332,3 +337,47 @@ router.post('/jobs/:id/variations/:vid/cancel', priceWork, async (req, res) => {
   req.session.flash = { type: 'success', text: `${name} cancelled. It no longer counts in the price.` };
   res.redirect(`/jobs/${job.id}#variations`);
 });
+
+// ---------- progress photos (supervisors and technicians), filed under the current step ----------
+
+const takePhotos = canAny('jobs.manage', 'jobs.progress');
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } }).single('photo');
+const receivePhoto = (req, res) => new Promise((resolve, reject) => photoUpload(req, res, (err) => (err ? reject(err) : resolve(req.file))));
+const photoUrls = (jobId, photoId) => ({ id: photoId, full: `/jobs/${jobId}/photos/${photoId}.webp`, thumb: `/jobs/${jobId}/photos/${photoId}/thumb.webp` });
+
+function photoError(req, res, err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'That photo is too large (over 15 MB).' });
+  if (!err.expose) req.log.error(err);
+  res.status(err.status ?? 500).json({ error: err.expose ? err.message : 'The photo couldn’t be saved. Try again.' });
+}
+
+router.post('/jobs/:id/photos', takePhotos, async (req, res) => {
+  try {
+    const job = await loadJob(req);
+    const file = await receivePhoto(req, res);
+    if (!file) throw httpError(422, 'Choose a photo to add.');
+    res.status(201).json(photoUrls(job.id, await jobPhotos.addPhoto(job.id, file.buffer, req)));
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+router.post('/jobs/:id/photos/:photoId/delete', takePhotos, async (req, res) => {
+  try {
+    const job = await loadJob(req);
+    await jobPhotos.deletePhoto(job.id, Number(req.params.photoId), req);
+    res.json({ ok: true });
+  } catch (err) {
+    photoError(req, res, err);
+  }
+});
+
+async function sendJobPhoto(req, res, which) {
+  const job = await loadJob(req);
+  const photo = await jobPhotos.getPhoto(job.id, Number(req.params.photoId));
+  if (!photo) throw httpError(404, 'That photo doesn’t exist.');
+  res.set('Cache-Control', 'private, max-age=604800, immutable'); // a photo never changes; a new one gets a new id
+  res.type('image/webp').sendFile(storagePath(photo[which]));
+}
+router.get('/jobs/:id/photos/:photoId.webp', view, (req, res) => sendJobPhoto(req, res, 'path'));
+router.get('/jobs/:id/photos/:photoId/thumb.webp', view, (req, res) => sendJobPhoto(req, res, 'thumb_path'));

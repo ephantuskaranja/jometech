@@ -47,7 +47,8 @@ export async function cleanup() {
   const qcIds = await db('qc_inspections').whereIn('job_id', jobIds).pluck('id');
   const qcPhotos = await db('qc_item_photos as p').join('qc_inspection_items as i', 'i.id', 'p.item_id').whereIn('i.inspection_id', qcIds).select('p.path', 'p.thumb_path');
   const signoffFiles = await db('customer_signoffs').whereIn('job_id', jobIds).whereNotNull('signature_path').pluck('signature_path');
-  for (const file of [...qcPhotos.flatMap((p) => [p.path, p.thumb_path]), ...signoffFiles]) await removeFile(file).catch((err) => console.warn(`Test file left behind: ${err.message}`));
+  const jobPhotoFiles = (await db('job_photos').whereIn('job_id', jobIds).select('path', 'thumb_path')).flatMap((p) => [p.path, p.thumb_path]);
+  for (const file of [...qcPhotos.flatMap((p) => [p.path, p.thumb_path]), ...signoffFiles, ...jobPhotoFiles]) await removeFile(file).catch((err) => console.warn(`Test file left behind: ${err.message}`));
   await db('audit_log').where({ entity: 'qc' }).whereIn('entity_id', qcIds).delete();
   await db('qc_inspections').whereIn('id', qcIds).delete(); // items go with them
   await db('audit_log').where({ entity: 'job' }).whereIn('entity_id', jobIds).delete();

@@ -1,0 +1,30 @@
+<%#
+  Progress photos on the job page, grouped by the step they were taken at. New photos go under the
+  step the job is at now; supervisors and technicians take them (and can delete them) while it's open.
+  Locals: job, photos ({ total, groups }), maxPhotos, canTakePhotos
+%>
+<%
+  const urls = (id) => ({ id, full: `/jobs/${job.id}/photos/${id}.webp`, thumb: `/jobs/${job.id}/photos/${id}/thumb.webp` });
+  const nowStep = job.steps.find((s) => s.status === 'pending');
+  const shown = photos.groups.filter((g) => g.photos.length || (canTakePhotos && g.stepId === nowStep?.id));
+%>
+<% if (shown.length || canTakePhotos) { %>
+  <section class="card" id="photos">
+    <div class="card-header d-flex align-items-center gap-2">
+      <h2 class="h6 mb-0 me-auto"><i class="bi bi-camera"></i> Progress photos</h2>
+      <% if (photos.total) { %><span class="small text-body-secondary"><%= photos.total %> photo<%= photos.total === 1 ? '' : 's' %></span><% } %>
+    </div>
+    <% if (!shown.length) { %>
+      <div class="card-body small text-body-secondary">No photos yet. Photos you take are filed under the step the job is at.</div>
+    <% } %>
+    <ul class="list-group list-group-flush">
+      <% shown.forEach((g) => { const here = canTakePhotos && g.stepId === nowStep?.id; %>
+        <li class="list-group-item d-grid gap-2">
+          <div class="small fw-semibold"><%= g.name %><% if (here) { %> <span class="badge text-bg-primary ms-1">Now</span><% } %></div>
+          <%- include('partials/item-photos', { photos: { url: `/jobs/${job.id}/photos`, max: maxPhotos, canEdit: canTakePhotos, upload: here, noun: 'A job', photos: g.photos.map(urls) } }) %>
+          <% if (here && !g.photos.length) { %><div class="small text-body-tertiary">Take photos of the work at this step: they stay with the job.</div><% } %>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+<% } %>

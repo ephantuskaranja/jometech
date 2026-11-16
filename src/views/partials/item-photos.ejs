@@ -1,12 +1,13 @@
 <%#
   A small strip of photos on one line of a list (a failed quality check item). Uploads one photo at a
   time, shrunk in the browser, with the same uploader as a check-in (checkinPhotos in public/js/app.js).
-  photos: { url, max, canEdit, photos: [{ id, full, thumb }] }
+  photos: { url, max, canEdit, photos: [{ id, full, thumb }], upload (default canEdit), noun (default 'An item') }
 %>
-<div class="jt-item-photos" x-data="checkinPhotos(<%= JSON.stringify({ ...photos, noun: 'An item' }) %>)">
+<% const canUpload = photos.upload ?? photos.canEdit; %>
+<div class="jt-item-photos" x-data="checkinPhotos(<%= JSON.stringify({ noun: 'An item', ...photos }) %>)">
   <template x-for="p in photos" :key="p.id">
     <div class="jt-photo">
-      <a :href="p.full" target="_blank" rel="noopener"><img :src="p.thumb" alt="Photo of the defect" width="320" height="320" loading="lazy"></a>
+      <a :href="p.full" target="_blank" rel="noopener"><img :src="p.thumb" alt="Photo" width="320" height="320" loading="lazy"></a>
       <% if (photos.canEdit) { %>
         <button type="button" class="jt-photo-delete" @click="remove(p)" aria-label="Delete this photo"><i class="bi bi-trash3"></i></button>
       <% } %>
@@ -28,8 +29,8 @@
       </div>
     </div>
   </template>
-  <% if (photos.canEdit) { %>
-    <label class="btn btn-sm btn-outline-secondary mb-0" x-show="room > 0" title="Take a photo of the defect">
+  <% if (canUpload) { %>
+    <label class="btn btn-sm btn-outline-secondary mb-0" x-show="room > 0" title="Take a photo">
       <i class="bi bi-camera"></i>Photo
       <input type="file" accept="image/*" capture="environment" class="visually-hidden" @change="add($event.target.files); $event.target.value = ''">
     </label>
