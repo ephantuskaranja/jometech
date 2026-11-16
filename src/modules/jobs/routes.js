@@ -9,6 +9,7 @@ import { config } from '../../config.js';
 import * as jobs from './service.js';
 import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
 import { forJob as signoffsForJob, OUTCOMES as SIGNOFF_OUTCOMES } from '../qc/signoff.js';
+import { jobCosting } from '../costing/service.js';
 import * as customers from '../customers/service.js';
 import { vehicleOptions } from '../enquiries/service.js';
 import { getVehicle } from '../vehicles/service.js';
@@ -171,6 +172,8 @@ router.get('/jobs/:id', view, async (req, res) => {
     qcChecks: await qcForJob(job.id), qcStatuses: QC_STATUSES,
     signoffs: await signoffsForJob(job.id), signoffOutcomes: SIGNOFF_OUTCOMES,
     canInspect: req.user.can('qc.manage'),
+    // What the job earned: managers and admins.
+    costing: req.user.can('costing.view') ? await jobCosting(job) : null,
   });
 });
 

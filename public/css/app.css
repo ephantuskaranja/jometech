@@ -677,3 +677,14 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-owed.is-paid { background: var(--bs-success-bg-subtle); box-shadow: inset 4px 0 0 var(--bs-success); }
 .jt-owed.is-paid > .bi, .jt-owed.is-paid .jt-owed-label { color: var(--bs-success-text-emphasis); }
 .jt-owed.is-paid .jt-owed-amount { font-size: 1rem; color: var(--bs-secondary-color); }
+
+/* Job costing card: price, costs, profit. */
+.jt-costing { display: grid; gap: .625rem; }
+.jt-costing > div { display: grid; grid-template-columns: 1fr auto; column-gap: 1rem; }
+.jt-costing dt { font-weight: 400; color: var(--bs-secondary-color); }
+.jt-costing dd { margin: 0; text-align: right; font-weight: 600; white-space: nowrap; }
+.jt-costing .jt-costing-note { grid-column: 1 / -1; text-align: left; font-weight: 400; font-size: .8125rem; color: var(--bs-tertiary-color); white-space: normal; }
+.jt-costing-total { border-top: 1px solid var(--bs-border-color); padding-top: .625rem; }
+.jt-costing-total dt { color: var(--bs-body-color); font-weight: 700; }
+.jt-costing-total dd { font-size: 1.25rem; font-weight: 700; color: var(--bs-success-text-emphasis); }
+.jt-costing-total.is-loss dd { color: var(--bs-danger-text-emphasis); }
