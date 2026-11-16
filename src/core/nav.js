@@ -51,6 +51,10 @@ export const nav = [
     label: 'Reports',
     items: [
       { label: 'Summary', href: '/reports/summary', icon: 'clipboard-data', permission: 'reports.summary', ready: true },
+      { label: 'Sales', href: '/reports/sales', icon: 'receipt', permission: 'reports.summary', ready: true },
+      { label: 'Stock value', href: '/reports/stock-value', icon: 'stack', permission: 'reports.summary', ready: true },
+      { label: 'Purchases', href: '/reports/purchases', icon: 'cart', permission: 'reports.summary', ready: true },
+      { label: 'Labour', href: '/reports/labour', icon: 'people', permission: 'reports.summary', ready: true },
       { label: 'Job costing', href: '/reports/job-costing', icon: 'graph-up-arrow', permission: 'costing.view', ready: true },
       { label: 'Running costs', href: '/costing/running-costs', icon: 'lightning-charge', permission: 'costing.view', ready: true },
     ],

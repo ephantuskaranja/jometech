@@ -5,6 +5,7 @@ import { localDay } from '../../core/dates.js';
 import { fmt } from '../../core/format.js';
 import { config } from '../../config.js';
 import * as reports from './service.js';
+import * as more from './more.js';
 import { METHODS as PAYMENT_METHODS } from '../invoices/service.js';
 
 // Period summary: a day or a range, one site or all. Printed from the browser, or downloaded as Excel.
@@ -132,4 +133,57 @@ function workbook(s, { p, site, today }) {
   sheet(book, 'Payments', [['Receipt', 'number'], ['Date', 'date', 14], ['Job', 'job_number'], ['Customer', 'customer_name', 28], ['From', 'from', 10], ['How', 'how', 14], ['Reference', 'reference', 18], ['Amount (KES)', 'amount', 16, MONEY]],
     money.received.map((p) => ({ ...p, date: day(p.paid_on), from: p.payer === 'financier' ? 'Bank' : 'Client', how: PAYMENT_METHODS[p.method], amount: Number(p.amount) })));
   return book;
+}
+
+// ---------- Reports → Sales, Stock value, Purchases, Labour (reports/more.js) ----------
+
+const isMonth = (s) => typeof s === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
+const shiftMonth = (m, by) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1 + by, 1)).toISOString().slice(0, 7);
+const monthName = (m) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+function reportChoice(req) {
+  const month = isMonth(String(req.query.month ?? '')) && req.query.month <= more.thisMonth() ? String(req.query.month) : more.thisMonth();
+  const site = req.user.sites.find((s) => s.id === Number(req.query.site)) ?? null;
+  return { month, site, siteIds: site ? [site.id] : req.user.sites.map((s) => s.id) };
+}
+
+const PATHS = { sales: 'sales', stock: 'stock-value', purchases: 'purchases', labour: 'labour' };
+
+for (const [key, path] of Object.entries(PATHS)) {
+  const report = more.REPORTS[key];
+  router.get(`/reports/${path}`, see, async (req, res) => {
+    const { month, site, siteIds } = reportChoice(req);
+    const data = await report.fn({ month, siteIds });
+    const qs = new URLSearchParams({ ...(report.monthly ? { month } : {}), ...(site ? { site: site.id } : {}) }).toString();
+    res.render('reports/views/table-report', {
+      title: report.title, report, path, data, month, site, sites: req.user.sites, qs,
+      label: report.monthly ? monthName(month) : 'Now', prev: shiftMonth(month, -1), next: shiftMonth(month, 1), thisMonth: more.thisMonth(),
+    });
+  });
+  router.get(`/reports/${path}.xlsx`, see, async (req, res) => {
+    const { month, site, siteIds } = reportChoice(req);
+    const data = await report.fn({ month, siteIds });
+    const book = new ExcelJS.Workbook();
+    book.creator = config.company?.name ?? 'Jome-Tech';
+    const glance = book.addWorksheet('Summary');
+    glance.columns = [{ width: 30 }, { width: 24 }, { width: 50 }];
+    glance.addRow([report.title, report.monthly ? monthName(month) : `As of ${day(localDay())}`]).font = { bold: true };
+    glance.addRow(['Site', site?.name ?? 'All sites']);
+    glance.addRow([]);
+    for (const k of data.kpis) glance.addRow([k.label, k.value, k.foot ?? '']);
+    if (data.note) { glance.addRow([]); glance.addRow([data.note]); }
+    for (const t of data.tables) {
+      const ws = book.addWorksheet(t.title.replace(/[\/?*[\]:]/g, '').slice(0, 31));
+      ws.columns = t.columns.map((c) => ({ header: c.label, key: c.key, width: c.type === 'money' ? 16 : c.type === 'qty' ? 11 : 24, style: c.type === 'money' ? { numFmt: MONEY } : {} }));
+      ws.getRow(1).font = { bold: true };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+      const plain = (row) => Object.fromEntries(t.columns.map((c) => [c.key, typeof row[c.key] === 'object' && row[c.key] !== null ? row[c.key].text : row[c.key] ?? '']));
+      t.rows.forEach((r) => ws.addRow(plain(r)));
+      if (!t.rows.length) ws.addRow({ [t.columns[0].key]: 'Nothing in this period' });
+      if (t.total) ws.addRow(plain(t.total)).font = { bold: true };
+    }
+    res.attachment(`${path}${report.monthly ? `-${month}` : `-${localDay()}`}${site ? `-${site.code}` : ''}.xlsx`);
+    await book.xlsx.write(res);
+    res.end();
+  });
 }
