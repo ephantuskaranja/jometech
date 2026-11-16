@@ -64,6 +64,7 @@ export const nav = [
     label: 'System',
     items: [
       { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },
+      { label: 'Roles', href: '/admin/roles', icon: 'shield-lock', permission: 'users.manage', ready: true },
       { label: 'Sites', href: '/admin/sites', icon: 'geo-alt', permission: 'system.settings', ready: true },
       { label: 'Job types & steps', href: '/admin/job-types', icon: 'list-check', permission: 'system.settings', ready: true },
       { label: 'Quality checklist', href: '/admin/qc-checklist', icon: 'clipboard-check', permission: 'system.settings', ready: true },

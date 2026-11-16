@@ -1,6 +1,6 @@
 // Every permission the code checks, and what each built-in role starts with.
 // The seed (db/seeds/02_roles.js) writes these to the database; after that,
-// admins can change role permissions in the app (roles screen, coming later).
+// admins can change role permissions in the app (System → Roles).
 //
 // Admins can do everything without needing each permission listed.
 

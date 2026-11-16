@@ -1,0 +1,73 @@
+<%# One role: tick what it can do. Admin is shown, not edited (admins can do everything). %>
+<% const isAdmin = role.key === 'admin'; %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Roles', href: '/admin/roles' }, role.name],
+  heading: role.name,
+  sub: role.description ?? '',
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <% if (isAdmin) { %>
+      <section class="card">
+        <div class="card-body d-flex gap-2 align-items-start">
+          <i class="bi bi-shield-lock fs-5 text-body-secondary"></i>
+          <p class="mb-0">Admins can do everything, at every site: every permission below, including users, settings and backups. That can’t be changed, so there is always someone who can put things right.</p>
+        </div>
+      </section>
+    <% } else { %>
+      <form method="post" action="/admin/roles/<%= role.id %>" novalidate
+            x-data="{ picked: <%= JSON.stringify(role.permissions) %>, saved: <%= JSON.stringify(role.permissions) %>, starting: <%= JSON.stringify(role.starting) %>,
+                      get changes() { return this.picked.filter((k) => !this.saved.includes(k)).length + this.saved.filter((k) => !this.picked.includes(k)).length; },
+                      get isStarting() { return this.starting && this.starting.length === this.picked.length && this.starting.every((k) => this.picked.includes(k)); } }">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <%# Nothing ticked still sends the field, so "take everything away" saves. %>
+        <input type="hidden" name="permissions" value="">
+        <div class="d-grid gap-4">
+          <% groups.forEach((g) => { %>
+            <section class="card">
+              <div class="card-header"><h2 class="h6 mb-0"><%= g.module %></h2></div>
+              <% if (g.module === 'System') { %>
+                <div class="card-body pb-0"><div class="jt-warn-box small"><i class="bi bi-exclamation-triangle"></i><div>These let people add users, change their roles, change settings and handle backups. Usually for admins only.</div></div></div>
+              <% } %>
+              <ul class="list-group list-group-flush">
+                <% g.items.forEach((p) => { %>
+                  <li class="list-group-item">
+                    <label class="d-flex gap-3 align-items-start" for="perm-<%= p.key %>" style="cursor: pointer">
+                      <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="perm-<%= p.key %>" name="permissions" value="<%= p.key %>" x-model="picked"<%= role.permissions.includes(p.key) ? ' checked' : '' %>>
+                      <span><%= p.description %><span class="d-block small text-body-tertiary font-monospace"><%= p.key %></span></span>
+                    </label>
+                  </li>
+                <% }) %>
+              </ul>
+            </section>
+          <% }) %>
+        </div>
+
+        <div class="jt-savebar">
+          <span class="jt-savebar-note"><i class="bi bi-shield-lock"></i>
+            <span x-text="changes ? `${changes} change${changes === 1 ? '' : 's'} not saved yet` : 'Applies to everyone with this role, from their next page.'">Applies to everyone with this role, from their next page.</span></span>
+          <div class="jt-savebar-actions">
+            <% if (role.starting) { %><button type="button" class="btn btn-link" x-show="!isStarting" @click="picked = [...starting]">Back to the starting set</button><% } %>
+            <button class="btn btn-primary" type="submit" :disabled="!changes"><i class="bi bi-check2"></i>Save</button>
+          </div>
+        </div>
+      </form>
+    <% } %>
+  </div>
+
+  <div class="col-lg-4 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">People with this role</h2></div>
+      <% if (role.people.length) { %>
+        <ul class="list-group list-group-flush"><% role.people.forEach((name) => { %><li class="list-group-item small"><%= name %></li><% }) %></ul>
+      <% } else { %>
+        <div class="card-body small text-body-secondary">No one yet. Give people roles on the <a href="/admin/users">Users</a> page.</div>
+      <% } %>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>
