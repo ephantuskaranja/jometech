@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { can } from '../../core/auth.js';
+import { sysadminOnly } from '../../core/auth.js';
 import { db } from '../../core/db.js';
 import { audit } from '../../core/audit.js';
 import { httpError } from '../../core/validate.js';
@@ -9,11 +9,11 @@ import * as customers from './customers.js';
 import * as items from './items.js';
 import * as employees from './employees.js';
 
-// System → Import data (admins): download a template, fill it in Excel, upload it, check the
+// System → Import data (System Administrator only): download a template, fill it in Excel, upload it, check the
 // preview (what will be added, skipped or is wrong), then import. Nothing is added before that.
 
 export const router = Router();
-router.use('/admin/import', can('system.settings'));
+router.use('/admin/import', sysadminOnly);
 
 export const KINDS = { [customers.KIND]: customers, [items.KIND]: items, [employees.KIND]: employees };
 const kindOf = (name) => KINDS[name] ?? (() => { throw httpError(404, 'That kind of import doesn’t exist.'); })();

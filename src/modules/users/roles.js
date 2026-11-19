@@ -4,7 +4,7 @@ import { httpError } from '../../core/validate.js';
 import { PERMISSIONS, ROLES } from '../../core/permissions.js';
 
 // System → Roles: admins choose what each role may do. A change applies to everyone with that role
-// from their next page. Admins can do everything (checked in code), so that role isn't edited here.
+// from their next page. Admin and System Administrator can do everything (checked in code), so they aren't edited here.
 // Re-running the seed keeps these changes (it only adds permissions that are new).
 
 /** Every role, with how many permissions it has and how many active people hold it. */
@@ -41,7 +41,7 @@ export async function setPermissions(id, keys, actor) {
   return db.transaction(async (trx) => {
     const role = await trx('roles').where({ id }).forUpdate().first();
     if (!role) throw httpError(404, 'That role doesn’t exist.');
-    if (role.key === 'admin') throw httpError(409, 'Admins can do everything; that can’t be changed.');
+    if (role.key === 'admin' || role.key === 'sysadmin') throw httpError(409, `${role.name} can do everything; that can’t be changed.`);
     const wanted = new Set(keys.filter((k) => PERMISSIONS.some(([, key]) => key === k)));
     const all = await trx('permissions').select('id', 'key');
     const had = new Set(await trx('role_permissions as rp').join('permissions as p', 'p.id', 'rp.permission_id').where('rp.role_id', id).pluck('p.key'));

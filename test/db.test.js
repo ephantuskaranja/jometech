@@ -24,7 +24,7 @@ test('sites table has the starter site', async () => {
 
 test('the built-in roles are seeded', async () => {
   const keys = (await db('roles').orderBy('id').select('key')).map((r) => r.key);
-  assert.deepEqual(keys, ['admin', 'manager', 'supervisor', 'sales', 'storekeeper', 'technician', 'gate', 'reception']);
+  assert.deepEqual(keys, ['admin', 'manager', 'supervisor', 'sales', 'storekeeper', 'technician', 'gate', 'reception', 'sysadmin']);
 });
 
 test('check-in quick-pick items are seeded', async () => {

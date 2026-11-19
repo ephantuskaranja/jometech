@@ -50,7 +50,9 @@ export async function loadUser(id) {
     .where('user_roles.user_id', id)
     .select('roles.id', 'roles.key', 'roles.name', 'roles.all_sites', 'roles.site_at_login');
 
-  const isAdmin = roles.some((r) => r.key === 'admin');
+  // The System Administrator can do everything an admin can, plus backups, import and roles.
+  const isSysAdmin = roles.some((r) => r.key === 'sysadmin');
+  const isAdmin = isSysAdmin || roles.some((r) => r.key === 'admin');
   const permissions = new Set(
     roles.length === 0 ? [] : (await db('permissions')
       .join('role_permissions', 'permissions.id', 'role_permissions.permission_id')
@@ -73,6 +75,7 @@ export async function loadUser(id) {
     roles,
     roleNames: roles.map((r) => r.name).join(', ') || 'No role',
     isAdmin,
+    isSysAdmin,
     sites,
     // Gate and Reception: choose a site when logging in, then keep it until logout.
     siteAtLogin: roles.some((r) => r.site_at_login),
@@ -138,6 +141,12 @@ export function can(permission) {
     if (req.user?.can(permission)) return next();
     next(httpError(403, "You don't have access to this page. Ask an administrator if you need it."));
   };
+}
+
+/** Route guard for Backups, Import data and Roles: the System Administrator only, whatever roles say. */
+export function sysadminOnly(req, res, next) {
+  if (req.user?.isSysAdmin) return next();
+  next(httpError(403, 'Only the System Administrator can use this page.'));
 }
 
 /** Route guard for "any one of these": canAny('customers.manage', 'checkin.manage') */

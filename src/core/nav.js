@@ -1,7 +1,7 @@
 import { MENU_CUSTOMERS } from './access.js';
 
 // Sidebar navigation. Icons are Bootstrap Icons names (https://icons.getbootstrap.com).
-// `permission`: who sees the item (one key, or a list meaning "any of these"). `adminOnly`: admins only.
+// `permission`: who sees the item (one key, or a list meaning "any of these"). `adminOnly`: admins only. `sysadminOnly`: the System Administrator only.
 // Items without `ready: true` show as "Soon" until their module is built.
 
 export const nav = [
@@ -64,21 +64,21 @@ export const nav = [
     label: 'System',
     items: [
       { label: 'Users', href: '/admin/users', icon: 'person-gear', permission: 'users.manage', ready: true },
-      { label: 'Roles', href: '/admin/roles', icon: 'shield-lock', permission: 'users.manage', adminOnly: true, ready: true },
+      { label: 'Roles', href: '/admin/roles', icon: 'shield-lock', sysadminOnly: true, ready: true },
       { label: 'Sites', href: '/admin/sites', icon: 'geo-alt', permission: 'system.settings', ready: true },
       { label: 'Job types & steps', href: '/admin/job-types', icon: 'list-check', permission: 'system.settings', ready: true },
       { label: 'Quality checklist', href: '/admin/qc-checklist', icon: 'clipboard-check', permission: 'system.settings', ready: true },
       { label: 'Closed days', href: '/admin/closed-days', icon: 'calendar-x', permission: 'system.settings', ready: true },
       { label: 'Pricing', href: '/admin/pricing', icon: 'tags', permission: 'system.settings', ready: true },
-      { label: 'Import data', href: '/admin/import', icon: 'file-earmark-arrow-up', permission: 'system.settings', ready: true },
-      { label: 'Backups', href: '/admin/backups', icon: 'database-check', permission: 'system.backup.manage', ready: true },
+      { label: 'Import data', href: '/admin/import', icon: 'file-earmark-arrow-up', sysadminOnly: true, ready: true },
+      { label: 'Backups', href: '/admin/backups', icon: 'database-check', sysadminOnly: true, ready: true },
     ],
   },
 ];
 
 /** The menu with only the items this user may see; empty groups are dropped. */
 export function navFor(user) {
-  const allowed = (item) => (!item.adminOnly || user.isAdmin) && (!item.permission || [].concat(item.permission).some((p) => user.can(p)));
+  const allowed = (item) => (!item.adminOnly || user.isAdmin) && (!item.sysadminOnly || user.isSysAdmin) && (!item.permission || [].concat(item.permission).some((p) => user.can(p)));
   return nav
     .map((group) => ({ ...group, items: group.items.filter(allowed) }))
     .filter((group) => group.items.length > 0);

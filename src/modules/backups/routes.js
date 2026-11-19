@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { can, verifyPassword } from '../../core/auth.js';
+import { sysadminOnly, verifyPassword } from '../../core/auth.js';
 import { audit } from '../../core/audit.js';
 import { db } from '../../core/db.js';
 import { httpError } from '../../core/validate.js';
@@ -8,7 +8,8 @@ import * as backups from './service.js';
 // System → Backups: back up now (optionally with photos and files), check, download, delete.
 // Download and delete ask for the admin's password again. Restoring is done on the server (docs/DEPLOY.md).
 export const router = Router();
-router.use(['/admin/backups', '/api/admin/backups'], can('system.backup.manage'));
+// The System Administrator only: a backup is the whole database.
+router.use(['/admin/backups', '/api/admin/backups'], sysadminOnly);
 
 async function loadBackup(req) {
   const id = Number(req.params.id);

@@ -10,7 +10,7 @@ const app = createApp();
 let admin, manager, reception, receptionRole, saved;
 
 before(async () => {
-  admin = await loginAs(app, await makeUser(61, ['admin']));
+  admin = await loginAs(app, await makeUser(61, ['sysadmin'])); // roles are the System Administrator's
   manager = await loginAs(app, await makeUser(62, ['manager']));
   reception = await loginAs(app, await makeUser(63, ['reception']));
   receptionRole = await db('roles').where({ key: 'reception' }).first();
@@ -30,7 +30,7 @@ async function post(agent, url, fields) {
 }
 const keysOf = async (roleId) => db('role_permissions as rp').join('permissions as p', 'p.id', 'rp.permission_id').where('rp.role_id', roleId).orderBy('p.key').pluck('p.key');
 
-test('only admins see and change roles', async () => {
+test('only the System Administrator sees and changes roles', async () => {
   const list = await admin.get('/admin/roles').expect(200);
   assert.match(list.text, /Reception/);
   assert.match(list.text, /Everything/, 'admin');

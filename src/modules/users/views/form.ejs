@@ -25,6 +25,12 @@
   </section>
 <% } %>
 
+<% if (readOnly) { %>
+  <div class="alert alert-info d-flex gap-2 mb-4">
+    <i class="bi bi-shield-lock"></i><span>This is the System Administrator’s account. Only they can change it, reset its password or switch it off.</span>
+  </div>
+<% } %>
+
 <div class="row g-4">
   <div class="<%= editing ? 'col-lg-8' : 'col-xl-9' %>">
     <form method="post" action="<%= editing ? `/admin/users/${account.id}` : '/admin/users' %>" novalidate id="user-form"
@@ -59,7 +65,7 @@
         <div class="card-header"><h2 class="h6 mb-0">Where they work</h2></div>
         <div class="card-body">
           <div class="alert alert-info mb-0 d-flex gap-2" x-show="seesAllSites" x-cloak>
-            <i class="bi bi-info-circle"></i><span>Admins and managers see every site, so there’s nothing to choose here.</span>
+            <i class="bi bi-info-circle"></i><span>Admins, the System Administrator and managers see every site, so there’s nothing to choose here.</span>
           </div>
           <div x-show="!seesAllSites">
             <%- include('partials/choices', { name: 'sites', label: 'Sites', multiple: true, options: siteOptions, value: values.sites, error: errors.sites, required: true, auto: !editing && values.sites.length ? 'your site' : false }) %>
@@ -67,6 +73,7 @@
         </div>
       </section>
 
+      <% if (!readOnly) { %>
       <div class="jt-savebar">
         <span class="jt-savebar-note"><i class="bi bi-shield-check"></i><%= editing ? 'Saving keeps their password as it is.' : 'A temporary password is made when you save.' %></span>
         <div class="jt-savebar-actions">
@@ -74,6 +81,7 @@
           <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i><%= editing ? 'Save changes' : 'Add user' %></button>
         </div>
       </div>
+      <% } %>
     </form>
   </div>
 
@@ -96,6 +104,7 @@
         </div>
       </section>
 
+      <% if (!readOnly) { %>
       <section class="card">
         <div class="card-body d-grid gap-3">
           <form method="post" action="/admin/users/<%= account.id %>/reset-password" class="d-grid gap-1">
@@ -124,6 +133,7 @@
           <% } %>
         </div>
       </section>
+      <% } %>
 
       <section class="card">
         <div class="card-header"><h2 class="h6 mb-0">History</h2></div>

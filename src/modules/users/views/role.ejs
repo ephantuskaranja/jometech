@@ -1,5 +1,5 @@
 <%# One role: tick what it can do. Admin is shown, not edited (admins can do everything). %>
-<% const isAdmin = role.key === 'admin'; %>
+<% const isAdmin = ['admin', 'sysadmin'].includes(role.key); %>
 <%- include('partials/page-header', {
   crumb: [{ label: 'Roles', href: '/admin/roles' }, role.name],
   heading: role.name,
@@ -12,7 +12,11 @@
       <section class="card">
         <div class="card-body d-flex gap-2 align-items-start">
           <i class="bi bi-shield-lock fs-5 text-body-secondary"></i>
-          <p class="mb-0">Admins can do everything, at every site: every permission below, including users, settings and backups. That can’t be changed, so there is always someone who can put things right.</p>
+          <% if (role.key === 'sysadmin') { %>
+            <p class="mb-0">The System Administrator can do everything, at every site, and is the only one who can use Backups, Import data and this Roles screen. That can’t be changed, and no one else can switch the account off or reset its password.</p>
+          <% } else { %>
+            <p class="mb-0">Admins can do everything, at every site: every permission below, including users and settings. That can’t be changed, so there is always someone who can put things right. Backups, Import data and Roles are for the System Administrator only.</p>
+          <% } %>
         </div>
       </section>
     <% } else { %>
@@ -28,7 +32,7 @@
             <section class="card">
               <div class="card-header"><h2 class="h6 mb-0"><%= g.module %></h2></div>
               <% if (g.module === 'System') { %>
-                <div class="card-body pb-0"><div class="jt-warn-box small"><i class="bi bi-exclamation-triangle"></i><div>These let people add users, change their roles, change settings and handle backups. Usually for admins only.</div></div></div>
+                <div class="card-body pb-0"><div class="jt-warn-box small"><i class="bi bi-exclamation-triangle"></i><div>These let people add users, change their roles and change settings. Usually for admins only.</div></div></div>
               <% } %>
               <ul class="list-group list-group-flush">
                 <% g.items.forEach((p) => { %>

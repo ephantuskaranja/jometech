@@ -101,6 +101,8 @@ SESSION_SECRET=the long random value
 ADMIN_NAME=Your Name
 ADMIN_PHONE=07xx xxx xxx          # the first admin's login
 ADMIN_PASSWORD=a temporary password   # you must change it at first login
+SYSADMIN_PHONE=07xx xxx xxx       # the System Administrator (backups, import, roles); may be the same as ADMIN_PHONE
+SYSADMIN_PASSWORD=a temporary password   # only used if that phone has no account yet
 ```
 ```bash
 chmod 600 .env
@@ -113,7 +115,7 @@ Still as `jometech` in `/var/www/apps/jometech`:
 ```bash
 npm ci --omit=dev
 npm run db:migrate
-npm run db:seed              # also creates the first admin from ADMIN_* in .env
+npm run db:seed              # also creates the first admin (ADMIN_*) and the System Administrator (SYSADMIN_*) from .env
 exit
 ```
 
@@ -142,7 +144,7 @@ sudo cp /var/www/apps/jometech/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 
-Open `https://your-domain` and log in with `ADMIN_PHONE` and `ADMIN_PASSWORD`; you'll be asked to choose a new password. Then add everyone else under **Users**, and remove `ADMIN_PASSWORD` from `.env` (the seed only uses it while no admin exists). The login cookie only works over **https**, so logging in at `http://<ip>:3000` will not work in production. That is deliberate.
+Open `https://your-domain` and log in with `ADMIN_PHONE` and `ADMIN_PASSWORD`; you'll be asked to choose a new password. Then add everyone else under **Users**, and remove `ADMIN_PASSWORD` and `SYSADMIN_PASSWORD` from `.env` (the seed only uses them while there is no admin / System Administrator). Keep `SYSADMIN_PHONE`. The login cookie only works over **https**, so logging in at `http://<ip>:3000` will not work in production. That is deliberate.
 
 ### 10. Firewall
 
@@ -201,14 +203,27 @@ Push to `master` (or GitHub → Actions → **Test and deploy** → Run workflow
 - **Undo a bad release:** `git revert <commit>` on your PC and push. The code goes back; migrations that already ran stay, so undo a table change with a new migration.
 - **Restore the database:** see *Backups* below.
 
+## System Administrator
+
+One account, set by `SYSADMIN_PHONE` in `.env`, is the System Administrator. It can do everything an admin can, and is the **only** one who can use **Backups**, **Import data** and **Roles**. No one else can change it, reset its password, switch it off or give the role to anyone.
+
+**Forgotten password** (nobody in the app can reset it, by design). On the server:
+
+```bash
+cd /var/www/apps/jometech
+sudo -u jometech npm run user:create
+```
+
+Type the System Administrator's phone number, answer `y` to *Reset their password?*, and type the new password twice. Any lock on the account is cleared and you can log in straight away. The change shows in the account's history as *Reset with npm run user:create*.
+
 ## Backups
 
-Admins see them at **System → Backups** in the app:
+The System Administrator (no one else) sees them at **System → Backups** in the app:
 
 - **Nightly** at 01:00 (Nairobi), database only. The last 7 days, 4 weeks and 12 months are kept; older ones are cleared out by the app.
 - **Back up now**, optionally *with photos and signatures* (a second file, `BKP-…-files.tar.gz`). Kept until an admin deletes them.
 - **Before an app update**: made by `scripts/deploy.sh` (`pre-deploy-….sql.gz`, last 10), listed on the same page.
-- **Check** re-reads a file and compares it with the checksum taken when it was made. **Download** and **Delete** ask for the admin's password again and go in the history.
+- **Check** re-reads a file and compares it with the checksum taken when it was made. **Download** and **Delete** ask for the System Administrator's password again and go in the history.
 
 All files are in `/var/www/apps/jometech/storage/backups/` on the same disk as the database, so they don't survive a lost server. Download one now and then (or after big data entry) and keep it off the server. Backups aren't encrypted: whoever has the file has every customer's details.
 

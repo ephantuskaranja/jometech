@@ -3,6 +3,8 @@
 // admins can change role permissions in the app (System → Roles).
 //
 // Admins can do everything without needing each permission listed.
+// The System Administrator can do everything too, and is the only one who can use
+// Backups, Import data and System → Roles (checked in code, so it can't be ticked on for anyone else).
 
 export const PERMISSIONS = [
   // module, key, description
@@ -36,13 +38,12 @@ export const PERMISSIONS = [
   ['Reports', 'costing.view', 'See what jobs cost and the profit on them'],
   ['System', 'users.manage', 'Add users, set roles and reset passwords'],
   ['System', 'system.settings', 'Change company settings'],
-  ['System', 'system.backup.manage', 'Run, download and delete backups'],
 ];
 
 export const ROLES = [
   {
     key: 'admin', name: 'Admin', all_sites: true,
-    description: 'Everything, including users, settings and backups',
+    description: 'Everything except backups, data import and roles: users, settings, approvals, reports',
     permissions: '*',
   },
   {
@@ -80,5 +81,11 @@ export const ROLES = [
     key: 'reception', name: 'Reception', site_at_login: true,
     description: 'Visitor register at reception: confirm visitors were received, book expected visitors',
     permissions: ['visitors.receive', 'visitors.view', 'visitors.book'],
+  },
+  // Added after the others, so a new database numbers the roles as the live one does.
+  {
+    key: 'sysadmin', name: 'System Administrator', all_sites: true,
+    description: 'Everything, plus backups, data import and what each role can do. Can’t be switched off or changed by anyone else.',
+    permissions: '*',
   },
 ];

@@ -31,11 +31,14 @@ async function renderForm(req, res, { status = 200, user = null, values, errors 
     title: user ? user.name : 'Add user',
     user: req.user, // the logged-in admin (layout); the person being edited is `account`
     account: user,
+    // The System Administrator's account, seen by anyone else: shown, not changed.
+    readOnly: Boolean(user?.roleKeys.includes('sysadmin') && !req.user.isSysAdmin),
     values,
     errors,
     tempPassword,
     entries: user ? await history('user', user.id, { limit: 30 }) : [],
-    roleOptions: options.roles.map((r) => ({ value: r.key, label: r.name, hint: r.description })),
+    // Only the System Administrator sees (and can give) that role; everyone keeps the roles they already have.
+    roleOptions: options.roles.filter((r) => r.key !== 'sysadmin' || req.user.isSysAdmin || values.roles.includes('sysadmin')).map((r) => ({ value: r.key, label: r.name, hint: r.description })),
     allSiteRoles: options.roles.filter((r) => r.all_sites).map((r) => r.key),
     siteOptions: options.sites.map((s) => ({ value: s.id, label: s.name })),
   });
@@ -51,6 +54,13 @@ async function extraErrors(req, data, account) {
   // Someone given users.manage who isn't an admin can't make admins (themselves included).
   if (!req.user.isAdmin && data.roles.includes('admin') !== Boolean(account?.roleKeys.includes('admin'))) {
     errors.roles = 'Only an admin can give or take away the Admin role.';
+  }
+  // The System Administrator role: given or taken away only by the System Administrator,
+  // never their own, and there is always at least one.
+  if (data.roles.includes('sysadmin') !== Boolean(account?.roleKeys.includes('sysadmin'))) {
+    if (!req.user.isSysAdmin) errors.roles = 'Only the System Administrator can give or take away that role.';
+    else if (account?.id === req.user.id) errors.roles = 'You can’t remove your own System Administrator role.';
+    else if (account && (await users.otherActiveAdmins(account.id, 'sysadmin')) === 0) errors.roles = 'This is the only System Administrator. Make someone else one first.';
   }
   if (account && account.roleKeys.includes('admin') && !data.roles.includes('admin')) {
     if (account.id === req.user.id) errors.roles = 'You can’t remove your own Admin role. Ask another admin to do it.';
@@ -101,9 +111,11 @@ async function loadAccount(req) {
   return account;
 }
 
-/** For changes: an admin's account is changed only by an admin. */
+/** For changes: an admin's account is changed only by an admin, and the System Administrator's
+ *  account only by the System Administrator (no one else can switch it off or reset its password). */
 async function loadForChange(req) {
   const account = await loadAccount(req);
+  if (account.roleKeys.includes('sysadmin') && !req.user.isSysAdmin) throw httpError(403, 'Only the System Administrator can change this account.');
   if (account.roleKeys.includes('admin') && !req.user.isAdmin) throw httpError(403, 'Only an admin can change an admin’s account.');
   return account;
 }
@@ -156,6 +168,8 @@ router.post('/admin/users/:id/status', async (req, res) => {
 
   if (!active && account.id === req.user.id) {
     req.session.flash = { type: 'warning', text: 'You can’t switch off your own account.' };
+  } else if (!active && account.roleKeys.includes('sysadmin') && (await users.otherActiveAdmins(account.id, 'sysadmin')) === 0) {
+    req.session.flash = { type: 'warning', text: 'This is the only System Administrator. Make someone else one first.' };
   } else if (!active && account.roleKeys.includes('admin') && (await users.otherActiveAdmins(account.id)) === 0) {
     req.session.flash = { type: 'warning', text: 'This is the only admin. Make someone else an admin first.' };
   } else {

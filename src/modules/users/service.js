@@ -169,12 +169,12 @@ export async function formOptions() {
   return { roles, sites };
 }
 
-/** Number of active admins other than `exceptUserId` (to never lock everyone out). */
-export async function otherActiveAdmins(exceptUserId) {
+/** Number of active admins (or holders of `roleKey`) other than `exceptUserId` (to never lock everyone out). */
+export async function otherActiveAdmins(exceptUserId, roleKey = 'admin') {
   const [{ n }] = await db('users')
     .join('user_roles', 'users.id', 'user_roles.user_id')
     .join('roles', 'roles.id', 'user_roles.role_id')
-    .where({ 'roles.key': 'admin', 'users.is_active': true })
+    .where({ 'roles.key': roleKey, 'users.is_active': true })
     .whereNot('users.id', exceptUserId)
     .countDistinct('users.id as n');
   return Number(n);

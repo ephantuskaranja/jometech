@@ -23,7 +23,7 @@ let admin, manager, existing, auditBefore;
 before(async () => {
   existing = await db('system_backups').pluck('id');
   auditBefore = (await db('audit_log').max('id as m').first()).m ?? 0;
-  admin = await loginAs(app, await makeUser(34, ['admin']));
+  admin = await loginAs(app, await makeUser(34, ['sysadmin'])); // backups are the System Administrator's
   manager = await loginAs(app, await makeUser(40, ['manager']));
 });
 
@@ -42,7 +42,7 @@ async function post(agent, url, fields = {}) {
 const mkdirp = (dir) => mkdirSync(dir, { recursive: true });
 const latest = () => db('system_backups').whereNotIn('id', existing).orderBy('id', 'desc').first();
 
-test('only admins see Backups', async () => {
+test('only the System Administrator sees Backups', async () => {
   await admin.get('/admin/backups').expect(200);
   await manager.get('/admin/backups').expect(403);
   assert.equal((await post(manager, '/admin/backups')).status, 403);

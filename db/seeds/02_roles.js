@@ -13,6 +13,10 @@ export async function seed(knex) {
     .insert(PERMISSIONS.map(([module, key, description]) => ({ module, key, description })))
     .onConflict('key')
     .merge(['module', 'description']);
+  // Permissions no longer in the list (e.g. backups, now System Administrator only) are taken off every role.
+  const listed = PERMISSIONS.map(([, key]) => key);
+  await knex('role_permissions').whereIn('permission_id', knex('permissions').whereNotIn('key', listed).select('id')).delete();
+  await knex('permissions').whereNotIn('key', listed).delete();
   const added = new Set(PERMISSIONS.map(([, key]) => key).filter((key) => !known.has(key)));
 
   const permissionIds = Object.fromEntries(
@@ -23,7 +27,8 @@ export async function seed(knex) {
     const existing = await knex('roles').where({ key: role.key }).first('id');
     let roleId = existing?.id;
     if (existing) {
-      await knex('roles').where({ id: roleId }).update({ site_at_login: role.site_at_login ?? false });
+      // Names and descriptions aren't edited in the app, so they follow permissions.js.
+      await knex('roles').where({ id: roleId }).update({ name: role.name, description: role.description, site_at_login: role.site_at_login ?? false });
     } else {
       [roleId] = await knex('roles').insert({
         key: role.key,
@@ -35,7 +40,7 @@ export async function seed(knex) {
       });
     }
 
-    if (role.permissions === '*') continue; // admin: everything, checked in code
+    if (role.permissions === '*') continue; // admin and sysadmin: everything, checked in code
     const keys = existing ? role.permissions.filter((key) => added.has(key)) : role.permissions;
     if (keys.length) {
       await knex('role_permissions')

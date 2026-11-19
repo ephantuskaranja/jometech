@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { can } from '../../core/auth.js';
+import { sysadminOnly } from '../../core/auth.js';
 import { history } from '../../core/audit.js';
 import { httpError } from '../../core/validate.js';
 import * as roles from './roles.js';
 
-// System → Roles: what each role may do. Admins only: whoever can change roles can give
-// themselves anything, so users.manage alone isn't enough.
+// System → Roles: what each role may do. The System Administrator only: whoever can change
+// roles can give themselves anything, so users.manage (or even Admin) isn't enough.
 export const router = Router();
-router.use('/admin/roles', can('users.manage'), (req, res, next) => (req.user.isAdmin ? next() : next(httpError(403, 'Only admins can change what roles can do.'))));
+router.use('/admin/roles', sysadminOnly);
 
 async function loadRole(req) {
   const id = Number(req.params.id);

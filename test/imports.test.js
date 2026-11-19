@@ -9,7 +9,7 @@ const app = createApp();
 let admin, manager, adminId;
 
 before(async () => {
-  admin = await loginAs(app, await makeUser(94, ['admin']));
+  admin = await loginAs(app, await makeUser(94, ['sysadmin'])); // import is the System Administrator's
   manager = await loginAs(app, await makeUser(95, ['manager']));
   adminId = (await db('users').where({ phone: '+254700000094' }).first('id')).id;
   // Already in the app: a customer with a vehicle.

@@ -15,7 +15,7 @@
             <td><a class="jt-row-link" href="/admin/roles/<%= r.id %>"><%= r.name %></a>
               <% if (r.all_sites) { %><span class="jt-sub">Every site</span><% } %></td>
             <td class="d-none d-md-table-cell small text-body-secondary"><%= r.description ?? '' %></td>
-            <td class="text-end text-nowrap"><%= r.key === 'admin' ? 'Everything' : `${r.permission_count} of ${total}` %></td>
+            <td class="text-end text-nowrap"><%= ['admin', 'sysadmin'].includes(r.key) ? 'Everything' : `${r.permission_count} of ${total}` %></td>
             <td class="text-end jt-num"><%= r.user_count %></td>
           </tr>
         <% }) %>
