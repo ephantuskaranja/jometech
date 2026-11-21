@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
-import { seed } from '../db/seeds/06_job_types.js';
+import { seed, FAB } from '../db/seeds/06_job_types.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
@@ -53,7 +53,8 @@ test('the starting lists are there; running the seed again changes nothing', asy
   assert.ok(fabrication, 'run: npm run db:seed');
   const names = await db('job_type_steps').where({ job_type_id: fabrication.id }).orderBy('sort_order').pluck('name');
   assert.equal(names[0], 'Vehicle Received');
-  assert.ok(names.includes('Welding'));
+  assert.ok(names.includes(FAB));
+  assert.ok(!names.includes('Welding'), 'cutting to assembly are one step');
   const before = await db('job_type_steps').count({ n: '*' });
   await seed(db);
   assert.deepEqual(await db('job_type_steps').count({ n: '*' }), before);

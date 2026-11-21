@@ -5,9 +5,11 @@ import { db } from '../src/core/db.js';
 import sharp from 'sharp';
 import { checklist } from '../src/modules/qc/service.js';
 import { seed } from '../db/seeds/08_qc_checklist.js';
+import { FAB } from '../db/seeds/06_job_types.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
+const FAB_RE = FAB.replace(/[()]/g, '\\$&');
 let admin, supervisor, technician, sales, customer, maintenance, repair, savedChecklist, savedQcStep, savedSignoffStep;
 
 before(async () => {
@@ -166,16 +168,18 @@ test('a failed check reopens only the steps chosen for the failed items; the job
   const id = await jobAtQc(repair);
   const check = idOf((await post(supervisor, `/jobs/${id}/qc`)).headers.location);
   const items = await itemsOf(check);
-  const welding = await stepOf(id, 'Welding');
+  const welding = await stepOf(id, FAB);
   const painting = await stepOf(id, 'Painting');
   const weld = items.find((i) => i.section === 'Welding');
   const paint = items.find((i) => i.section === 'Paint and finish');
   const fit = items.find((i) => i.section === 'Dimensions and fit');
+  const lights = items.find((i) => i.section === 'Electrical and accessories');
   assert.equal(weld.redo_step_id, welding.id, 'the section’s suggested step is chosen to start with');
   assert.equal(paint.redo_step_id, painting.id);
-  assert.equal(fit.redo_step_id, null, 'a Repair job has no Assembly step');
+  assert.equal(fit.redo_step_id, welding.id, 'assembly is part of Fabrication');
+  assert.equal(lights.redo_step_id, null, 'a Repair job has no Electrical / Accessories step');
   const page = (await supervisor.get(`/qc/${check}`)).text;
-  assert.match(page, new RegExp(`<option value="${welding.id}" selected>Welding: reopen this step`));
+  assert.match(page, new RegExp(`<option value="${welding.id}" selected>${FAB_RE}: reopen this step`));
   assert.doesNotMatch(page, /Quality Inspection: reopen/, 'only steps before the check');
 
   const finishing = await stepOf(id, 'Finishing');
@@ -189,13 +193,13 @@ test('a failed check reopens only the steps chosen for the failed items; the job
   assert.equal((await db('job_steps').where({ id: welding.id }).first()).rework_qc_id, check);
   assert.equal((await db('job_steps').where({ id: painting.id }).first()).status, 'pending');
   assert.equal((await db('job_steps').where({ id: finishing.id }).first()).status, 'done', 'steps not chosen stay done');
-  assert.equal((await currentStep(id)).id, welding.id, 'the job is back at Welding');
+  assert.equal((await currentStep(id)).id, welding.id, 'the job is back at Fabrication');
 
   let job = (await supervisor.get(`/jobs/${id}`)).text;
   assert.match(job, /Rework<\/span> from <a href="\/qc\/\d+">QC-/);
   assert.match(job, /Hinge weld cracked/);
   assert.match(job, /Body 20 mm off centre/);
-  assert.match(job, /Welding done → Painting/, 'the next step to do, skipping the ones still done');
+  assert.match(job, new RegExp(`${FAB_RE} done → Painting`), 'the next step to do, skipping the ones still done');
   assert.equal((await post(supervisor, `/jobs/${id}/qc`)).status, 409, 'no new check until the rework is done');
 
   await post(supervisor, `/jobs/${id}/steps/${welding.id}/done`);
@@ -208,7 +212,7 @@ test('a failed check reopens only the steps chosen for the failed items; the job
   const again = idOf((await post(supervisor, `/jobs/${id}/qc`)).headers.location);
   assert.equal((await db('qc_inspections').where({ id: again }).first()).attempt, 2);
   const logged = await db('audit_log').where({ entity: 'job', entity_id: id, action: 'steps_reworked' }).first();
-  assert.match(logged.summary, /^Welding, Painting \(quality check QC-\d{4}-\d{4} failed\)$/);
+  assert.match(logged.summary, new RegExp(`^${FAB_RE}, Painting \\(quality check QC-\\d{4}-\\d{4} failed\\)$`));
 });
 
 test('failed items take photos while the check is open; anyone who sees the report sees them', async () => {

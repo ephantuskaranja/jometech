@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { checklist as releaseChecklist } from '../src/modules/checkins/release.js';
+import { FAB } from '../db/seeds/06_job_types.js';
 import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
@@ -164,7 +165,7 @@ test('the release checklist shows the passed quality check', async () => {
 
 test('a job type’s customer sign-off comes after its quality check', async () => {
   const steps = await db('job_type_steps').where({ job_type_id: repair.id }).orderBy('sort_order').pluck('name');
-  let res = await post(admin, `/admin/job-types/${repair.id}`, { name: repair.name, step: steps, qc_step: 'Quality Inspection', signoff_step: 'Welding' });
+  let res = await post(admin, `/admin/job-types/${repair.id}`, { name: repair.name, step: steps, qc_step: 'Quality Inspection', signoff_step: FAB });
   assert.equal(res.status, 422);
   assert.match(res.text, /The customer signs at a step after the quality check/);
   res = await post(admin, `/admin/job-types/${repair.id}`, { name: repair.name, step: steps, qc_step: 'Quality Inspection', signoff_step: '' });

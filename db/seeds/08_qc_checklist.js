@@ -4,24 +4,26 @@
 // Written once, while there is no checklist. Deploys run the seeds every time,
 // so anything an admin later changes under System stays that way.
 
+import { FAB } from './06_job_types.js';
+
 export const CHECKLIST = [
-  { name: 'Dimensions and fit', rework_step: 'Assembly', items: [
+  { name: 'Dimensions and fit', rework_step: FAB, items: [
     'Overall length, width and height as ordered or drawn',
     'Body square and level (diagonals match)',
     'Mounted firmly on the chassis (U-bolts, brackets, bolts tight)',
     'Clear of wheels, cab, exhaust and fuel tank',
   ] },
-  { name: 'Welding', rework_step: 'Welding', items: [
+  { name: 'Welding', rework_step: FAB, items: [
     'All joints fully welded as specified',
     'No cracks, holes (porosity) or undercut',
     'Slag and spatter removed; welds ground where they show',
   ] },
-  { name: 'Structure and moving parts', rework_step: 'Assembly', items: [
+  { name: 'Structure and moving parts', rework_step: FAB, items: [
     'Floor, sides and cross-members straight, no dents',
     'Doors, tailgate and drop-sides open, close and lock properly',
     'Hinges and pins greased and moving freely',
   ] },
-  { name: 'Hydraulics (tippers only, else N/A)', rework_step: 'Assembly', items: [
+  { name: 'Hydraulics (tippers only, else N/A)', rework_step: FAB, items: [
     'Tips fully up and down smoothly',
     'No oil leaks (pump, hoses, ram)',
     'Safety prop / stay works',

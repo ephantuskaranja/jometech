@@ -13,7 +13,7 @@ const PLAN = 'Material Planning';
 const QC = 'Quality Inspection';
 const CUSTOMER = 'Customer Inspection';
 // Cutting, frame fabrication, welding, assembly and grinding are one step (Nov 2026: fewer steps to tick).
-const FAB = 'Fabrication (cutting, frame, welding, assembly, grinding)';
+export const FAB = 'Fabrication (cutting, frame, welding, assembly, grinding)';
 
 const TYPES = [
   { name: 'New fabrication', is_default: true, steps: [RECEIVED, INSPECT, DESIGN, PLAN, FAB, 'Body Installation', 'Finishing', 'Painting', 'Electrical / Accessories', QC, CUSTOMER] },

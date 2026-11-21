@@ -110,7 +110,7 @@ test('allowed: the collector signs and the vehicle leaves; the note says “on c
   const page = (await supervisor.get(`/check-in/${owing.checkin}`)).text;
   assert.match(page, /Collected by <strong>Peter Kamau/);
   assert.match(page, /Released: waiting at the gate/);
-  assert.match(note, /Cleared at the gate by:<\/span> \n/, 'blank until the gate clears it');
+  assert.match(note, /Cleared at the gate by:<\/span> \r?\n/, 'blank until the gate clears it');
 });
 
 test('the gate sees released vehicles, clears them out, and is named on the release note', async () => {
