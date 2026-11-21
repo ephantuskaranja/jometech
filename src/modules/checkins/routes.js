@@ -11,7 +11,7 @@ import * as checkins from './service.js';
 import * as release from './release.js';
 import * as movements from '../movements/service.js';
 import { forCheckin, STATUSES as JOB_STATUSES } from '../jobs/service.js';
-import { afterCheckin } from '../../core/next-steps.js';
+import { afterCheckin, forCheckin as nextForCheckin } from '../../core/next-steps.js';
 import { fmt } from '../../core/format.js';
 import { config } from '../../config.js';
 import * as customers from '../customers/service.js';
@@ -171,7 +171,12 @@ router.get('/check-in/:id', view, async (req, res) => {
   // A send or receive form that came back with problems (movements/routes.js) opens again with them.
   const moveForm = req.session.moveForm?.checkinId === checkin.id ? req.session.moveForm : null;
   delete req.session.moveForm;
+  const visitJobs = await forCheckin(checkin.id);
+  const releaseList = checkin.status === 'in_workshop' ? await release.checklist(checkin.id) : null;
+  const releaseRecord = ['released', 'checked_out'].includes(checkin.status) ? await release.releaseOf(checkin.id) : null;
   res.render('checkins/views/show', {
+    // The one thing to do next, at the top of the page (core/next-steps.js).
+    next: await nextForCheckin(req.user, checkin, { jobs: visitJobs, list: releaseList, release: releaseRecord }),
     title: checkin.number,
     checkin,
     vehicleLabel, typeLabel,
@@ -182,8 +187,7 @@ router.get('/check-in/:id', view, async (req, res) => {
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
     canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,
     // Release: the checklist while it is here, the release (who collected it) once it has left.
-    releaseList: checkin.status === 'in_workshop' ? await release.checklist(checkin.id) : null,
-    releaseRecord: ['released', 'checked_out'].includes(checkin.status) ? await release.releaseOf(checkin.id) : null,
+    releaseList, releaseRecord,
     canClear: checkin.status === 'released' && req.user.can('checkin.gate') && req.site?.id === checkin.site_id,
     canAllow: req.user.can('invoices.manage'),
     daysIn: checkins.daysIn(checkin.checked_in_at, checkin.checked_out_at ?? new Date()),
@@ -198,8 +202,9 @@ router.get('/check-in/:id', view, async (req, res) => {
     canGateOut: Boolean(move) && !move.gate_out_at && req.user.can('checkin.gate') && worksAt(req, move.from_site_id),
     canGateIn: Boolean(move?.gate_out_at) && !move.gate_in_at && req.user.can('checkin.gate') && worksAt(req, move.to_site_id),
     moveForm,
-    jobs: await forCheckin(checkin.id), jobStatuses: JOB_STATUSES,
-    canStartJob: req.user.can('jobs.manage') && checkin.status === 'in_workshop',
+    jobs: visitJobs, jobStatuses: JOB_STATUSES,
+    // One running job per vehicle: "New job" only when none is open or in progress.
+    canStartJob: req.user.can('jobs.manage') && checkin.status === 'in_workshop' && !visitJobs.some((j) => ['open', 'in_progress'].includes(j.status)),
   });
 });
 
@@ -227,28 +232,11 @@ async function renderRelease(res, checkin, { status = 200, values, errors = {} }
   });
 }
 
-/**
- * Shortcut buttons for "it can't be released yet": the checklist, and for those who handle money
- * the first invoice to raise or payment to record. Shown in the message (partials/flash).
- */
-async function releaseShortcuts(req, checkin) {
-  const list = await release.checklist(checkin.id);
-  if (list.ok) return [];
-  const actions = [{ label: 'See what is missing', href: `/check-in/${checkin.id}#release-checklist`, icon: 'list-check' }];
-  if (req.user.can('invoices.manage')) {
-    const owing = list.jobs.find((j) => j.invoice && j.invoice.balance > 0);
-    const uninvoiced = list.jobs.find((j) => !j.invoice && j.status === 'completed');
-    if (owing) actions.unshift({ label: `Record payment for ${owing.invoice.number}`, href: `/jobs/${owing.id}#payments`, icon: 'cash-coin', primary: true });
-    else if (uninvoiced) actions.unshift({ label: `Invoice ${uninvoiced.number}`, href: `/jobs/${uninvoiced.id}/invoice`, icon: 'receipt', primary: true });
-  }
-  return actions;
-}
-
 router.get('/check-in/:id/release', manage, async (req, res) => {
   const checkin = await loadForRelease(req);
   const blocked = await release.blockedBecause(checkin);
   if (blocked) {
-    req.session.flash = { type: 'warning', text: blocked, actions: await releaseShortcuts(req, checkin) };
+    req.session.flash = { type: 'warning', text: blocked }; // the check-in page's Next step says what to do
     return res.redirect(`/check-in/${checkin.id}`);
   }
   // Most often whoever brought it in collects it.
@@ -269,10 +257,7 @@ router.post('/check-in/:id/release', manage, async (req, res) => {
   if (Object.keys(allErrors).length) return renderRelease(res, checkin, { status: 422, values: { ...req.body, signature: '' }, errors: allErrors });
 
   const { number } = await release.releaseVehicle(checkin.id, { ...data, signature: png }, req);
-  req.session.flash = {
-    type: 'success', text: `${vehicleLabel(checkin)} released to ${data.collector_name}. Release note ${number} is ready to print. The gate clears it out as it leaves.`,
-    actions: [{ label: 'Print the release note', href: `/check-in/${checkin.id}/release-note`, icon: 'printer', primary: true }],
-  };
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} released to ${data.collector_name}. Release note ${number} is ready to print. The gate clears it out as it leaves.` };
   res.redirect(`/check-in/${checkin.id}`);
 });
 
@@ -284,7 +269,7 @@ router.post('/check-in/:id/allow-release', allow, async (req, res) => {
     return res.redirect(`/check-in/${checkin.id}`);
   }
   await release.allowRelease(checkin.id, reason, req);
-  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} can now be released.`, actions: [{ label: 'Release it now', href: `/check-in/${checkin.id}/release`, icon: 'box-arrow-right', primary: true }] };
+  req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} can now be released.` };
   res.redirect(`/check-in/${checkin.id}`);
 });
 
@@ -413,7 +398,7 @@ router.post('/check-in/:id/sign', manage, async (req, res) => {
   if (Object.keys(allErrors).length) return renderSign(res, checkin, { status: 422, values: { ...req.body, signature: '' }, errors: allErrors });
 
   await checkins.signCheckin(checkin.id, { driver_name: data.driver_name, driver_phone: data.driver_phone, driver_id_no: data.driver_id_no, signature: png }, req);
-  req.session.flash = { type: 'success', text: `Thank you. ${checkin.number} is confirmed by ${data.driver_name}.`, actions: await afterCheckin(req.user, checkin) };
+  req.session.flash = { type: 'success', text: `Thank you. ${checkin.number} is confirmed by ${data.driver_name}.`, actions: afterCheckin(checkin) };
   res.redirect(`/check-in/${checkin.id}`);
 });
 
@@ -427,7 +412,7 @@ router.post('/check-in/:id/not-signed', manage, async (req, res) => {
     });
   }
   await checkins.markNotSigned(checkin.id, reason, req);
-  req.session.flash = { type: 'warning', text: `${checkin.number} saved without the driver’s signature.`, actions: await afterCheckin(req.user, checkin) };
+  req.session.flash = { type: 'warning', text: `${checkin.number} saved without the driver’s signature.`, actions: afterCheckin(checkin) };
   res.redirect(`/check-in/${checkin.id}`);
 });
 

@@ -31,6 +31,33 @@
   </div>
 </section>
 
+<%
+  // The same main button as the "Next step" card, at the top on phones and tablets (where that card
+  // is far down the page, under the steps). Big screens show the card beside the steps instead.
+  const openQc = qcChecks.find((q) => q.status === 'in_progress');
+  let top = null;
+  if (job.status === 'open' && canManage) {
+    top = { tone: 'info', text: 'Print the job card, then start the job when work begins.', actions: [
+      { label: 'Start the job', post: `/jobs/${job.id}/start`, icon: 'play-fill', primary: true },
+      { label: 'Job card', href: `/jobs/${job.id}/print`, icon: 'printer' }] };
+  } else if (job.status === 'in_progress' && current?.is_qc) {
+    top = { tone: 'warning', text: `Now: ${current.name}.`, actions: canInspect
+      ? [openQc ? { label: `Carry on with ${openQc.number}`, href: `/qc/${openQc.id}`, icon: 'clipboard-check', primary: true } : { label: 'Start quality check', post: `/jobs/${job.id}/qc`, icon: 'clipboard-check', primary: true }]
+      : [] };
+    if (!canInspect) top.text += ' Someone who does quality checks takes it from here.';
+  } else if (job.status === 'in_progress' && current?.is_signoff && canManage) {
+    top = { tone: 'warning', text: `Now: ${current.name}. The customer checks the work and signs.`, actions: [{ label: 'Customer sign-off', href: `/jobs/${job.id}/signoff`, icon: 'pen', primary: true }] };
+  } else if (job.status === 'in_progress' && current && canManage) {
+    top = { tone: 'info', text: `Now: ${current.name} (${job.stepsFinished + 1} of ${job.steps.length}).`, actions: [
+      { label: `${current.name} done`, post: `/jobs/${job.id}/steps/${current.id}/done`, icon: 'check2', primary: true }] };
+  } else if (job.status === 'in_progress' && !current && canManage) {
+    top = { tone: 'success', text: 'All steps done.', actions: [{ label: 'Mark completed', post: `/jobs/${job.id}/complete`, icon: 'check2-circle', primary: true }] };
+  } else if (job.status === 'completed' && afterDone.length) {
+    top = { tone: 'success', text: 'Work completed. Next: invoice, payment and release.', actions: afterDone };
+  }
+%>
+<% if (top) { %><div class="d-lg-none"><%- include('partials/next-step', top) %></div><% } %>
+
 <div class="row g-4">
   <div class="col-lg-8 d-grid gap-4 align-content-start">
     <% if (job.steps.length) { %>
@@ -167,7 +194,10 @@
         <% } else if (job.status === 'in_progress') { %>
           <p class="small mb-0">Started <%= fmt.dateTime(job.started_at) %>.<%= current ? '' : ' Mark it completed when the work is done.' %></p>
         <% } else if (job.status === 'completed') { %>
-          <p class="small mb-0">Completed <%= fmt.dateTime(job.completed_at) %>.</p>
+          <p class="small mb-0">Completed <%= fmt.dateTime(job.completed_at) %>.<%= afterDone.length ? ' Next: invoice, payment and release.' : '' %></p>
+          <% afterDone.forEach((a) => { %>
+            <a class="btn <%= a.primary ? 'btn-primary' : 'btn-outline-secondary' %> w-100" href="<%= a.href %>"><i class="bi bi-<%= a.icon %>"></i><%= a.label %></a>
+          <% }) %>
         <% } else { %>
           <div class="small">Cancelled <%= fmt.dateTime(job.cancelled_at) %><div class="mt-1"><%= job.cancelled_reason %></div></div>
         <% } %>

@@ -784,3 +784,21 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 /* "Install Jome-Tech" banner (layout.ejs). */
 .jt-install img { border-radius: .5rem; }
 .jt-install[hidden] { display: none !important; }
+
+/* "Next step" bar on record pages (partials/next-step.ejs): one clear thing to do now. */
+.jt-next { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; padding: .9rem 1.1rem; border-radius: var(--bs-border-radius-lg); border: 1px solid; }
+.jt-next-info { background: var(--bs-primary-bg-subtle); border-color: var(--bs-primary-border-subtle); }
+.jt-next-warning { background: var(--bs-warning-bg-subtle); border-color: var(--bs-warning-border-subtle); }
+.jt-next-success { background: var(--bs-success-bg-subtle); border-color: var(--bs-success-border-subtle); }
+.jt-next-icon { font-size: 1.5rem; }
+.jt-next-info .jt-next-icon { color: var(--bs-primary); }
+.jt-next-warning .jt-next-icon { color: var(--bs-warning-text-emphasis); }
+.jt-next-success .jt-next-icon { color: var(--bs-success); }
+.jt-next-body { flex: 1 1 14rem; min-width: 0; }
+.jt-next-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-secondary-color); }
+.jt-next-text { font-weight: 600; }
+.jt-next-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.jt-next-actions form { display: contents; }
+.jt-next-actions .btn i { margin-right: .35rem; }
+@media (max-width: 575.98px) { .jt-next-actions { width: 100%; } .jt-next-actions .btn { flex: 1 1 auto; } }
+@media print { .jt-next { display: none; } }

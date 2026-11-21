@@ -34,6 +34,9 @@
   <div class="jt-info-box mb-4"><i class="bi bi-info-circle"></i><span>Replaces cancelled <%- earlier.map((o) => `<a href="/invoices/${o.id}">invoice ${o.number}</a>`).join(', ') %>.</span></div>
 <% } %>
 
+<%# What happens next with this invoice (routes.js invoiceNext). A draft's "Issue" button is beside the lines on big screens. %>
+<% if (locals.next) { %><div class="<%= next.phoneOnly ? 'd-lg-none' : '' %>"><%- include('partials/next-step', next) %></div><% } %>
+
 <div class="row g-4">
   <div class="col-lg-8 d-grid gap-4 align-content-start">
     <section class="card">

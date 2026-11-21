@@ -1,0 +1,36 @@
+<%#
+  "Next step" bar: the one thing to do now, with its button(s). Same look on every record page
+  (check-in, job, invoice), so the workshop always knows where to tap next.
+  include('partials/next-step', { tone: 'info', text: 'No job yet. Open one for the work on this vehicle.',
+          actions: [{ label: 'Open a job', href: '/jobs/new?vehicle_id=3', icon: 'plus-lg', primary: true }] })
+
+  tone     info | warning | success
+  actions  [{ label, href, icon?, primary? }] or [{ label, post, fields?, icon?, primary? }]
+%>
+<%
+  const tone = locals.tone ?? 'info';
+  const icon = { success: 'check-circle-fill', warning: 'hourglass-split', info: 'arrow-right-circle-fill' }[tone] ?? 'arrow-right-circle-fill';
+  const actions = (locals.actions ?? []).filter((a) => a && a.label && (a.href || a.post));
+%>
+<section class="jt-next jt-next-<%= tone %> mb-4" aria-label="Next step">
+  <i class="bi bi-<%= icon %> jt-next-icon" aria-hidden="true"></i>
+  <div class="jt-next-body">
+    <div class="jt-next-label">Next step</div>
+    <div class="jt-next-text"><%= text %></div>
+  </div>
+  <% if (actions.length) { %>
+    <div class="jt-next-actions">
+      <% actions.forEach((a) => { const cls = `btn ${a.primary ? 'btn-primary' : 'btn-outline-secondary'}`; %>
+        <% if (a.post) { %>
+          <form method="post" action="<%= a.post %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% Object.entries(a.fields ?? {}).forEach(([k, v]) => { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% }) %>
+            <button class="<%= cls %>" type="submit"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></button>
+          </form>
+        <% } else { %>
+          <a class="<%= cls %>" href="<%= a.href %>"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></a>
+        <% } %>
+      <% }) %>
+    </div>
+  <% } %>
+</section>

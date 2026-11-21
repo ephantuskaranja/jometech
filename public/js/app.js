@@ -428,7 +428,7 @@ document.addEventListener('alpine:init', () => {
   // Strokes are kept so the drawing survives the box being resized (phone rotated).
   // A finished signature locks a moment after the last stroke: the page then scrolls normally over the
   // box (a thumb scrolling past can't add a stray line). "Change" unlocks it, "Undo" takes off the last stroke.
-  Alpine.data('signaturePad', ({ lockAfter = 1500 } = {}) => ({
+  Alpine.data('signaturePad', ({ lockAfter = 2500 } = {}) => ({
     strokes: [], current: null, empty: true, missing: false, busy: false, ctx: null, locked: false, lockTimer: null, fromImage: false,
     init() {
       this.resize();

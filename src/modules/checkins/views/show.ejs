@@ -17,6 +17,9 @@
   </div>
 </section>
 
+<%# What to do next with this vehicle, right under its name (core/next-steps.js forCheckin). %>
+<% if (locals.next) { %><%- include('partials/next-step', next) %><% } %>
+
 <div class="row g-4">
   <div class="col-lg-7 d-grid gap-4 align-content-start">
     <section class="card">

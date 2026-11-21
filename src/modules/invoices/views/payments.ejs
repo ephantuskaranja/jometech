@@ -4,7 +4,8 @@
   financierName (the bank on the invoice, if any), canRecord.
 %>
 <%# Linked to as …#payments (e.g. from "not paid yet" messages): the record form opens straight away. %>
-<section class="card" id="payments" x-data="{ adding: <%= locals.canRecord === false ? 'false' : "window.location.hash === '#payments'" %>, voiding: null }">
+<section class="card" id="payments" x-data="{ adding: <%= locals.canRecord === false ? 'false' : "window.location.hash === '#payments'" %>, voiding: null }"
+         <% if (locals.canRecord !== false) { %>@hashchange.window="if (window.location.hash === '#payments') { adding = true; $el.scrollIntoView({ block: 'start' }) }"<% } %>>
   <div class="card-header d-flex align-items-center gap-3">
     <h2 class="h6 mb-0 me-auto">Payments</h2>
     <% if (payments.total > 0) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(payments.total) %> received</span><% } %>

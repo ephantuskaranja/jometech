@@ -9,7 +9,6 @@ import { httpError } from '../../core/validate.js';
 import * as qc from './service.js';
 import { getJob } from '../jobs/service.js';
 import { forCheck as signoffForCheck } from './signoff.js';
-import { afterJobChange } from '../../core/next-steps.js';
 
 // Quality checks: the list (Workshop → Quality checks), an inspection on a job,
 // printed reports (filled in, or blank for paper), and System → Quality checklist.
@@ -80,13 +79,14 @@ router.post('/qc/:id', inspect, async (req, res) => {
   }
   if (!finish) req.session.flash = { type: 'success', text: `${insp.number} saved. Carry on when you’re ready.` };
   else if (result.status === 'passed') {
-    req.session.flash = { type: 'success', text: `${insp.number} passed. ${result.step.name} ticked off${result.step.next ? `; next: ${result.step.next}` : `; ${insp.job_number} is completed`}.`, actions: await afterJobChange(req.user, insp.job_id) };
+    req.session.flash = { type: 'success', text: `${insp.number} passed. ${result.step.name} ticked off${result.step.next ? `; next: ${result.step.next}` : `; ${insp.job_number} is completed`}.` };
     return res.redirect(`/jobs/${insp.job_id}`); // the next step (usually the customer's sign-off) is there
   } else {
     const back = result.reworked.length
       ? `${insp.job_number} goes back to ${result.reworked.join(', ')}; when that is done it comes back for its next quality check.`
       : `Put the work right, then start a new quality check on ${insp.job_number}.`;
-    req.session.flash = { type: 'warning', text: `${insp.number} failed on ${result.failed} item${result.failed === 1 ? '' : 's'}. ${back}` };
+    req.session.flash = { type: 'warning', text: `${insp.number} failed on ${result.failed} item${result.failed === 1 ? '' : 's'}. ${back}`,
+      actions: [{ label: `Back to ${insp.job_number}`, href: `/jobs/${insp.job_id}`, icon: 'wrench', primary: true }] };
   }
   res.redirect(`/qc/${insp.id}`);
 });

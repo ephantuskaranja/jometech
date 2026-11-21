@@ -177,7 +177,7 @@ router.post('/jobs', manage, async (req, res) => {
   if (Object.keys(all).length) return renderForm(req, res, { status: 422, values, rows, errors: all });
   try {
     const { id, number: jobNumber } = await jobs.createJob({ ...data, lines }, req);
-    req.session.flash = { type: 'success', text: `Job ${jobNumber} opened. Print the job card for the workshop.`, actions: await afterJobChange(req.user, id) };
+    req.session.flash = { type: 'success', text: `Job ${jobNumber} opened. Print the job card for the workshop.` };
     res.redirect(`/jobs/${id}`);
   } catch (err) {
     if (!err.field) throw err;
@@ -216,6 +216,8 @@ router.get('/jobs/:id', view, async (req, res) => {
     qcChecks: await qcForJob(job.id), qcStatuses: QC_STATUSES,
     signoffs: await signoffsForJob(job.id), signoffOutcomes: SIGNOFF_OUTCOMES,
     canInspect: req.user.can('qc.manage'),
+    // Once the work is done: invoice, payment, release (core/next-steps.js).
+    afterDone: job.status === 'completed' ? await afterJobChange(req.user, job.id) : [],
     // What the job earned: managers and admins.
     costing: req.user.can('costing.view') ? await jobCosting(job) : null,
     // Extra work agreed after pricing; its price only for those who price work.
@@ -286,14 +288,14 @@ router.post('/jobs/:id/supervisor', manage, async (req, res) => {
 router.post('/jobs/:id/start', manage, async (req, res) => {
   const job = await loadJob(req);
   await jobs.startJob(job.id, req);
-  req.session.flash = { type: 'success', text: `${job.number} is now in progress.`, actions: await afterJobChange(req.user, job.id) };
+  req.session.flash = { type: 'success', text: `${job.number} is now in progress.` };
   res.redirect(`/jobs/${job.id}`);
 });
 
 router.post('/jobs/:id/complete', manage, async (req, res) => {
   const job = await loadJob(req);
   await jobs.completeJob(job.id, req);
-  req.session.flash = { type: 'success', text: `${job.number} completed.`, actions: await afterJobChange(req.user, job.id) };
+  req.session.flash = { type: 'success', text: `${job.number} completed.` };
   res.redirect(`/jobs/${job.id}`);
 });
 
@@ -304,7 +306,7 @@ async function finishStep(req, res, status) {
   if (!result) req.session.flash = { type: 'info', text: 'That step was already updated. Here is where the job is now.' };
   else {
     const what = `${result.name} ${status === 'done' ? 'done' : 'skipped'}.`;
-    req.session.flash = { type: 'success', text: result.next ? `${what} Next: ${result.next}.` : `${what} ${job.number} is completed.`, actions: await afterJobChange(req.user, job.id) };
+    req.session.flash = { type: 'success', text: result.next ? `${what} Next: ${result.next}.` : `${what} ${job.number} is completed.` };
   }
   res.redirect(`/jobs/${job.id}`);
 }
@@ -366,7 +368,7 @@ router.post('/proformas/:id/job', fromProforma, async (req, res) => {
   req.session.flash = job.existed
     ? { type: 'info', text: `This proforma already has job ${job.number}.` }
     : { type: 'success', text: `Job ${job.number} opened. Add the supervisor and promised date, then print the job card.`,
-      actions: worksAt(req, job.site_id) && req.user.can('jobs.manage') ? [{ label: 'Add supervisor and date', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }, ...await afterJobChange(req.user, job.id)] : [] };
+      actions: worksAt(req, job.site_id) && req.user.can('jobs.manage') ? [{ label: 'Add supervisor and date', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }] : [] };
   // The vehicle may be at a site this person doesn't work at: they stay on the proforma.
   res.redirect(worksAt(req, job.site_id) ? `/jobs/${job.id}` : `/proformas/${req.params.id}`);
 });

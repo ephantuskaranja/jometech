@@ -13,6 +13,7 @@ import { getJob } from '../jobs/service.js';
 import { db } from '../../core/db.js';
 import { vatIn } from '../proformas/service.js';
 import { staffSignatures } from '../../core/staff-signatures.js';
+import { afterJobChange } from '../../core/next-steps.js';
 
 // Invoices: from a job (its proforma's lines and prices), then issued, printed, paid.
 // Payments are recorded on the job, from the job page or the invoice.
@@ -125,8 +126,25 @@ router.get('/invoices/:id', manage, async (req, res) => {
     vat: vatIn(invoice.total), vatRate: config.vatRate, today: localDay(),
     due: await invoices.owedOn(invoice.job_id),
     entries: await history('invoice', invoice.id),
+    next: await invoiceNext(req, invoice),
   });
 });
+
+/** The "Next step" bar on an invoice: issue it, then take the money, then the vehicle can go. */
+async function invoiceNext(req, invoice) {
+  if (invoice.status === 'draft') {
+    return { tone: 'info', text: 'Draft: check the lines, then issue it. That gives it its number.', phoneOnly: true,
+      actions: [{ label: 'Issue the invoice', post: `/invoices/${invoice.id}/issue`, icon: 'send', primary: true }] };
+  }
+  if (invoice.status !== 'issued') return null;
+  if (invoice.balance > 0) {
+    return { tone: 'warning', text: `KES ${Number(invoice.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} still to pay.`,
+      actions: [{ label: 'Record a payment', href: `/invoices/${invoice.id}#payments`, icon: 'cash-coin', primary: true },
+        { label: 'Print', href: `/invoices/${invoice.id}/print`, icon: 'printer' }] };
+  }
+  const release = (await afterJobChange(req.user, invoice.job_id)).filter((a) => /release/i.test(a.label));
+  return { tone: 'success', text: release.length ? 'Paid in full. The vehicle can be released.' : 'Paid in full.', actions: release };
+}
 
 router.get('/invoices/:id/edit', manage, async (req, res) => {
   const invoice = await loadInvoice(req);
@@ -154,13 +172,7 @@ router.post('/invoices/:id', manage, async (req, res) => {
 router.post('/invoices/:id/issue', manage, async (req, res) => {
   const invoice = await loadInvoice(req);
   const { number } = await invoices.issueInvoice(invoice.id, req);
-  req.session.flash = {
-    type: 'success', text: `Issued as invoice ${number}. Print it for the customer, and add the KRA eTIMS number once it is keyed in.`,
-    actions: [
-      { label: 'Print', href: `/invoices/${invoice.id}/print`, icon: 'printer', primary: true },
-      { label: 'Record a payment', href: `/invoices/${invoice.id}#payments`, icon: 'cash-coin' },
-    ],
-  };
+  req.session.flash = { type: 'success', text: `Issued as invoice ${number}. Print it for the customer, and add the KRA eTIMS number once it is keyed in.` };
   res.redirect(`/invoices/${invoice.id}`);
 });
 
@@ -212,23 +224,12 @@ router.get('/invoices/:id/print', manage, async (req, res) => {
 
 // ---------- Payments, on the job ----------
 
-/**
- * After a payment: what comes next. Paid up with the vehicle still in → release it; money still owed → another payment.
- */
-async function afterPayment(job, back) {
-  const { balance } = await invoices.moneyForJob(job.id);
-  if (balance !== null && balance > 0) return [{ label: 'Record another payment', href: `${back.split('#')[0]}#payments`, icon: 'cash-coin' }];
-  const checkin = job.checkin_id ? await db('checkins').where({ id: job.checkin_id }).first('id', 'status') : null;
-  if (checkin?.status === 'in_workshop') return [{ label: 'Release the vehicle', href: `/check-in/${checkin.id}/release`, icon: 'box-arrow-right', primary: true }];
-  return [];
-}
-
 router.post('/jobs/:id/payments', manage, async (req, res) => {
   const job = await loadJob(req);
   const back = backTo(req.body.back, `/jobs/${req.params.id}`);
   const { data, errors } = check(paymentSchema, req.body);
   if (errors) {
-    req.session.flash = { type: 'warning', text: `Payment not saved: ${Object.values(errors)[0]}.`, actions: [{ label: 'Try again', href: `${back.split('#')[0]}#payments`, icon: 'cash-coin', primary: true }] };
+    req.session.flash = { type: 'warning', text: `Payment not saved: ${Object.values(errors)[0]}.` };
     return res.redirect(back);
   }
   const money = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
@@ -236,7 +237,6 @@ router.post('/jobs/:id/payments', manage, async (req, res) => {
     const { number, credit } = await invoices.recordPayment(Number(req.params.id), data, req);
     req.session.flash = {
       type: 'success', text: `Payment ${number} recorded: ${money(data.amount)}.${credit > 0 ? ` ${money(credit)} is held as the customer’s credit.` : ''}`,
-      actions: await afterPayment(job, back),
     };
   } catch (err) {
     if (!err.field) throw err;
