@@ -23,6 +23,12 @@
   actions: [{ label: 'Add vehicle', href: '/vehicles/new', icon: 'plus-lg', primary: true }],
 }) %>
 
+<%
+  // A job is open for the vehicle but it hasn't been checked in: say so, with the way to fix it.
+  const jobWaiting = (v) => (v.open_job_id
+    ? `<span class="d-block small text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> Job <a class="font-monospace" href="/jobs/${v.open_job_id}">${v.open_job_number}</a> open, not checked in${canCheckIn ? ` · <a href="/check-in/new?vehicle_id=${v.id}">Check in</a>` : ''}</span>`
+    : '');
+%>
 <section class="card">
   <nav class="nav nav-tabs jt-tabs">
     <% tabs.forEach(([key, label]) => { %>
@@ -76,20 +82,21 @@
               <td><a href="/customers/<%= v.customer_id %>"><%= v.customer_name %></a></td>
               <% if (place === 'in') { %>
                 <td><%= v.open_site %></td>
-                <td><a class="font-monospace small" href="/check-in/<%= v.open_id %>"><%= v.open_number %></a></td>
+                <td><a class="font-monospace small" href="/check-in/<%= v.open_id %>"><%= v.open_number %></a><% if (v.open_job_id) { %><a class="jt-sub font-monospace" href="/jobs/<%= v.open_job_id %>">Job <%= v.open_job_number %></a><% } %></td>
                 <td class="text-end text-nowrap jt-num"><%= daysIn(v.open_since) %></td>
               <% } else if (place === 'left') { %>
-                <td class="text-nowrap"><%= v.last_left_at ? fmt.date(v.last_left_at) : '—' %></td>
+                <td class="text-nowrap"><%= v.last_left_at ? fmt.date(v.last_left_at) : '—' %><%- jobWaiting(v) %></td>
                 <td class="text-end jt-num"><%= v.visits %></td>
               <% } else if (place === 'new') { %>
                 <td><%= typeLabel(v.type) %></td>
-                <td class="text-nowrap"><%= fmt.date(v.created_at) %></td>
+                <td class="text-nowrap"><%= fmt.date(v.created_at) %><%- jobWaiting(v) %></td>
               <% } else { %>
                 <td><%= typeLabel(v.type) %></td>
                 <td>
                   <% if (v.open_id) { %><%- include('partials/pill', { text: `In at ${v.open_site}`, tone: 'info' }) %>
                   <% } else if (Number(v.visits) > 0) { %><span class="text-body-secondary small">Left <%= v.last_left_at ? fmt.date(v.last_left_at) : '' %></span>
                   <% } else { %><span class="text-body-secondary small">Not yet visited</span><% } %>
+                  <% if (!v.open_id) { %><%- jobWaiting(v) %><% } %>
                 </td>
               <% } %>
               <td class="d-none d-xl-table-cell text-body-secondary"><%= v.contact_name ?? '—' %></td>

@@ -2,12 +2,13 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
-import { VIEW_CUSTOMERS } from '../../core/access.js';
+import { VIEW_CUSTOMERS, isManagerUp } from '../../core/access.js';
 import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalId, optionalText } from '../../core/validate.js';
 import { config } from '../../config.js';
 import * as jobs from './service.js';
+import { afterJobChange } from '../../core/next-steps.js';
 import * as variations from './variations.js';
 import * as jobPhotos from './photos.js';
 import { storagePath } from '../../core/storage.js';
@@ -22,6 +23,7 @@ import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.
 import { requestsForJob, STATUSES as REQUEST_STATUSES } from '../purchasing/requests.js';
 import { materialsForJob } from '../issues/service.js';
 import { moneyForJob, METHODS as PAYMENT_METHODS } from '../invoices/service.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Jobs: start one from an accepted proforma or from scratch, move it along, print the job card.
 
@@ -85,7 +87,31 @@ function checkDue(data, errors, job = null) {
   return { ...errors, due_on: 'Promise a date from today on' };
 }
 
-async function renderForm(req, res, { status = 200, job = null, values, rows = [], errors = {} }) {
+/**
+ * Shortcut buttons for what stops a job being opened on a vehicle (jobs.vehicleBlocker):
+ * edit the job already running, or switch to the site the vehicle is at and carry on there.
+ * `next` is where to come back to after switching site.
+ */
+function blockerNotice(req, blocker, next) {
+  if (!blocker) return null;
+  const actions = [];
+  let text = blocker.message;
+  if (blocker.kind === 'running') {
+    const { job } = blocker;
+    if (worksAt(req, job.site_id)) {
+      if (req.user.can('jobs.manage')) actions.push({ label: `Edit ${job.number}`, href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true });
+      actions.push({ label: `Open ${job.number}`, href: `/jobs/${job.id}`, icon: 'box-arrow-up-right' });
+    } else text += ` It is at ${job.site_name}: ask someone there.`;
+  } else if (blocker.kind === 'site') {
+    const { site } = blocker;
+    if (worksAt(req, site.id) && !req.session.siteLocked) {
+      actions.push({ label: `Switch to ${site.name}`, post: '/account/site', fields: { site_id: site.id, next }, icon: 'geo-alt', primary: true });
+    } else text = `${text.replace(/ Switch to .*$/, '')} Ask someone at ${site.name} to open it, or an admin to add ${site.name} to your sites.`;
+  }
+  return { tone: 'warning', text, actions };
+}
+
+async function renderForm(req, res, { status = 200, job = null, values, rows = [], errors = {}, blocker = null }) {
   const customer = values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
   const supervisors = await jobs.supervisorOptions(job?.site_id ?? req.site.id);
   // Someone already in charge stays on the list, even if their role has since changed.
@@ -96,7 +122,10 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
   if (job?.job_type_id && !jobTypes.some((t) => t.value === job.job_type_id)) jobTypes.push({ value: job.job_type_id, label: job.job_type_name });
   res.status(status).render('jobs/views/form', {
     title: job ? `Edit ${job.number}` : 'New job',
+    notice: blockerNotice(req, blocker, job ? `/jobs/${job.id}/edit` : `/jobs/new${values.vehicle_id ? `?vehicle_id=${values.vehicle_id}` : ''}`),
     job, values, errors, supervisors, jobTypes, today: localDay(),
+    // Once a job has a supervisor, only managers and above put someone else in charge.
+    supervisorLocked: Boolean(job?.supervisor_id) && !isManagerUp(req.user),
     // No app user can supervise here yet: admins get a link to add one.
     supervisorHelp: noSupervisors ? { site: job?.site_name ?? req.site.name, canAdd: req.user.can('users.manage') } : null,
     rows: rows.length ? rows : [blankRow()],
@@ -134,7 +163,9 @@ router.get('/jobs/new', manage, async (req, res) => {
   const vehicle = req.query.vehicle_id ? await getVehicle(Number(req.query.vehicle_id)) : null;
   if (vehicle) Object.assign(values, { customer_id: vehicle.customer_id, vehicle_id: vehicle.id });
   else if (req.query.customer_id && (await customers.getCustomer(Number(req.query.customer_id)))) values.customer_id = Number(req.query.customer_id);
-  await renderForm(req, res, { values });
+  // Say straight away if this vehicle already has a job running, or is at another site.
+  const blocker = vehicle ? await jobs.vehicleBlocker(vehicle.id, { siteId: req.site.id }) : null;
+  await renderForm(req, res, { values, blocker, errors: blocker ? { vehicle_id: blocker.message } : {} });
 });
 
 router.post('/jobs', manage, async (req, res) => {
@@ -146,11 +177,11 @@ router.post('/jobs', manage, async (req, res) => {
   if (Object.keys(all).length) return renderForm(req, res, { status: 422, values, rows, errors: all });
   try {
     const { id, number: jobNumber } = await jobs.createJob({ ...data, lines }, req);
-    req.session.flash = { type: 'success', text: `Job ${jobNumber} opened. Print the job card for the workshop.` };
+    req.session.flash = { type: 'success', text: `Job ${jobNumber} opened. Print the job card for the workshop.`, actions: await afterJobChange(req.user, id) };
     res.redirect(`/jobs/${id}`);
   } catch (err) {
     if (!err.field) throw err;
-    await renderForm(req, res, { status: 422, values, rows, errors: { [err.field]: err.message } });
+    await renderForm(req, res, { status: 422, values, rows, errors: { [err.field]: err.message }, blocker: err.blocker });
   }
 });
 
@@ -161,6 +192,10 @@ router.get('/jobs/:id', view, async (req, res) => {
     statuses: jobs.STATUSES, today: localDay(),
     entries: await history('job', job.id),
     canManage: req.user.can('jobs.manage'),
+    canCheckIn: req.user.can('checkin.manage'),
+    // Managers and above can put someone else in charge at any stage, from the job page.
+    canChangeSupervisor: req.user.can('jobs.manage') && isManagerUp(req.user) && job.status !== 'cancelled',
+    supervisorChoices: req.user.can('jobs.manage') && isManagerUp(req.user) ? await supervisorChoices(job) : [],
     canSeeCustomers: VIEW_CUSTOMERS.some((p) => req.user.can(p)),
     canSeeProforma: req.user.can('quotations.manage'),
     // Purchase orders with a line for this job, for those who can open them.
@@ -204,7 +239,9 @@ router.post('/jobs/:id', manage, async (req, res) => {
   const job = await loadJob(req);
   // From a proforma: the customer and the work stay as agreed, whatever the form sends.
   const fixed = Boolean(job.proforma_id);
-  const body = fixed ? { ...req.body, customer_id: job.customer_id } : req.body;
+  let body = fixed ? { ...req.body, customer_id: job.customer_id } : req.body;
+  // The supervisor stays as it is unless a manager or above changes it (the form shows it locked).
+  if (job.supervisor_id && !isManagerUp(req.user)) body = { ...body, supervisor_id: String(job.supervisor_id) };
   const values = { ...blank(), ...body };
   const { data, errors } = check(jobSchema, body);
   const { rows, lines, error } = fixed ? { rows: [], lines: [], error: null } : readLines(body);
@@ -216,21 +253,47 @@ router.post('/jobs/:id', manage, async (req, res) => {
     res.redirect(`/jobs/${job.id}`);
   } catch (err) {
     if (!err.field) throw err;
-    await renderForm(req, res, { status: 422, job, values, rows, errors: { [err.field]: err.message } });
+    await renderForm(req, res, { status: 422, job, values, rows, errors: { [err.field]: err.message }, blocker: err.blocker });
   }
+});
+
+/** Everyone who can run jobs at the job's site, plus whoever is in charge now (even if their role changed). */
+async function supervisorChoices(job) {
+  const list = await jobs.supervisorOptions(job.site_id);
+  if (job.supervisor_id && !list.some((u) => u.value === job.supervisor_id)) list.unshift({ value: job.supervisor_id, label: job.supervisor_name });
+  return list;
+}
+
+// Managers and above: put someone else in charge, at any stage (from the job page).
+router.post('/jobs/:id/supervisor', manage, async (req, res) => {
+  const job = await loadJob(req);
+  if (!isManagerUp(req.user)) throw httpError(403, 'Only a manager or admin can change the supervisor once it is set.');
+  const raw = String(req.body.supervisor_id ?? '').trim();
+  const supervisorId = raw ? Number(raw) : null;
+  if (raw && !Number.isInteger(supervisorId)) throw httpError(422, 'Choose the supervisor from the list.');
+  try {
+    const result = await jobs.changeSupervisor(job.id, supervisorId, req);
+    req.session.flash = result.unchanged
+      ? { type: 'info', text: `${result.to ?? 'No one'} is already the supervisor on ${job.number}.` }
+      : { type: 'success', text: result.to ? `${result.to} now supervises ${job.number}.` : `${job.number} has no supervisor now.` };
+  } catch (err) {
+    if (!err.field) throw err;
+    req.session.flash = { type: 'warning', text: `Supervisor not changed: ${err.message}.` };
+  }
+  res.redirect(`/jobs/${job.id}`);
 });
 
 router.post('/jobs/:id/start', manage, async (req, res) => {
   const job = await loadJob(req);
   await jobs.startJob(job.id, req);
-  req.session.flash = { type: 'success', text: `${job.number} is now in progress.` };
+  req.session.flash = { type: 'success', text: `${job.number} is now in progress.`, actions: await afterJobChange(req.user, job.id) };
   res.redirect(`/jobs/${job.id}`);
 });
 
 router.post('/jobs/:id/complete', manage, async (req, res) => {
   const job = await loadJob(req);
   await jobs.completeJob(job.id, req);
-  req.session.flash = { type: 'success', text: `${job.number} completed.` };
+  req.session.flash = { type: 'success', text: `${job.number} completed.`, actions: await afterJobChange(req.user, job.id) };
   res.redirect(`/jobs/${job.id}`);
 });
 
@@ -241,7 +304,7 @@ async function finishStep(req, res, status) {
   if (!result) req.session.flash = { type: 'info', text: 'That step was already updated. Here is where the job is now.' };
   else {
     const what = `${result.name} ${status === 'done' ? 'done' : 'skipped'}.`;
-    req.session.flash = { type: 'success', text: result.next ? `${what} Next: ${result.next}.` : `${what} ${job.number} is completed.` };
+    req.session.flash = { type: 'success', text: result.next ? `${what} Next: ${result.next}.` : `${what} ${job.number} is completed.`, actions: await afterJobChange(req.user, job.id) };
   }
   res.redirect(`/jobs/${job.id}`);
 }
@@ -283,16 +346,27 @@ router.get('/jobs/:id/print', view, async (req, res) => {
     variations: (await variations.forJob(job.id)).filter((v) => v.status === 'agreed'),
     // What was issued to the job, less returns (sheet row 28). No costs: the card goes to the floor.
     materials: (await materialsForJob(job.id)).lines.filter((l) => Number(l.quantity) - Number(l.returned_qty) > 0),
+    // The supervisor signs "Checked by" once the work is completed (their saved signature, Account → My signature).
+    signs: await staffSignatures({ supervisor: job.status === 'completed' ? job.supervisor_id : null }),
   });
 });
 
 // One click on an accepted proforma.
 router.post('/proformas/:id/job', fromProforma, async (req, res) => {
   needSite(req);
-  const job = await jobs.createFromProforma(Number(req.params.id), Number(req.body.job_type_id) || null, req);
+  let job;
+  try {
+    job = await jobs.createFromProforma(Number(req.params.id), Number(req.body.job_type_id) || null, req);
+  } catch (err) {
+    if (!err.blocker) throw err;
+    const notice = blockerNotice(req, err.blocker, `/proformas/${req.params.id}`);
+    req.session.flash = { type: 'warning', text: notice.text, actions: notice.actions };
+    return res.redirect(`/proformas/${req.params.id}`);
+  }
   req.session.flash = job.existed
     ? { type: 'info', text: `This proforma already has job ${job.number}.` }
-    : { type: 'success', text: `Job ${job.number} opened. Add the supervisor and promised date, then print the job card.` };
+    : { type: 'success', text: `Job ${job.number} opened. Add the supervisor and promised date, then print the job card.`,
+      actions: worksAt(req, job.site_id) && req.user.can('jobs.manage') ? [{ label: 'Add supervisor and date', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }, ...await afterJobChange(req.user, job.id)] : [] };
   // The vehicle may be at a site this person doesn't work at: they stay on the proforma.
   res.redirect(worksAt(req, job.site_id) ? `/jobs/${job.id}` : `/proformas/${req.params.id}`);
 });

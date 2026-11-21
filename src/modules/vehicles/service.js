@@ -83,7 +83,10 @@ export async function listVehicles({ q = '', type = '', place = 'all', siteId = 
     .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.type', 'vehicles.make', 'vehicles.model', 'vehicles.body_type',
       'vehicles.created_at', 'customers.id as customer_id', 'customers.name as customer_name', 'customer_contacts.name as contact_name',
       'open.id as open_id', 'open.number as open_number', 'open.checked_in_at as open_since', 'open_site.name as open_site',
-      db.raw('COALESCE(hist.visits, 0) as visits'), 'hist.last_left_at');
+      db.raw('COALESCE(hist.visits, 0) as visits'), 'hist.last_left_at',
+      // An open job for it (the newest), so a vehicle that has work waiting but isn't checked in says so.
+      db('jobs').where('vehicle_id', db.ref('vehicles.id')).whereIn('status', ['open', 'in_progress']).orderBy('id', 'desc').limit(1).select('number').as('open_job_number'),
+      db('jobs').where('vehicle_id', db.ref('vehicles.id')).whereIn('status', ['open', 'in_progress']).orderBy('id', 'desc').limit(1).select('id').as('open_job_id'));
   if (place === 'in') query.whereNotNull('open.id').orderBy('open.checked_in_at', 'desc');
   else if (place === 'left') query.whereNull('open.id').where('hist.visits', '>', 0).orderBy('hist.last_left_at', 'desc');
   else if (place === 'new') query.whereNull('hist.vehicle_id').orderBy('vehicles.created_at', 'desc');

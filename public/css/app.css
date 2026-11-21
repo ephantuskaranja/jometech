@@ -597,6 +597,15 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-sign-pad { position: relative; height: 13rem; border: 2px dashed var(--bs-border-color); border-radius: var(--bs-border-radius); background: #fff; overflow: hidden; }
 .jt-sign-pad.is-invalid { border-color: var(--bs-form-invalid-border-color); }
 .jt-sign-pad canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+/* A finished signature: the page scrolls over it and it can't be drawn on until "Change". */
+.jt-sign-pad.is-locked { border-style: solid; border-color: var(--bs-success-border-subtle); }
+.jt-sign-pad.is-locked canvas { touch-action: auto; pointer-events: none; cursor: default; }
+.jt-sign-tools { position: absolute; top: .4rem; right: .4rem; display: flex; gap: .35rem; z-index: 2; }
+.jt-sign-tools .btn { border: 1px solid #d0d5dd; color: #344054; background: #fff; }
+.jt-sign-tools .btn i { margin-right: .25rem; }
+.jt-sign-locked { display: none; position: absolute; left: .6rem; top: .55rem; font-size: .8rem; color: #067647; background: rgba(255,255,255,.9); padding: .1rem .4rem; border-radius: .35rem; pointer-events: none; }
+.jt-sign-locked i { margin-right: .25rem; }
+.jt-sign-pad.is-locked .jt-sign-locked { display: block; }
 .jt-sign-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .5rem; color: #98a2b3; font-size: 1.05rem; pointer-events: none; }
 .jt-sign-line { position: absolute; left: 1.5rem; right: 1.5rem; bottom: 2.75rem; border-bottom: 1px solid #d0d5dd; pointer-events: none; }
 .jt-signature { display: block; max-width: 100%; height: auto; max-height: 9rem; background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius-sm); }
@@ -724,3 +733,54 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-alert-group li + li { border-top: 1px dashed var(--bs-border-color-translucent); }
 .jt-alert-group li a { font-weight: 600; }
 .jt-alert-sub { display: block; font-size: .8125rem; color: var(--bs-secondary-color); }
+
+/* ---------- Reworks (Nov 2026) ---------- */
+
+/* Price lines (invoice, proforma) on a phone: each line is a block, description first,
+   then quantity, price and amount on one row; the totals underneath as label … amount. */
+@media (max-width: 575.98px) {
+  .jt-stack-sm thead { display: none; }
+  .jt-stack-sm tbody tr { display: grid; grid-template-columns: auto 1fr auto; gap: .25rem .75rem; padding: .65rem .75rem; border-bottom: 1px solid var(--bs-border-color); }
+  .jt-stack-sm tbody td { display: block; border: 0; padding: 0; background: none; }
+  .jt-stack-sm tbody td.jt-stack-main { grid-column: 1 / -1; order: -1; }
+  .jt-stack-sm tbody td[data-label]::before { content: attr(data-label) " "; color: var(--bs-tertiary-color); font-size: .75rem; font-weight: 600; }
+  .jt-stack-sm tfoot tr { display: flex; justify-content: space-between; gap: .75rem; padding: .3rem .75rem; }
+  .jt-stack-sm tfoot th, .jt-stack-sm tfoot td { border: 0; padding: 0; text-align: left !important; }
+  .jt-stack-sm tfoot tr > :last-child { text-align: right !important; white-space: nowrap; }
+  .jt-stack-sm { min-width: 0 !important; }
+}
+
+/* History folded under "Show history" (partials/history.ejs). */
+.jt-history > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; font-size: .875rem; color: var(--bs-link-color); }
+.jt-history > summary::-webkit-details-marker { display: none; }
+.jt-history > summary i { margin-right: .3rem; }
+.jt-history > summary .text-body-tertiary { font-size: .8rem; }
+.jt-history .jt-history-hide, .jt-history[open] .jt-history-show { display: none; }
+.jt-history[open] .jt-history-hide { display: inline; }
+.jt-history[open] > summary { margin-bottom: .75rem; }
+@media print { .jt-history:not([open]) { display: none; } }
+
+/* The field the page took you to, because something in it needs fixing. */
+.jt-error-pulse { animation: jt-error-pulse 1.2s ease-out 1; }
+@keyframes jt-error-pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--bs-danger-rgb), .45); } 100% { box-shadow: 0 0 0 .6rem rgba(var(--bs-danger-rgb), 0); } }
+@media (prefers-reduced-motion: reduce) { .jt-error-pulse { animation: none; } }
+
+/* Shortcut buttons in messages and notices (partials/flash, partials/notice, the release checklist). */
+.jt-flash-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+.jt-flash-actions .btn i { margin-right: .3rem; }
+.jt-flash .jt-flash-actions form { display: inline; }
+.jt-notice { display: flex; gap: .65rem; align-items: flex-start; }
+.jt-notice > i { font-size: 1.1rem; line-height: 1.4; }
+
+/* A vehicle moving between sites: its four steps (checkins/views/show.ejs). */
+.jt-move-steps { list-style: none; padding: 0; display: grid; gap: .2rem; }
+.jt-move-steps li { position: relative; padding-left: 1.3rem; color: var(--bs-tertiary-color); }
+.jt-move-steps li::before { content: ""; position: absolute; left: .1rem; top: .35em; width: .7rem; height: .7rem; border-radius: 50%; border: 2px solid var(--bs-border-color); }
+.jt-move-steps li.is-done { color: var(--bs-body-color); }
+.jt-move-steps li.is-done::before { background: var(--bs-success); border-color: var(--bs-success); }
+.jt-move-steps li.is-now { color: var(--bs-body-color); font-weight: 600; }
+.jt-move-steps li.is-now::before { border-color: var(--bs-warning); background: var(--bs-warning-bg-subtle); }
+
+/* "Install Jome-Tech" banner (layout.ejs). */
+.jt-install img { border-radius: .5rem; }
+.jt-install[hidden] { display: none !important; }

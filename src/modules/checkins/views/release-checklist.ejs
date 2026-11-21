@@ -3,7 +3,23 @@
   Locals: checkin, list (release.checklist), canAllow (managers and admins), showMoney (amounts owed; same people).
 %>
 <% const allowed = Boolean(checkin.release_allowed_at); %>
-<section class="card" x-data="{ allowing: false }">
+<%
+  // Shortcuts beside each item that isn't done yet: straight to the job, the invoice or the payment form.
+  const shortcuts = (key) => {
+    const links = [];
+    for (const j of list.jobs) {
+      if (key === 'work' && j.status !== 'completed') links.push({ href: `/jobs/${j.id}`, label: `Open ${j.number}`, icon: 'wrench' });
+      if (key === 'qc' && j.qc === false) links.push({ href: `/jobs/${j.id}`, label: `Quality check ${j.number}`, icon: 'shield-check' });
+      if (key === 'invoiced' && !j.invoice && showMoney) links.push({ href: `/jobs/${j.id}/invoice`, label: `Invoice ${j.number}`, icon: 'receipt' });
+      if (key === 'paid' && j.invoice && j.invoice.balance > 0 && showMoney) {
+        links.push({ href: `/jobs/${j.id}#payments`, label: `Record payment for ${j.invoice.number}`, icon: 'cash-coin', primary: true });
+        links.push({ href: `/invoices/${j.invoice.id}`, label: `Open ${j.invoice.number}`, icon: 'receipt' });
+      }
+    }
+    return links;
+  };
+%>
+<section class="card" id="release-checklist" x-data="{ allowing: false }">
   <div class="card-header d-flex align-items-center gap-2">
     <h2 class="h6 mb-0 me-auto">Release checklist</h2>
     <% if (list.ok) { %><%- include('partials/pill', { text: 'Ready', tone: 'ok' }) %>
@@ -24,6 +40,11 @@
             <% if (amounts) { list.jobs.filter((j) => j.invoice && j.invoice.balance > 0).forEach((j) => { %>
               <div class="small">Invoice <a href="/invoices/<%= j.invoice.id %>"><%= j.invoice.number %></a>: KES <%= fmt.money(j.invoice.balance) %> owing</div>
             <% }) } %>
+            <% const links = item.ok ? [] : shortcuts(item.key); if (links.length) { %>
+              <div class="jt-flash-actions">
+                <% links.forEach((a) => { %><a class="btn btn-sm <%= a.primary ? 'btn-primary' : 'btn-outline-secondary' %>" href="<%= a.href %>"><i class="bi bi-<%= a.icon %>"></i><%= a.label %></a><% }) %>
+              </div>
+            <% } %>
           </div>
         </li>
       <% }) %>

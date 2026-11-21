@@ -68,6 +68,40 @@ test('HQ sends a vehicle; it shows as on the way, and Site B sees it arriving', 
   assert.equal((await db('vehicle_movements').where({ checkin_id: id })).length, 1);
 });
 
+test('it passes both gates before Site B can receive it', async () => {
+  const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
+  const move = await openMove(id);
+  // Not received, and not logged in at Site B, before the HQ gate has cleared it out
+  assert.equal((await post(siteB, `/movements/${move.id}/receive`)).status, 409);
+  await post(siteB, `/movements/${move.id}/gate-in`);
+  assert.equal((await openMove(id)).gate_in_at, null);
+  // Only the sending site's gate clears it out
+  assert.equal((await post(siteB, `/movements/${move.id}/gate-out`)).status, 403);
+  assert.match((await hq.get('/gate/vehicles')).text, /Cleared out to Site B/);
+  assert.equal((await post(hq, `/movements/${move.id}/gate-out`)).status, 302);
+  assert.ok((await openMove(id)).gate_out_at);
+  // Once it has left the gate it can't be cancelled
+  await post(hq, `/movements/${move.id}/cancel`);
+  assert.equal((await openMove(id)).status, 'in_transit');
+  // Site B's gate logs it in; HQ's gate can't
+  assert.equal((await post(hq, `/movements/${move.id}/gate-in`)).status, 403);
+  assert.match((await siteB.get('/gate/vehicles')).text, /Logged in at the gate/);
+  assert.equal((await post(siteB, `/movements/${move.id}/gate-in`, { gate_in_note: 'Arrived fine' })).status, 302);
+  const logged = await openMove(id);
+  assert.ok(logged.gate_in_at);
+  assert.equal(logged.gate_in_note, 'Arrived fine');
+});
+
+test('a gate guard logs it in but can’t confirm it was received', async () => {
+  const guard = await loginAs(app, await makeUser(74, ['gate'], { siteIds: [bSite.id] }));
+  const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
+  const move = await openMove(id);
+  const csrf = csrfFrom((await guard.get('/gate/vehicles')).text);
+  const res = await guard.post(`/movements/${move.id}/receive`).type('form').send({ _csrf: csrf });
+  assert.equal(res.status, 403);
+  assert.equal((await openMove(id)).status, 'in_transit');
+});
+
 test('Site B receives it: the check-in moves to Site B’s workshop list', async () => {
   const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
   const move = await openMove(id);

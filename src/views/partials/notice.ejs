@@ -1,0 +1,35 @@
+<%#
+  A message inside the page with shortcut buttons to what to do about it.
+  include('partials/notice', { tone: 'warning', text: 'KDA 123A already has job JOB-2026-0042 running.',
+          actions: [{ label: 'Edit JOB-2026-0042', href: '/jobs/42/edit', icon: 'pencil', primary: true }] })
+
+  tone      warning (default) | danger | info | success
+  text      the message (escaped)
+  actions   [{ label, href, icon?, primary? }] or [{ label, post, fields: { name: value }, icon?, primary? }]
+%>
+<%
+  const tone = locals.tone ?? 'warning';
+  const icon = { success: 'check-circle', info: 'info-circle', warning: 'exclamation-triangle', danger: 'exclamation-octagon' }[tone] ?? 'info-circle';
+  const actions = (locals.actions ?? []).filter((a) => a && a.label && (a.href || a.post));
+%>
+<div class="alert alert-<%= tone %> jt-notice is-invalid" role="alert">
+  <i class="bi bi-<%= icon %>"></i>
+  <div class="me-auto">
+    <div><%= text %></div>
+    <% if (actions.length) { %>
+      <div class="jt-flash-actions">
+        <% actions.forEach((a) => { const cls = `btn btn-sm ${a.primary ? 'btn-primary' : 'btn-outline-secondary'}`; %>
+          <% if (a.post) { %>
+            <form method="post" action="<%= a.post %>" class="d-inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <% Object.entries(a.fields ?? {}).forEach(([k, v]) => { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% }) %>
+              <button class="<%= cls %>" type="submit"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></button>
+            </form>
+          <% } else { %>
+            <a class="<%= cls %>" href="<%= a.href %>"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></a>
+          <% } %>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+</div>

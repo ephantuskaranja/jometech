@@ -35,6 +35,39 @@ const openCheckin = (trx, vehicleId) => (vehicleId
   ? trx('checkins').where({ vehicle_id: vehicleId, status: 'in_workshop' }).first('id', 'site_id', 'number')
   : null);
 
+/**
+ * What stops a job being opened on this vehicle, or null:
+ *   running  it already has a job open or in progress: that job is edited instead of opening another
+ *   site     it is checked in at another site: the person switches to that site to open its job
+ * @returns {Promise<null | { kind: 'running', message: string, job: { id: number, number: string, site_id: number, site_name: string } }
+ *                        | { kind: 'site', message: string, site: { id: number, name: string } }>}
+ */
+export async function vehicleBlocker(vehicleId, { siteId = null, exceptJobId = null } = {}, trx = db) {
+  if (!vehicleId) return null;
+  const vehicle = await trx('vehicles').where({ id: vehicleId }).first('reg_no', 'chassis_no', 'temp_tag');
+  if (!vehicle) return null;
+  const label = vehicleLabel(vehicle);
+  const running = await trx('jobs as j').join('sites as s', 's.id', 'j.site_id')
+    .where({ 'j.vehicle_id': vehicleId }).whereIn('j.status', ACTIVE)
+    .modify((q) => { if (exceptJobId) q.whereNot('j.id', exceptJobId); })
+    .orderBy('j.id', 'desc').first('j.id', 'j.number', 'j.status', 'j.site_id', 's.name as site_name');
+  if (running) {
+    return { kind: 'running', job: running, message: `${label} already has job ${running.number} ${running.status === 'open' ? 'open' : 'in progress'}. Add the work to that job instead of opening another.` };
+  }
+  const checkin = siteId ? await openCheckin(trx, vehicleId) : null;
+  if (checkin && checkin.site_id !== siteId) {
+    const site = await trx('sites').where({ id: checkin.site_id }).first('id', 'name');
+    return { kind: 'site', site, message: `${label} is checked in at ${site.name}, not here. Switch to ${site.name} to open its job.` };
+  }
+  return null;
+}
+
+/** Throws the blocker as a form error on the vehicle, carrying what the page needs for its shortcut buttons. */
+async function refuseIfBlocked(trx, vehicleId, options) {
+  const blocker = await vehicleBlocker(vehicleId, options, trx);
+  if (blocker) throw Object.assign(err(409, blocker.message, 'vehicle_id'), { blocker });
+}
+
 /** Who can be put in charge at a site: active users whose role lets them manage jobs. */
 export function supervisorOptions(siteId) {
   return db('users as u')
@@ -109,6 +142,8 @@ async function snapshot(trx, job, lines) {
 /** A job with no proforma. @returns {Promise<{ id: number, number: string }>} */
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
+    // One running job per vehicle, opened at the site the vehicle is at.
+    await refuseIfBlocked(trx, input.vehicle_id, { siteId: actor.site.id });
     const checkin = await openCheckin(trx, input.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
     await checkLinks(trx, input, { siteId });
@@ -137,6 +172,7 @@ export async function createFromProforma(proformaId, jobTypeId, actor) {
     const existing = await trx('jobs').where({ proforma_id: p.id }).first('id', 'number', 'site_id');
     if (existing) return { ...existing, existed: true };
     if (p.status !== 'accepted') throw httpError(409, `Only an accepted proforma can become a job. ${p.number} hasn’t been accepted.`);
+    await refuseIfBlocked(trx, p.vehicle_id, { siteId: actor.site.id });
 
     const checkin = await openCheckin(trx, p.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
@@ -165,6 +201,8 @@ export async function updateJob(id, input, actor) {
 
     // A newly chosen vehicle brings its open check-in, and the job goes to that vehicle's site.
     const vehicleChanged = input.vehicle_id !== before.vehicle_id;
+    // Giving the job a vehicle that already has another job running would make two.
+    if (vehicleChanged) await refuseIfBlocked(trx, input.vehicle_id, { exceptJobId: id });
     const checkin = vehicleChanged ? await openCheckin(trx, input.vehicle_id) : null;
     const siteId = checkin?.site_id ?? before.site_id;
     await checkLinks(trx, { ...input, customer_id: customerId }, { siteId, currentSupervisor: before.supervisor_id });
@@ -195,6 +233,31 @@ export async function updateJob(id, input, actor) {
       before: await snapshot(trx, before, beforeLines),
       after: await snapshot(trx, { ...before, ...changes }, lines),
     });
+  });
+}
+
+/**
+ * Puts someone else in charge of the job, at any stage (managers and above; the route checks).
+ * The new supervisor must be able to run jobs at the job's site.
+ * @returns {Promise<{ from: string|null, to: string|null }>} the names, for the message
+ */
+export async function changeSupervisor(id, supervisorId, actor) {
+  return db.transaction(async (trx) => {
+    const job = await trx('jobs').where({ id }).forUpdate().first();
+    if (!job) throw httpError(404, 'That job doesn’t exist.');
+    if ((job.supervisor_id ?? null) === (supervisorId ?? null)) {
+      const same = supervisorId ? await trx('users').where({ id: supervisorId }).first('name') : null;
+      return { from: same?.name ?? null, to: same?.name ?? null, unchanged: true };
+    }
+    if (supervisorId) {
+      const allowed = await supervisorOptions(job.site_id);
+      if (!allowed.some((u) => u.value === supervisorId)) throw err(422, 'Choose someone who runs jobs at this site', 'supervisor_id');
+    }
+    const name = async (uid) => (uid ? (await trx('users').where({ id: uid }).first('name'))?.name ?? null : null);
+    const [from, to] = [await name(job.supervisor_id), await name(supervisorId)];
+    await trx('jobs').where({ id }).update({ supervisor_id: supervisorId });
+    await audit(trx, actor, { entity: 'job', id, action: 'update', before: { supervisor: from }, after: { supervisor: to } });
+    return { from, to, unchanged: false };
   });
 }
 
@@ -338,8 +401,11 @@ export async function reopenJob(id, actor) {
       const step = await lastFinishedStep(trx, id);
       if (step) await reopenStep(trx, step);
     }
+    // The vehicle may have left and come back while the job was closed: link today's check-in.
+    const checkin = await openCheckin(trx, job.vehicle_id);
     await trx('jobs').where({ id }).update({
       status: job.started_at ? 'in_progress' : 'open', completed_at: null, cancelled_at: null, cancelled_reason: null,
+      ...(checkin && checkin.id !== job.checkin_id ? { checkin_id: checkin.id } : {}),
     });
     await audit(trx, actor, { entity: 'job', id, action: 'reopened' });
   });
@@ -381,6 +447,18 @@ export async function getJob(id) {
       'ci.number as checkin_number', 'ci.status as checkin_status', 'ci.odometer_km', 'ci.odometer_not_working',
       'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name');
   if (!job) return null;
+  // An open job whose vehicle is in the workshop always shows that check-in, even if the link was
+  // missed (the job was opened, reopened or given its vehicle in an order the links didn't follow).
+  // The link is put right here too, so lists and the job card agree.
+  const linkedIsOpen = ['in_workshop', 'released'].includes(job.checkin_status);
+  if (ACTIVE.includes(job.status) && job.vehicle_id && !linkedIsOpen) {
+    const now = await db('checkins').where({ vehicle_id: job.vehicle_id }).whereIn('status', ['in_workshop', 'released'])
+      .orderBy('id', 'desc').first('id', 'number', 'status', 'odometer_km', 'odometer_not_working');
+    if (now) {
+      await db('jobs').where({ id: job.id }).update({ checkin_id: now.id });
+      Object.assign(job, { checkin_id: now.id, checkin_number: now.number, checkin_status: now.status, odometer_km: now.odometer_km, odometer_not_working: now.odometer_not_working });
+    }
+  }
   job.vehicle_label = job.vehicle_id ? vehicleLabel(job) : null;
   job.lines = await db('job_lines').where({ job_id: id }).orderBy('sort_order');
   job.steps = await db('job_steps as s').leftJoin('users as u', 'u.id', 's.finished_by')

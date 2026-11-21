@@ -114,15 +114,38 @@
           <div class="d-flex gap-3 align-items-start">
             <i class="bi bi-truck fs-4 text-info"></i>
             <div>
-              <div class="fw-semibold">On the way to <%= move.to_site_name %></div>
+              <div class="fw-semibold"><%= { at_sending_gate: `Going to ${move.to_site_name}: waiting at the ${move.from_site_name} gate`, on_the_road: `On the way to ${move.to_site_name}`, at_receiving_gate: `At the ${move.to_site_name} gate: waiting to be confirmed` }[move.stage] ?? `On the way to ${move.to_site_name}` %></div>
               <div class="small text-body-secondary">
                 Sent from <%= move.from_site_name %> <%= fmt.dateTime(move.sent_at) %><%= move.sent_by_name ? ` by ${move.sent_by_name}` : '' %>.
                 Driver: <%= move.driver_name %><%= move.driver_phone ? `, ${fmt.phone(move.driver_phone)}` : '' %><%= move.odometer_out != null ? `. Odometer ${fmt.qty(move.odometer_out)} km` : '' %>.
               </div>
               <% if (move.notes) { %><div class="small mt-1"><%= move.notes %></div><% } %>
+              <%# The steps: sent → cleared out → logged in at the other gate → received. %>
+              <ol class="jt-move-steps small mt-2 mb-0">
+                <li class="is-done">Sent<%= move.sent_by_name ? ` by ${move.sent_by_name}` : '' %></li>
+                <li class="<%= move.gate_out_at ? 'is-done' : 'is-now' %>">Cleared out at the <%= move.from_site_name %> gate<%= move.gate_out_at ? ` ${fmt.dateTime(move.gate_out_at)}${move.gate_out_by_name ? ` by ${move.gate_out_by_name}` : ''}` : '' %></li>
+                <li class="<%= move.gate_in_at ? 'is-done' : (move.gate_out_at ? 'is-now' : '') %>">Logged in at the <%= move.to_site_name %> gate<%= move.gate_in_at ? ` ${fmt.dateTime(move.gate_in_at)}${move.gate_in_by_name ? ` by ${move.gate_in_by_name}` : ''}` : '' %><%= move.gate_in_note ? `: ${move.gate_in_note}` : '' %></li>
+                <li class="<%= move.gate_in_at ? 'is-now' : '' %>">Received at <%= move.to_site_name %> (admin, manager or supervisor)</li>
+              </ol>
               <div class="small text-body-tertiary font-monospace mt-1"><%= move.number %></div>
             </div>
           </div>
+          <% if (canGateOut) { %>
+            <form method="post" action="/movements/<%= move.id %>/gate-out" class="border-top pt-3">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="checkin">
+              <button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-right"></i>Cleared out at the gate</button>
+            </form>
+          <% } %>
+          <% if (canGateIn) { %>
+            <form method="post" action="/movements/<%= move.id %>/gate-in" class="d-grid gap-2 border-top pt-3">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="checkin">
+              <%- include('partials/field', { name: 'gate_in_note', label: 'Gate note (optional)', placeholder: 'e.g. Arrived with a flat tyre' }) %>
+              <div><button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-down"></i>Logged in at the <%= move.to_site_name %> gate</button></div>
+            </form>
+          <% } %>
+          <% if (move.stage === 'at_receiving_gate' && !canReceive) { %>
+            <p class="small text-body-secondary mb-0 border-top pt-3"><i class="bi bi-hourglass-split"></i> An admin, manager or supervisor at <%= move.to_site_name %> confirms it was received.</p>
+          <% } %>
           <% if (canReceive) { %>
             <form method="post" action="/movements/<%= move.id %>/receive" class="d-grid gap-3 border-top pt-3">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">

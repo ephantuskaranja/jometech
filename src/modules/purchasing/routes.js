@@ -12,6 +12,7 @@ import { getSupplier } from '../suppliers/service.js';
 import { listCategories } from '../items/service.js';
 import { receiptsForOrder, RECEIVABLE } from '../stock/service.js';
 import { waitingFor } from '../gate/deliveries.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Purchase orders: write one, have it approved, print it for the supplier.
 
@@ -194,5 +195,7 @@ router.post('/purchase-orders/:id/cancel', manageOrApprove, async (req, res) => 
 // The order on letterhead, like the paper one: an A4 page to print or save as PDF.
 router.get('/purchase-orders/:id/print', view, async (req, res) => {
   const order = await loadOrder(req);
-  res.render('purchasing/views/print', { layout: false, title: `${order.number} ${order.supplier_name}`, order, company: config.company });
+  // Signed by whoever approved it; a draft (not approved) prints unsigned.
+  const signs = await staffSignatures({ by: ['approved', 'sent', 'partly_received', 'received'].includes(order.status) ? order.approved_by : null });
+  res.render('purchasing/views/print', { layout: false, title: `${order.number} ${order.supplier_name}`, order, company: config.company, signs });
 });

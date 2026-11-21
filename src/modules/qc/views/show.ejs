@@ -38,7 +38,7 @@
 <% } %>
 
 <% if (canInspect) { %>
-  <form method="post" action="/qc/<%= insp.id %>" novalidate x-data="qcInspection(<%= insp.items.length %>)" @change="count()" @input="count()" @submit="check($event)">
+  <form method="post" action="/qc/<%= insp.id %>" novalidate data-own-errors x-data="qcInspection(<%= insp.items.length %>)" @change="count()" @input="count()" @submit="check($event)">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <% } %>
 
@@ -50,6 +50,8 @@
         <% if (canInspect) { %>
           <button class="btn btn-link btn-sm p-0" type="button" @click="fill($refs.s<%= si %>, 'pass')">All pass</button>
           <button class="btn btn-link btn-sm p-0 text-body-secondary" type="button" @click="fill($refs.s<%= si %>, 'na')">All N/A</button>
+          <button class="btn btn-link btn-sm p-0 text-danger-emphasis" type="button" x-show="sectionAnswered($refs.s<%= si %>)" x-cloak
+                  @click="undoSection($refs.s<%= si %>, <%= JSON.stringify(section.name) %>)"><i class="bi bi-arrow-counterclockwise"></i>Undo all</button>
         <% } %>
       </div>
       <ul class="list-group list-group-flush">

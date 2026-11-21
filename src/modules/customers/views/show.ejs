@@ -156,7 +156,7 @@
 <% if (tab === 'history') { %>
   <section class="card">
     <div class="card-body">
-      <%- include('partials/history', { entries, labels: { name: 'Name', category: 'Type', phone: 'Phone', email: 'Email', kra_pin: 'KRA PIN', town: 'Town', address: 'Address', credit_days: 'Payment terms', notes: 'Notes', number: 'Number', contact: 'Contact' } }) %>
+      <%- include('partials/history', { entries, open: true, labels: { name: 'Name', category: 'Type', phone: 'Phone', email: 'Email', kra_pin: 'KRA PIN', town: 'Town', address: 'Address', credit_days: 'Payment terms', notes: 'Notes', number: 'Number', contact: 'Contact' } }) %>
     </div>
   </section>
 <% } %>

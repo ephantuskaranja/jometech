@@ -140,6 +140,24 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
   .sheet { width: 100%; min-height: 0; padding: 16px; }
   .title-row, .letterhead { flex-wrap: wrap; }
   .company { margin-left: 0; text-align: left; }
+  .toolbar { flex-wrap: wrap; }
+}
+/* Invoice, proforma and order on a phone screen: narrower columns so the description keeps room,
+   and a smaller letterhead, so nothing runs off the side of the screen. */
+@media screen and (max-width: 600px) {
+  .sheet { padding: 12px; font-size: 10pt; }
+  .pf-company-name { font-size: 16pt; }
+  .pf-head-row { flex-wrap: wrap; }
+  .pf-head-row img { width: 56px; height: 56px; }
+  .pf-address { font-size: 8.5pt; }
+  .pf-lines { font-size: 9pt; }
+  .pf-lines .qty { width: auto; min-width: 12mm; }
+  .pf-lines .money { width: auto; }
+  .pf-lines td.desc { font-size: 9.5pt; padding: 4px 6px 6px; }
+  .pf-lines td.desc ul { padding-left: 16px; }
+  .pf-lines th, .pf-lines td { padding-left: 4px; padding-right: 4px; }
+  .pf-bank td:first-child { width: auto; }
+  .pf-sign-line { width: 100%; max-width: 60mm; }
 }
 
 /* Quality inspection report (qc/views/print.ejs) */
@@ -162,3 +180,14 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .qc-signoff .jc-sign-line { display: flex; align-items: flex-end; padding-bottom: 2px; }
 .qc-signed { gap: 3mm; font-size: 8.5pt; }
 .qc-signed img { height: 10mm; width: auto; max-width: 35mm; object-fit: contain; }
+
+/* Staff signatures saved under Account → My signature, printed on the line. */
+.pf-sign-line.has-sig, .jc-sign-line.has-sig { display: flex; align-items: flex-end; padding-bottom: 2px; }
+.pf-sign-line.has-sig img { max-height: 13mm; max-width: 100%; }
+.jc-sign-line.has-sig img { max-height: 10mm; max-width: 100%; }
+
+/* Empty lines kept for handwriting: off unless "Blank lines to write in by hand" is ticked (print-note.js). */
+body:not(.keep-blank) .jt-pad-row { display: none; }
+body:not(.keep-blank) .jt-pad-section { display: none; }
+.blank-toggle { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; font-size: .9rem; color: #344054; cursor: pointer; }
+@media print { .blank-toggle { display: none; } }

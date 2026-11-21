@@ -83,12 +83,12 @@
             <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
             <td>
               <% let list = []; const flush = () => { if (list.length) { %><ul><% list.forEach((b) => { %><li><%= b %></li><% }) %></ul><% list = []; } }; %>
-              <% String(l.description).split('\n').forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
+              <% String(l.description).split('\n').filter((t) => t.trim()).forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
             </td>
             <td class="tick"></td>
           </tr>
         <% }) %>
-        <% for (let i = 0; i < spare; i++) { %><tr class="jc-blank"><td></td><td></td><td></td></tr><% } %>
+        <% for (let i = 0; i < spare; i++) { %><tr class="jc-blank jt-pad-row"><td></td><td></td><td></td></tr><% } %>
       </tbody>
     </table>
 
@@ -115,12 +115,15 @@
       </ol>
     <% } %>
 
+    <div class="jt-pad-section">
     <h2>Work log</h2>
     <table class="jc-fill">
       <thead><tr><th class="date">Date</th><th>Work done</th><th class="who">Done by</th><th class="hrs">Hours</th><th class="sign">Supervisor</th></tr></thead>
-      <tbody><% for (let i = 0; i < 5; i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
+      <tbody><% for (let i = 0; i < 5; i++) { %><tr class="jc-blank jt-pad-row"><td></td><td></td><td></td><td></td><td></td></tr><% } %></tbody>
     </table>
+    </div>
 
+    <div class="<%= (locals.materials ?? []).length ? '' : 'jt-pad-section' %>">
     <h2>Materials used</h2>
     <table class="jc-fill">
       <thead><tr><th class="date">Date</th><th>Item</th><th class="hrs">Qty</th><th class="who">Issued by</th><th class="sign">Received by</th></tr></thead>
@@ -135,16 +138,18 @@
           </tr>
         <% }) %>
         <%# Room to write in anything taken without an issue. %>
-        <% for (let i = 0; i < ((locals.materials ?? []).length ? 2 : 3); i++) { %><tr class="jc-blank"><td></td><td></td><td></td><td></td><td></td></tr><% } %>
+        <% for (let i = 0; i < ((locals.materials ?? []).length ? 2 : 3); i++) { %><tr class="jc-blank jt-pad-row"><td></td><td></td><td></td><td></td><td></td></tr><% } %>
       </tbody>
     </table>
+    </div>
 
     <div class="jc-signoff">
-      <% ['Work completed by', 'Checked by (supervisor)', 'Approved for release'].forEach((who) => { %>
+      <% ['Work completed by', 'Checked by (supervisor)', 'Approved for release'].forEach((who) => {
+           const staff = who.startsWith('Checked') ? locals.signs?.supervisor : null; %>
         <div>
           <div class="label"><%= who %></div>
-          <div class="jc-sign-line"></div>
-          <div class="muted small">Name, signature and date</div>
+          <div class="jc-sign-line<%= staff?.url ? ' has-sig' : '' %>"><% if (staff?.url) { %><img src="<%= staff.url %>" alt="Signature of <%= staff.name %>"><% } %></div>
+          <div class="muted small"><% if (staff?.url) { %><%= staff.name %><%= job.completed_at ? ` · ${fmt.date(job.completed_at)}` : '' %><% } else { %>Name, signature and date<% } %></div>
         </div>
       <% }) %>
     </div>

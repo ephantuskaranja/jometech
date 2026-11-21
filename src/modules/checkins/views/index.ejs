@@ -4,7 +4,7 @@
     out: ['Checked out', `Vehicles that have left ${site.name}, most recent first.`],
     moves: ['Movements', `Vehicles sent from or to ${site.name}, most recent first.`],
   };
-  const moveStatus = { in_transit: ['On the way', 'warn'], received: ['Received', 'ok'], cancelled: ['Cancelled', 'neutral'] };
+  const moveStatus = { in_transit: ['On the way', 'warn'], at_sending_gate: ['Waiting at the gate', 'warn'], on_the_road: ['On the way', 'warn'], at_receiving_gate: ['At the gate: to confirm', 'warn'], received: ['Received', 'ok'], cancelled: ['Cancelled', 'neutral'] };
   const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const vehicleCell = (v) => v.reg_no ? include('partials/plate', { reg: v.reg_no }) : `<span class="font-monospace small">${esc(vehicleLabel(v))}</span>`;
 %>
@@ -23,7 +23,8 @@
         <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
           <%- vehicleCell(m) %>
           <span class="small text-body-secondary me-auto">From <%= m.from_site_name %> with <%= m.driver_name %>, sent <%= fmt.dateTime(m.sent_at) %></span>
-          <a class="btn btn-sm btn-primary" href="/check-in/<%= m.checkin_id %>"><i class="bi bi-box-arrow-in-down"></i>Receive</a>
+          <%- include('partials/pill', { text: { at_sending_gate: `At the ${m.from_site_name} gate`, on_the_road: 'On the road', at_receiving_gate: 'At our gate: confirm' }[m.stage] ?? 'On the way', tone: m.stage === 'at_receiving_gate' ? 'warn' : 'info' }) %>
+          <a class="btn btn-sm <%= m.stage === 'at_receiving_gate' ? 'btn-primary' : 'btn-outline-secondary' %>" href="/check-in/<%= m.checkin_id %>"><i class="bi bi-box-arrow-in-down"></i><%= m.stage === 'at_receiving_gate' ? 'Confirm received' : 'Open' %></a>
         </li>
       <% }) %>
     </ul>
@@ -52,7 +53,7 @@
               <tr>
                 <td><a class="jt-row-link" href="/check-in/<%= m.checkin_id %>"><%- vehicleCell(m) %></a></td>
                 <td><span class="font-monospace small"><%= m.number %></span>
-                  <span class="d-block mt-1"><%- include('partials/pill', { text: moveStatus[m.status][0], tone: moveStatus[m.status][1] }) %></span></td>
+                  <span class="d-block mt-1"><%- include('partials/pill', { text: (moveStatus[m.stage] ?? moveStatus[m.status])[0], tone: (moveStatus[m.stage] ?? moveStatus[m.status])[1] }) %></span></td>
                 <td class="text-nowrap"><%= m.from_site_name %> <i class="bi bi-arrow-right text-body-tertiary"></i> <%= m.to_site_name %></td>
                 <td class="d-none d-lg-table-cell text-body-secondary"><%= m.driver_name %></td>
                 <td class="text-nowrap"><%= fmt.dateTime(m.sent_at) %></td>

@@ -87,6 +87,7 @@ router.get('/vehicles', view, async (req, res) => {
     counts: await vehicles.countByPlace(),
     sites: req.user.sites,
     types: vehicles.VEHICLE_TYPES, typeLabel: vehicles.typeLabel, daysIn,
+    canCheckIn: req.user.can('checkin.manage'),
   });
 });
 

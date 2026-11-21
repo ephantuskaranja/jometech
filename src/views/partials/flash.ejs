@@ -4,15 +4,35 @@
   action, so they sit at the top of the page until closed.
   flash.undo = { action, back, seconds }: an Undo button (posts to action) while the message shows,
   which is then `seconds` long and not paused by pointing at it (the bar shows the real time left).
+  flash.actions = [{ label, href, icon?, primary? }, { label, post, fields: { name: value }, icon? }]:
+  shortcut buttons to what to do next (open the invoice, record a payment, switch site …).
+  A message with shortcuts stays until closed, so there is time to use them.
 %>
 <% if (flash) {
   const tone = flash.type === 'error' ? 'danger' : flash.type;
-  const toast = tone === 'success' || tone === 'info';
+  const actions = Array.isArray(flash.actions) ? flash.actions.filter((a) => a && a.label && (a.href || a.post)) : [];
+  const toast = (tone === 'success' || tone === 'info') && !actions.length;
   const icon = { success: 'check-circle', info: 'info-circle', warning: 'exclamation-triangle', danger: 'exclamation-octagon' }[tone] ?? 'info-circle';
 %>
   <div class="alert alert-<%= tone %> alert-dismissible fade show jt-flash<%= toast ? ' jt-toast' : '' %><%= flash.undo ? ' jt-toast-undo' : '' %>" role="<%= toast ? 'status' : 'alert' %>"<%- toast ? ' data-autoclose' : '' %><%- flash.undo ? ` style="--jt-toast-time: ${Number(flash.undo.seconds) || 20}s"` : '' %>>
     <i class="bi bi-<%= icon %>"></i>
-    <span class="me-auto"><%= flash.text %></span>
+    <span class="me-auto"><%= flash.text %>
+      <% if (actions.length) { %>
+        <span class="jt-flash-actions">
+          <% actions.forEach((a) => { const cls = `btn btn-sm ${a.primary ? 'btn-primary' : 'btn-outline-secondary'}`; %>
+            <% if (a.post) { %>
+              <form method="post" action="<%= a.post %>" class="d-inline">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <% Object.entries(a.fields ?? {}).forEach(([k, v]) => { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% }) %>
+                <button class="<%= cls %>" type="submit"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></button>
+              </form>
+            <% } else { %>
+              <a class="<%= cls %>" href="<%= a.href %>"><% if (a.icon) { %><i class="bi bi-<%= a.icon %>"></i><% } %><%= a.label %></a>
+            <% } %>
+          <% }) %>
+        </span>
+      <% } %>
+    </span>
     <% if (flash.undo) { %>
       <form method="post" action="<%= flash.undo.action %>" class="jt-undo">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="<%= flash.undo.back %>">

@@ -117,6 +117,13 @@ export function createApp() {
     }
     next();
   });
+  // The service worker (installable app, public/sw.js): checked with the server on every visit,
+  // so a deploy reaches phones straight away. It may control the whole site.
+  app.get('/sw.js', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Service-Worker-Allowed', '/');
+    next();
+  });
   // Our own files, then front-end libraries served straight from node_modules
   // (no copying, no build step; `npm update` updates them).
   const statics = { cacheControl: false }; // the headers above decide

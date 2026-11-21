@@ -186,21 +186,31 @@ test('a vehicle added later links its check-in; a later check-in links too; the 
   assert.match((await supervisor.get(`/check-in/${checkin.id}`)).text, new RegExp(`/jobs/${job.id}`), 'the check-in shows its job');
   assert.match((await supervisor.get(`/vehicles/${vehicle.id}`)).text, new RegExp(`/jobs/${job.id}`), 'the vehicle shows its job');
 
-  // A new job for a vehicle already here links at once.
+  // One running job per vehicle: a second one is refused, with a way to edit the one running.
   res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: vehicle.id, ...work });
-  const second = await db('jobs').where({ id: idOf(res.headers.location) }).first();
-  assert.equal(second.checkin_id, checkin.id);
+  assert.equal(res.status, 422);
+  assert.match(res.text, new RegExp(`already has job ${job.number}`));
+  assert.match(res.text, new RegExp(`href="/jobs/${job.id}/edit"`));
+  assert.match((await supervisor.get(`/jobs/new?vehicle_id=${vehicle.id}`)).text, /Add the work to that job instead/, 'said before the form is filled in');
 
-  // Sent to Site B and received there: both jobs go with it.
+  // Sent to Site B, through both gates, and received there: the job goes with it.
   res = await post(supervisor, `/check-in/${checkin.id}/send`, { to_site_id: siteB.id, driver_name: 'Otieno' });
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('jobs').where({ id: job.id }).first()).site_id, hq.id, 'still HQ’s until it arrives');
   const move = await db('vehicle_movements').where({ checkin_id: checkin.id, status: 'in_transit' }).first();
+  assert.equal((await post(supervisor, `/movements/${move.id}/gate-out`)).status, 302);
+  assert.equal((await post(siteBOnly, `/movements/${move.id}/gate-in`)).status, 302);
   res = await post(siteBOnly, `/movements/${move.id}/receive`);
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('jobs').where({ id: job.id }).first()).site_id, siteB.id);
-  assert.equal((await db('jobs').where({ id: second.id }).first()).site_id, siteB.id);
   await siteBOnly.get(`/jobs/${job.id}`).expect(200);
+
+  // A supervisor at both sites, working at HQ, is sent to Site B to open a job for a vehicle there.
+  await post(supervisor, `/jobs/${job.id}/cancel`, { reason: 'Test: free the vehicle' });
+  const page = (await supervisor.get(`/jobs/new?vehicle_id=${vehicle.id}`)).text;
+  assert.match(page, /is checked in at Site B, not here/);
+  assert.match(page, /Switch to Site B/);
+  await post(supervisor, `/jobs/${job.id}/reopen`);
 
   // HQ-only staff can't open it now.
   await technician.get(`/jobs/${job.id}`).expect(403);

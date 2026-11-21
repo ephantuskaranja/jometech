@@ -74,7 +74,7 @@
       <thead><tr><th class="no">No:</th><th>Item description</th><th class="qty">Quantity</th></tr></thead>
       <tbody>
         <% rows.forEach((item, i) => { %>
-          <tr><td class="no"><%= i + 1 %></td><td><%= item?.description ?? '' %></td><td class="qty"><%= item?.quantity ?? '' %></td></tr>
+          <tr<%- item ? '' : ' class="jt-pad-row"' %>><td class="no"><%= i + 1 %></td><td><%= item?.description ?? '' %></td><td class="qty"><%= item?.quantity ?? '' %></td></tr>
         <% }) %>
       </tbody>
     </table>
@@ -85,7 +85,8 @@
     <div class="signatures">
       <div class="sig-row">
         <div class="sig-name"><span class="label">Received by:</span> <%= checkin.received_by_name %></div>
-        <div class="sig-box"><span class="label">Sign</span><span class="sig-line"></span></div>
+        <% const staff = locals.signs?.received; %>
+        <div class="sig-box"><span class="label">Sign</span><span class="sig-line<%= staff?.url ? ' has-sig' : '' %>"><% if (staff?.url) { %><img src="<%= staff.url %>" alt="Signature of <%= staff.name %>"><% } %></span></div>
       </div>
       <div class="sig-row">
         <div class="sig-name">

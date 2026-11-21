@@ -15,3 +15,10 @@ export const EDIT_CUSTOMERS = ['customers.manage'];
 
 /** Adding / editing vehicles, and quick-adding a customer while doing so (at check-in). */
 export const EDIT_VEHICLES = ['customers.manage', 'checkin.manage'];
+
+/**
+ * Managers and above (Manager, Admin, System Administrator): the people who can overrule
+ * a decision already made on a record, e.g. who supervises a job once it is set.
+ * @param {{ isAdmin: boolean, roles: { key: string }[] }} user
+ */
+export const isManagerUp = (user) => Boolean(user?.isAdmin || user?.roles?.some((r) => r.key === 'manager'));

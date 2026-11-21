@@ -1,12 +1,71 @@
 <%#
   The gate: vehicles the workshop has released, waiting to drive out. The guard compares the vehicle and
   the person with what is shown here, then taps "Cleared out": only then is the vehicle checked out.
+  Also vehicles moving between sites: cleared out here for the other site, or logged in here from it
+  (then an admin, manager or supervisor confirms it was received).
 %>
 <%- include('partials/page-header', {
-  crumb: ['Workshop', 'Vehicles leaving'],
-  heading: 'Vehicles leaving',
-  sub: `Released by the workshop at ${site.name}. Check the vehicle and the person collecting it, then clear it out.`,
+  crumb: ['Workshop', 'Vehicles at the gate'],
+  heading: 'Vehicles at the gate',
+  sub: `At ${site.name}. Check the vehicle and the person with it against what is shown here, then tap the button.`,
 }) %>
+
+<% const vehicleHead = (v) => { const describe = [v.make, v.model, v.colour].filter(Boolean).join(' · '); return { describe }; }; %>
+
+<% if (moves.leaving.length || moves.arriving.length) { %>
+  <h2 class="h6 text-body-secondary text-uppercase mb-3">To and from other sites</h2>
+  <div class="d-grid gap-3 mb-4">
+    <% moves.leaving.forEach((m) => { %>
+      <section class="card">
+        <div class="card-body d-grid gap-3">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <% if (m.reg_no) { %><%- include('partials/plate', { reg: m.reg_no, size: 'lg' }) %><% } else { %><strong class="font-monospace fs-5"><%= vehicleLabel(m) %></strong><% } %>
+            <div>
+              <div class="fw-semibold"><%= vehicleHead(m).describe || 'Vehicle' %></div>
+              <div class="small text-body-secondary"><%= m.customer_name %></div>
+            </div>
+            <span class="ms-auto"><%- include('partials/pill', { text: `Going to ${m.to_site_name}`, tone: 'info' }) %></span>
+          </div>
+          <dl class="jt-kv mb-0">
+            <div><dt>Driver</dt><dd><strong><%= m.driver_name %></strong><% if (m.driver_phone) { %><span class="d-block small"><%= fmt.phone(m.driver_phone) %></span><% } %></dd></div>
+            <div><dt>Movement</dt><dd class="font-monospace"><%= m.number %></dd></div>
+            <div><dt>Sent</dt><dd><%= fmt.dateTime(m.sent_at) %></dd></div>
+            <% if (m.notes) { %><div><dt>Notes</dt><dd><%= m.notes %></dd></div><% } %>
+          </dl>
+          <form method="post" action="/movements/<%= m.id %>/gate-out">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-box-arrow-right"></i>Cleared out to <%= m.to_site_name %></button>
+          </form>
+        </div>
+      </section>
+    <% }) %>
+    <% moves.arriving.forEach((m) => { %>
+      <section class="card">
+        <div class="card-body d-grid gap-3">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <% if (m.reg_no) { %><%- include('partials/plate', { reg: m.reg_no, size: 'lg' }) %><% } else { %><strong class="font-monospace fs-5"><%= vehicleLabel(m) %></strong><% } %>
+            <div>
+              <div class="fw-semibold"><%= vehicleHead(m).describe || 'Vehicle' %></div>
+              <div class="small text-body-secondary"><%= m.customer_name %></div>
+            </div>
+            <span class="ms-auto"><%- include('partials/pill', { text: `From ${m.from_site_name}`, tone: 'warn' }) %></span>
+          </div>
+          <dl class="jt-kv mb-0">
+            <div><dt>Driver</dt><dd><strong><%= m.driver_name %></strong><% if (m.driver_phone) { %><span class="d-block small"><%= fmt.phone(m.driver_phone) %></span><% } %></dd></div>
+            <div><dt>Movement</dt><dd class="font-monospace"><%= m.number %></dd></div>
+            <div><dt>Left <%= m.from_site_name %></dt><dd><%= fmt.dateTime(m.gate_out_at) %></dd></div>
+          </dl>
+          <form method="post" action="/movements/<%= m.id %>/gate-in" class="d-grid gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <%- include('partials/field', { name: 'gate_in_note', id: `gate-in-note-${m.id}`, label: 'Note (optional)', placeholder: 'e.g. Arrived with a flat tyre' }) %>
+            <button class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-box-arrow-in-down"></i>Logged in at the gate</button>
+          </form>
+        </div>
+      </section>
+    <% }) %>
+  </div>
+  <h2 class="h6 text-body-secondary text-uppercase mb-3">Released to customers</h2>
+<% } %>
 
 <% if (!list.length) { %>
   <section class="card">

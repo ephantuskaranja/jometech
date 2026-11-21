@@ -3,7 +3,7 @@
   Each photo is shrunk in the browser and uploaded on its own (checkinPhotos in public/js/app.js).
   photos: { url, max, canEdit, photos: [{ id, full, thumb }] } from photosFor() in routes.js
 %>
-<section class="card" x-data="checkinPhotos(<%= JSON.stringify(photos) %>)">
+<section class="card" id="photos" x-data="checkinPhotos(<%= JSON.stringify(photos) %>)">
   <div class="card-header d-flex align-items-center gap-2 flex-wrap">
     <h2 class="h6 mb-0 me-auto">Photos <span class="text-body-tertiary fw-normal small" x-show="photos.length" x-cloak x-text="`${photos.length} of ${max}`"></span></h2>
     <% if (photos.canEdit) { %>

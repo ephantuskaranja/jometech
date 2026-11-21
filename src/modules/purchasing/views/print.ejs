@@ -84,8 +84,10 @@
       <div>Yours faithfully,</div>
       <div>For &amp; on behalf of</div>
       <div><%= company.name %></div>
-      <div class="pf-sign-line"></div>
-      <div><%= company.signatory %></div>
+      <%# The saved signature of whoever is responsible (Account → My signature), or a line to sign by hand. %>
+      <% const signer = locals.signs?.by; %>
+      <div class="pf-sign-line<%= signer?.url ? ' has-sig' : '' %>"><% if (signer?.url) { %><img src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %></div>
+      <div><%= signer?.url ? signer.name : company.signatory %></div>
     </div>
   </main>
 </body>

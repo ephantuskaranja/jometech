@@ -4,6 +4,8 @@
 
   entries   from history(entity, id) in src/core/audit.js
   labels    field → label people understand; fields not listed use their own name
+  open      true → shown straight away (a page that is only the history). Otherwise it starts
+            folded under "Show history" so it doesn't push the page's real content down.
 %>
 <%
   const phrases = {
@@ -12,6 +14,8 @@
     delete: 'deleted this',
     password_reset: 'reset the password',
     password_changed: 'changed their password',
+    signature_saved: 'saved their signature for documents',
+    signature_removed: 'removed their signature',
     switched_off: 'switched the account off',
     switched_on: 'switched the account back on',
     login: 'logged in',
@@ -38,6 +42,8 @@
     sent: 'sent it to another site',
     received: 'received it',
     move_cancelled: 'cancelled a move',
+    move_gate_out: 'cleared it out at the gate for another site',
+    move_gate_in: 'logged it in at the gate from another site',
     site_chosen: 'chose a site at login',
     visitor_in: 'signed the visitor in',
     visitor_received: 'confirmed the visitor was received',
@@ -129,6 +135,12 @@
 <% if (!entries.length) { %>
   <p class="text-body-secondary small mb-0">No changes recorded yet.</p>
 <% } else { %>
+  <details class="jt-history"<%= locals.open ? ' open' : '' %>>
+  <summary class="jt-history-toggle">
+    <span class="jt-history-show"><i class="bi bi-clock-history"></i>Show history</span>
+    <span class="jt-history-hide"><i class="bi bi-chevron-up"></i>Hide history</span>
+    <span class="text-body-tertiary">(<%= entries.length %> <%= entries.length === 1 ? 'entry' : 'entries' %>, latest <%= fmt.dateTime(entries[0].created_at) %>)</span>
+  </summary>
   <ol class="jt-timeline">
     <% entries.forEach((e) => { const changes = Object.entries(e.changes ?? {}); %>
       <li class="jt-timeline-item<%= e.action === 'login' ? ' is-quiet' : '' %>">
@@ -150,4 +162,5 @@
       </li>
     <% }) %>
   </ol>
+  </details>
 <% } %>

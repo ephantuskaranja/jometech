@@ -7,8 +7,70 @@
   "background_color": "#0b1a5c",
   "theme_color": "#0b1a5c",
   "icons": [
-    { "src": "/img/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/img/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/img/brand/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "/img/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/img/brand/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "id": "/",
+  "scope": "/",
+  "lang": "en",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "shortcuts": [
+    {
+      "name": "Check in a vehicle",
+      "short_name": "Check in",
+      "url": "/check-in/new",
+      "icons": [
+        {
+          "src": "/img/brand/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "url": "/jobs",
+      "icons": [
+        {
+          "src": "/img/brand/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Vehicles at the gate",
+      "short_name": "Gate",
+      "url": "/gate/vehicles",
+      "icons": [
+        {
+          "src": "/img/brand/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

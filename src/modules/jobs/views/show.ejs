@@ -376,13 +376,31 @@
             <% if (job.checkin_id) { %>
               <% if (canSeeCustomers) { %><a class="font-monospace" href="/check-in/<%= job.checkin_id %>"><%= job.checkin_number %></a><% } else { %><span class="font-monospace"><%= job.checkin_number %></span><% } %>
               <% if (job.checkin_status === 'checked_out') { %><span class="d-block small text-body-secondary">Vehicle has left</span><% } %>
-            <% } else { %><span class="text-body-secondary"><%= job.vehicle_id ? 'Not in the workshop' : '—' %></span><% } %>
+            <% } else { %><span class="text-body-secondary"><%= job.vehicle_id ? 'Not checked in yet' : '—' %></span>
+              <% if (job.vehicle_id && canCheckIn && active) { %><a class="d-block small" href="/check-in/new?vehicle_id=<%= job.vehicle_id %>"><i class="bi bi-box-arrow-in-right"></i> Check it in</a><% } %>
+            <% } %>
           </dd></div>
           <div><dt>Proforma</dt><dd>
             <% if (job.proforma_id && canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.proforma_id %>"><%= job.proforma_number %></a>
             <% } else { %><span class="font-monospace"><%= job.proforma_number ?? '—' %></span><% } %>
           </dd></div>
-          <div><dt>Supervisor</dt><dd><%= job.supervisor_name ?? '—' %></dd></div>
+          <div><dt>Supervisor</dt><dd>
+            <%= job.supervisor_name ?? '—' %>
+            <% if (canChangeSupervisor) { %>
+              <div x-data="{ edit: false }">
+                <button type="button" class="btn btn-link btn-sm p-0" x-show="!edit" @click="edit = true; $nextTick(() => $refs.pick.focus())"><%= job.supervisor_id ? 'Change' : 'Choose' %></button>
+                <form method="post" action="/jobs/<%= job.id %>/supervisor" class="d-grid gap-2 mt-1" x-show="edit" x-cloak>
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <label class="visually-hidden" for="change-supervisor">Supervisor</label>
+                  <select class="form-select form-select-sm" id="change-supervisor" name="supervisor_id" x-ref="pick">
+                    <option value="">No one yet</option>
+                    <% supervisorChoices.forEach((u) => { %><option value="<%= u.value %>"<%= u.value === job.supervisor_id ? ' selected' : '' %>><%= u.label %></option><% }) %>
+                  </select>
+                  <div class="d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Save</button><button class="btn btn-link btn-sm" type="button" @click="edit = false">Keep</button></div>
+                </form>
+              </div>
+            <% } %>
+          </dd></div>
           <% if (job.responsible_name) { %><div><dt>Responsible</dt><dd><%= job.responsible_name %><span class="d-block small text-body-secondary">Not an app user</span></dd></div><% } %>
           <div><dt>Promised by</dt><dd><%= promised ?? '—' %></dd></div>
           <div><dt>Opened</dt><dd><%= fmt.date(job.created_at) %><% if (job.created_name) { %><span class="d-block small text-body-secondary">By <%= job.created_name %></span><% } %></dd></div>

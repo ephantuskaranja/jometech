@@ -12,11 +12,13 @@ const DESIGN = 'Design / Specification';
 const PLAN = 'Material Planning';
 const QC = 'Quality Inspection';
 const CUSTOMER = 'Customer Inspection';
+// Cutting, frame fabrication, welding, assembly and grinding are one step (Nov 2026: fewer steps to tick).
+const FAB = 'Fabrication (cutting, frame, welding, assembly, grinding)';
 
 const TYPES = [
-  { name: 'New fabrication', is_default: true, steps: [RECEIVED, INSPECT, DESIGN, PLAN, 'Cutting', 'Frame Fabrication', 'Welding', 'Assembly', 'Body Installation', 'Grinding', 'Finishing', 'Painting', 'Electrical / Accessories', QC, CUSTOMER] },
-  { name: 'Repair', steps: [RECEIVED, INSPECT, PLAN, 'Cutting', 'Welding', 'Grinding', 'Finishing', 'Painting', QC, CUSTOMER] },
-  { name: 'Modification', steps: [RECEIVED, INSPECT, DESIGN, PLAN, 'Cutting', 'Welding', 'Assembly', 'Grinding', 'Finishing', 'Painting', QC, CUSTOMER] },
+  { name: 'New fabrication', is_default: true, steps: [RECEIVED, INSPECT, DESIGN, PLAN, FAB, 'Body Installation', 'Finishing', 'Painting', 'Electrical / Accessories', QC, CUSTOMER] },
+  { name: 'Repair', steps: [RECEIVED, INSPECT, PLAN, FAB, 'Finishing', 'Painting', QC, CUSTOMER] },
+  { name: 'Modification', steps: [RECEIVED, INSPECT, DESIGN, PLAN, FAB, 'Finishing', 'Painting', QC, CUSTOMER] },
   { name: 'Maintenance / other', steps: [RECEIVED, INSPECT, 'Work Carried Out', QC, CUSTOMER] },
 ];
 

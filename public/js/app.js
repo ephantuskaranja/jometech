@@ -30,6 +30,144 @@ document.querySelectorAll('.jt-flash[data-autoclose]').forEach((el) => {
   el.addEventListener('animationend', () => bootstrap.Alert.getOrCreateInstance(el).close(), { once: true });
 });
 
+// ---------- Take the person to the first mistake on a form ----------
+// On a phone the field with the problem is often off screen, under the keyboard or far down a
+// long form. After the server sends a form back with errors, or a check in the page stops a
+// submit, the first field marked wrong scrolls to the middle of the screen and takes the focus.
+
+/** What can actually be seen for a field marked wrong (a Tom Select hides its <select>). */
+function visibleFor(el) {
+  if (el.getClientRects().length) return el;
+  const ts = el.nextElementSibling?.classList.contains('ts-wrapper') ? el.nextElementSibling : null;
+  if (ts?.getClientRects().length) return ts;
+  return null;
+}
+
+function goToFirstError(root = document) {
+  const marked = root.querySelectorAll('.is-invalid, [aria-invalid="true"], .jt-error-text');
+  let target = null;
+  for (const el of marked) { target = visibleFor(el); if (target) break; }
+  if (!target) return false;
+  const box = target.getBoundingClientRect();
+  const inView = box.top >= 70 && box.bottom <= window.innerHeight - 20;
+  if (!inView) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const field = target.matches('input, select, textarea, button, [tabindex]') ? target : target.querySelector('input:not([type=hidden]), select, textarea, [tabindex]');
+  // A text box would open the keyboard and cover the message: on a phone, focus only after the scroll.
+  if (field && !(field.matches('select[data-tom-select]'))) setTimeout(() => field.focus({ preventScroll: true }), inView ? 0 : 350);
+  target.classList.remove('jt-error-pulse'); void target.offsetWidth; target.classList.add('jt-error-pulse');
+  return true;
+}
+window.goToFirstError = goToFirstError;
+
+// Once the page (and Alpine, which may show or hide parts of it) has settled.
+window.addEventListener('load', () => {
+  if (window.location.hash || document.querySelector('[data-own-errors]')) return; // a link to a place on the page wins
+  setTimeout(() => goToFirstError(document.querySelector('#main') ?? document), 60);
+});
+
+// A check in the page stopped the form (the signature is missing, a quality check has gaps …):
+// handlers on the form run first, so by now the form says whether it was stopped.
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  if (form.hasAttribute('data-own-errors')) return; // the form takes you there itself (quality check)
+  setTimeout(() => { if (e.defaultPrevented) goToFirstError(form); }, 30);
+});
+
+// The browser's own checks (a required box left empty) scroll to the field but leave it under the
+// top bar on a phone: put it in the middle instead. Only the first field per submit.
+let invalidShown = 0;
+document.addEventListener('invalid', (e) => {
+  if (Date.now() - invalidShown < 500) return;
+  invalidShown = Date.now();
+  const target = visibleFor(e.target);
+  if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+}, true);
+
+// ---------- Phone numbers, checked as they are typed ----------
+// Every <input type="tel"> on every form. Same rules as normalizePhone() in src/core/phone.js
+// (the server checks again): Kenyan 07…/01… numbers in any spacing, or +country code for others.
+// Letters can't be typed; a number that can't be right says so when you leave the box (or as
+// soon as it has too many digits); a right one is tidied to 0712 345 678. A form with a wrong
+// number doesn't send: it takes you to the number.
+
+function normalizePhone(input) {
+  const trimmed = String(input ?? '').trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (/^0[17]\d{8}$/.test(digits)) return `+254${digits.slice(1)}`;
+  if (/^[17]\d{8}$/.test(digits)) return `+254${digits}`;
+  if (/^254[17]\d{8}$/.test(digits)) return `+${digits}`;
+  if (trimmed.startsWith('+') && /^\d{8,15}$/.test(digits)) return `+${digits}`;
+  return null;
+}
+const phoneDisplay = (e164) => { const m = /^\+254(\d{3})(\d{3})(\d{3})$/.exec(e164); return m ? `0${m[1]} ${m[2]} ${m[3]}` : e164; };
+const PHONE_MESSAGE = 'Check the number. Use a format like 0712 345 678 (or +44 … for other countries).';
+
+/** Why this number can't be right, or '' if it is fine (or still being typed and could be). */
+function phoneProblem(value, finished) {
+  const v = String(value ?? '').trim();
+  if (!v) return '';
+  if (normalizePhone(v)) return '';
+  const digits = v.replace(/\D/g, '');
+  const tooLong = v.startsWith('+') ? digits.length > 15 : digits.length > 12;
+  const badStart = !v.startsWith('+') && digits.length >= 2 && !/^(0[17]|[17]|2|25|254[17]?)/.test(digits);
+  return finished || tooLong || badStart ? PHONE_MESSAGE : '';
+}
+
+function showPhoneProblem(el, message) {
+  el.setCustomValidity(message);
+  let box = el.parentElement.querySelector(`.jt-phone-check[data-for="${el.id || el.name}"]`);
+  if (message && !box) {
+    box = document.createElement('div');
+    box.className = 'invalid-feedback jt-phone-check';
+    box.dataset.for = el.id || el.name;
+    box.setAttribute('aria-live', 'polite');
+    el.insertAdjacentElement('afterend', box);
+  }
+  // The server's message for this box (sent with the page) gives way once the number is being fixed.
+  const serverMsg = el.id ? document.getElementById(`${el.id}-error`) : null;
+  if (serverMsg && serverMsg !== box && el.dataset.phoneTouched) serverMsg.hidden = true;
+  if (box) { box.textContent = message; box.style.display = message ? 'block' : 'none'; }
+  el.classList.toggle('is-invalid', Boolean(message) || Boolean(serverMsg && !serverMsg.hidden));
+  if (message) el.setAttribute('aria-invalid', 'true'); else if (el.dataset.phoneTouched) el.removeAttribute('aria-invalid');
+}
+
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || el.type !== 'tel') return;
+  el.dataset.phoneTouched = '1';
+  const cleaned = el.value.replace(/[^\d\s+\-()]/g, '').replace(/(?!^)\+/g, '');
+  if (cleaned !== el.value) {
+    const pos = Math.max(0, (el.selectionStart ?? cleaned.length) - (el.value.length - cleaned.length));
+    el.value = cleaned;
+    el.setSelectionRange(pos, pos);
+    el.dispatchEvent(new Event('input', { bubbles: true })); // let Alpine's x-model see the cleaned value
+    return;
+  }
+  showPhoneProblem(el, phoneProblem(el.value, false));
+});
+
+document.addEventListener('focusout', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || el.type !== 'tel' || !el.dataset.phoneTouched) return;
+  const ok = normalizePhone(el.value);
+  if (ok && el.value.trim() !== phoneDisplay(ok)) {
+    el.value = phoneDisplay(ok);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  showPhoneProblem(el, phoneProblem(el.value, true));
+});
+
+// Before anything else on the page handles the submit: a wrong number stops it here.
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  const wrong = [...form.querySelectorAll('input[type="tel"]')].filter((el) => !el.disabled && el.getClientRects().length && phoneProblem(el.value, true));
+  if (!wrong.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  for (const el of wrong) { el.dataset.phoneTouched = '1'; showPhoneProblem(el, PHONE_MESSAGE); }
+  goToFirstError(form);
+}, true);
+
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 const getJson = (url) => fetch(url, { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : Promise.reject(r)));
 
@@ -288,15 +426,43 @@ document.addEventListener('alpine:init', () => {
 
   // Signature box: draw with a finger, stylus or mouse; sent as a PNG data URL.
   // Strokes are kept so the drawing survives the box being resized (phone rotated).
-  Alpine.data('signaturePad', () => ({
-    strokes: [], current: null, empty: true, missing: false, busy: false, ctx: null,
+  // A finished signature locks a moment after the last stroke: the page then scrolls normally over the
+  // box (a thumb scrolling past can't add a stray line). "Change" unlocks it, "Undo" takes off the last stroke.
+  Alpine.data('signaturePad', ({ lockAfter = 1500 } = {}) => ({
+    strokes: [], current: null, empty: true, missing: false, busy: false, ctx: null, locked: false, lockTimer: null, fromImage: false,
     init() {
       this.resize();
       new ResizeObserver(() => this.resize()).observe(this.$refs.canvas);
+      this.addTools();
+      this.$watch('locked', (v) => this.pad().classList.toggle('is-locked', v));
+    },
+    pad() { return this.$refs.canvas.parentElement; },
+    // Undo / Change buttons inside the box, the same on every page that has a signature box.
+    addTools() {
+      const tools = document.createElement('div');
+      tools.className = 'jt-sign-tools';
+      tools.innerHTML = '<button type="button" class="btn btn-sm btn-light" data-act="undo"><i class="bi bi-arrow-counterclockwise"></i>Undo</button>'
+        + '<button type="button" class="btn btn-sm btn-light" data-act="change"><i class="bi bi-pencil"></i>Change</button>';
+      tools.addEventListener('click', (e) => {
+        const act = e.target.closest('[data-act]')?.dataset.act;
+        if (act === 'undo') this.undo();
+        if (act === 'change') this.unlock();
+      });
+      const lockNote = document.createElement('div');
+      lockNote.className = 'jt-sign-locked';
+      lockNote.innerHTML = '<i class="bi bi-lock"></i>Signed. Tap <strong>Change</strong> to sign again';
+      this.pad().append(tools, lockNote);
+      const sync = () => {
+        tools.querySelector('[data-act="undo"]').hidden = this.empty || this.locked;
+        tools.querySelector('[data-act="change"]').hidden = !this.locked;
+      };
+      this.$watch('empty', sync); this.$watch('locked', sync); sync();
     },
     resize() {
       const canvas = this.$refs.canvas;
       const ratio = window.devicePixelRatio || 1;
+      // Scrolling on a phone shows and hides the address bar; the box itself doesn't change size then.
+      if (canvas.width === Math.round(canvas.offsetWidth * ratio) && canvas.height === Math.round(canvas.offsetHeight * ratio) && this.ctx) return;
       canvas.width = canvas.offsetWidth * ratio;
       canvas.height = canvas.offsetHeight * ratio;
       this.ctx = canvas.getContext('2d');
@@ -309,13 +475,17 @@ document.addEventListener('alpine:init', () => {
       return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
     },
     start(e) {
+      if (this.locked) return; // the page is being scrolled over a finished signature
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
+      clearTimeout(this.lockTimer);
       this.$refs.canvas.setPointerCapture?.(e.pointerId);
       this.current = [this.point(e)];
       this.strokes.push(this.current);
     },
     move(e) {
-      if (!this.current) return;
+      if (!this.current || this.locked) return;
+      e.preventDefault();
       this.current.push(this.point(e));
       this.redraw();
     },
@@ -325,6 +495,8 @@ document.addEventListener('alpine:init', () => {
       this.current = null;
       this.empty = false;
       this.missing = false;
+      clearTimeout(this.lockTimer);
+      this.lockTimer = setTimeout(() => { if (!this.current && !this.empty) this.locked = true; }, lockAfter);
     },
     redraw() {
       const { ctx } = this;
@@ -347,10 +519,32 @@ document.addEventListener('alpine:init', () => {
         ctx.stroke();
       }
     },
+    undo() {
+      clearTimeout(this.lockTimer);
+      this.strokes.pop();
+      this.empty = !this.strokes.length;
+      this.redraw();
+    },
+    unlock() { clearTimeout(this.lockTimer); this.locked = false; },
     clear() {
+      clearTimeout(this.lockTimer);
       this.strokes = [];
       this.empty = true;
+      this.locked = false;
       this.redraw();
+    },
+    // A saved signature (the person's own, from My signature) drawn into the box as an image.
+    useImage(url) {
+      const img = new Image();
+      img.onload = () => {
+        this.strokes = [];
+        this.redraw();
+        const w = this.$refs.canvas.offsetWidth, h = this.$refs.canvas.offsetHeight;
+        const scale = Math.min(w / img.width, h / img.height, 1);
+        this.ctx.drawImage(img, (w - img.width * scale) / 2, (h - img.height * scale) / 2, img.width * scale, img.height * scale);
+        this.empty = false; this.missing = false; this.locked = true; this.fromImage = true;
+      };
+      img.src = url;
     },
     submit(e) {
       if (this.empty) { e.preventDefault(); this.missing = true; return; }
@@ -526,7 +720,26 @@ document.addEventListener('alpine:init', () => {
       Object.assign(this, { answered, failed, flagged });
     },
     fill(section, value) {
+      // Remember the section as it was, so "Undo all" puts back exactly what "All pass" changed.
+      section.jtBefore = this.sectionRows(section).map((row) => [row, this.answer(row)]);
       section.querySelectorAll('.jt-qc-item').forEach((row) => { if (!this.answer(row)) row.querySelector(`input.btn-check[value=${value}]`).checked = true; });
+      this.count();
+    },
+    sectionRows(section) { return [...section.querySelectorAll('.jt-qc-item')]; },
+    sectionAnswered(section) { void this.answered; return this.sectionRows(section).some((row) => this.answer(row)); },
+    // Undo all, for one section (e.g. Hydraulics, Finishing): right after "All pass" / "All N/A" it puts the
+    // answers back as they were; otherwise it clears every answer in the section, after asking.
+    undoSection(section, name) {
+      const before = section.jtBefore;
+      if (before) {
+        for (const [row, was] of before) {
+          row.querySelectorAll('input.btn-check').forEach((input) => { input.checked = input.value === was; });
+        }
+        delete section.jtBefore;
+      } else {
+        if (!confirm(`Clear every answer in ${name}? Notes stay; you answer the items again.`)) return;
+        this.sectionRows(section).forEach((row) => row.querySelectorAll('input.btn-check').forEach((input) => { input.checked = false; }));
+      }
       this.count();
     },
     goTo(row) {
@@ -1020,3 +1233,53 @@ document.addEventListener('click', async (e) => {
     /* clipboard blocked: the text is still on screen to copy by hand */
   }
 });
+
+// ---------- Installable app (manifest.webmanifest + /sw.js) ----------
+// Registers the service worker, then offers "Install the app" (menu, and a banner until it is
+// installed or closed) when the browser allows it. iPhones have no install prompt: the banner says
+// how to add it from Safari's Share menu instead.
+(() => {
+  const swUrl = document.currentScript?.dataset.sw;
+  if ('serviceWorker' in navigator && swUrl) {
+    window.addEventListener('load', () => navigator.serviceWorker.register(swUrl, { scope: '/' }).catch(() => { /* the app works without it */ }));
+  }
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (standalone) return; // already installed and opened from the home screen
+
+  const KEY = 'jt-install-dismissed';
+  const dismissed = () => { try { return Number(localStorage.getItem(KEY) ?? 0) > Date.now() - 14 * 864e5; } catch { return false; } };
+  const banner = document.querySelector('[data-install-banner]');
+  const menuItem = document.querySelector('[data-install-app]');
+  let prompt = null;
+
+  const show = (text) => {
+    if (menuItem && prompt) menuItem.hidden = false;
+    if (!banner || dismissed()) return;
+    if (text) banner.querySelector('[data-install-text]').textContent = text;
+    banner.querySelector('[data-install-app-button]').hidden = !prompt;
+    banner.hidden = false;
+  };
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // offered by our own button instead of the browser's mini bar
+    prompt = e;
+    show();
+  });
+  document.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-install-dismiss]')) {
+      try { localStorage.setItem(KEY, String(Date.now())); } catch { /* ignore */ }
+      banner.hidden = true;
+      return;
+    }
+    if (!e.target.closest('[data-install-app-button]') || !prompt) return;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice.catch(() => ({ outcome: 'dismissed' }));
+    if (outcome === 'accepted') { banner && (banner.hidden = true); menuItem && (menuItem.hidden = true); }
+    prompt = null;
+  });
+  window.addEventListener('appinstalled', () => { if (banner) banner.hidden = true; if (menuItem) menuItem.hidden = true; });
+
+  // iPhone / iPad Safari: no prompt to show, so say how.
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) show('In Safari, tap the Share button, then “Add to Home Screen”.');
+})();

@@ -12,6 +12,7 @@ import * as customers from '../customers/service.js';
 import { getJob } from '../jobs/service.js';
 import { db } from '../../core/db.js';
 import { vatIn } from '../proformas/service.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Invoices: from a job (its proforma's lines and prices), then issued, printed, paid.
 // Payments are recorded on the job, from the job page or the invoice.
@@ -153,7 +154,13 @@ router.post('/invoices/:id', manage, async (req, res) => {
 router.post('/invoices/:id/issue', manage, async (req, res) => {
   const invoice = await loadInvoice(req);
   const { number } = await invoices.issueInvoice(invoice.id, req);
-  req.session.flash = { type: 'success', text: `Issued as invoice ${number}. Print it for the customer, and add the KRA eTIMS number once it is keyed in.` };
+  req.session.flash = {
+    type: 'success', text: `Issued as invoice ${number}. Print it for the customer, and add the KRA eTIMS number once it is keyed in.`,
+    actions: [
+      { label: 'Print', href: `/invoices/${invoice.id}/print`, icon: 'printer', primary: true },
+      { label: 'Record a payment', href: `/invoices/${invoice.id}#payments`, icon: 'cash-coin' },
+    ],
+  };
   res.redirect(`/invoices/${invoice.id}`);
 });
 
@@ -199,23 +206,38 @@ router.get('/invoices/:id/print', manage, async (req, res) => {
     title: fileTitle(invoice),
     invoice, company: config.company,
     vat: vatIn(invoice.total), vatRate: config.vatRate,
+    signs: await staffSignatures({ by: invoice.created_by }), // who raised it
   });
 });
 
 // ---------- Payments, on the job ----------
 
+/**
+ * After a payment: what comes next. Paid up with the vehicle still in → release it; money still owed → another payment.
+ */
+async function afterPayment(job, back) {
+  const { balance } = await invoices.moneyForJob(job.id);
+  if (balance !== null && balance > 0) return [{ label: 'Record another payment', href: `${back.split('#')[0]}#payments`, icon: 'cash-coin' }];
+  const checkin = job.checkin_id ? await db('checkins').where({ id: job.checkin_id }).first('id', 'status') : null;
+  if (checkin?.status === 'in_workshop') return [{ label: 'Release the vehicle', href: `/check-in/${checkin.id}/release`, icon: 'box-arrow-right', primary: true }];
+  return [];
+}
+
 router.post('/jobs/:id/payments', manage, async (req, res) => {
-  await loadJob(req);
+  const job = await loadJob(req);
   const back = backTo(req.body.back, `/jobs/${req.params.id}`);
   const { data, errors } = check(paymentSchema, req.body);
   if (errors) {
-    req.session.flash = { type: 'warning', text: `Payment not saved: ${Object.values(errors)[0]}.` };
+    req.session.flash = { type: 'warning', text: `Payment not saved: ${Object.values(errors)[0]}.`, actions: [{ label: 'Try again', href: `${back.split('#')[0]}#payments`, icon: 'cash-coin', primary: true }] };
     return res.redirect(back);
   }
   const money = (n) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
   try {
     const { number, credit } = await invoices.recordPayment(Number(req.params.id), data, req);
-    req.session.flash = { type: 'success', text: `Payment ${number} recorded: ${money(data.amount)}.${credit > 0 ? ` ${money(credit)} is held as the customer’s credit.` : ''}` };
+    req.session.flash = {
+      type: 'success', text: `Payment ${number} recorded: ${money(data.amount)}.${credit > 0 ? ` ${money(credit)} is held as the customer’s credit.` : ''}`,
+      actions: await afterPayment(job, back),
+    };
   } catch (err) {
     if (!err.field) throw err;
     req.session.flash = { type: 'warning', text: `Payment not saved: ${err.message}` };

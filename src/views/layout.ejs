@@ -12,6 +12,13 @@
       <%- include('partials/topbar') %>
       <main class="jt-content" id="main">
         <%- include('partials/flash') %>
+        <%# "Install Jome-Tech on this phone": shown by public/js/app.js when the browser offers it, until installed or closed. %>
+        <div class="alert alert-info jt-install d-flex align-items-center gap-2" role="status" hidden data-install-banner>
+          <img src="/img/brand/icon-192.png" alt="" width="36" height="36">
+          <div class="me-auto"><strong>Install Jome-Tech</strong><div class="small" data-install-text>Open it from your home screen like any other app, full screen and quicker to start.</div></div>
+          <button class="btn btn-sm btn-primary" type="button" data-install-app-button>Install</button>
+          <button type="button" class="btn-close" aria-label="Not now" data-install-dismiss></button>
+        </div>
         <%- body %>
       </main>
     </div>
@@ -19,6 +26,6 @@
 
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js?v=<%= assetVersion %>"></script>
   <script src="/vendor/tom-select/js/tom-select.complete.min.js?v=<%= assetVersion %>"></script>
-  <script src="/js/app.js?v=<%= assetVersion %>"></script>
+  <script src="/js/app.js?v=<%= assetVersion %>" data-sw="/sw.js?v=<%= assetVersion %>"></script>
 </body>
 </html>

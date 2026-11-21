@@ -87,7 +87,8 @@
     <div class="signatures">
       <div class="sig-row">
         <div class="sig-name"><span class="label">Released by:</span> <%= record.released_by_name ?? blank %></div>
-        <div class="sig-box"><span class="label">Sign</span><span class="sig-line"></span></div>
+        <% const staff = locals.signs?.released; %>
+        <div class="sig-box"><span class="label">Sign</span><span class="sig-line<%= staff?.url ? ' has-sig' : '' %>"><% if (staff?.url) { %><img src="<%= staff.url %>" alt="Signature of <%= staff.name %>"><% } %></span></div>
       </div>
       <div class="sig-row">
         <div class="sig-name">

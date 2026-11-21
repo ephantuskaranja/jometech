@@ -8,6 +8,7 @@ import { isPng } from '../checkins/service.js';
 import { getJob } from '../jobs/service.js';
 import { getInspection, redoSteps } from './service.js';
 import * as signoff from './signoff.js';
+import { afterJobChange } from '../../core/next-steps.js';
 
 // Customer sign-off on a job (its Customer Inspection step): the customer, or the driver collecting
 // for them, signs on the device; or no one is there to sign; or they have concerns, and the job goes
@@ -71,7 +72,7 @@ router.post('/jobs/:id/signoff', manage, async (req, res) => {
   if (data && !png) errors.signature = 'The signature didn’t come through. Clear it and sign again.';
   if (Object.keys(errors).length) return renderSignoff(req, res, job, { status: 422, values: { ...req.body, signature: '' }, errors, form: 'accept' });
   const { step } = await signoff.acceptSignoff(job.id, { signer_role: data.signer_role, signer_name: data.signer_name, signer_phone: data.signer_phone, signature: png }, req);
-  req.session.flash = { type: 'success', text: `Signed off by ${data.signer_name}. ${doneText(job, step)}` };
+  req.session.flash = { type: 'success', text: `Signed off by ${data.signer_name}. ${doneText(job, step)}`, actions: await afterJobChange(req.user, job.id) };
   res.redirect(`/jobs/${job.id}`);
 });
 
@@ -82,7 +83,7 @@ router.post('/jobs/:id/signoff/not-signed', manage, async (req, res) => {
     return renderSignoff(req, res, job, { status: 422, values: req.body, errors: { reason: 'Say why no one signed (3 to 255 characters)' }, form: 'not_signed' });
   }
   const { step } = await signoff.notSigned(job.id, reason, req);
-  req.session.flash = { type: 'warning', text: `Recorded without a signature. ${doneText(job, step)}` };
+  req.session.flash = { type: 'warning', text: `Recorded without a signature. ${doneText(job, step)}`, actions: await afterJobChange(req.user, job.id) };
   res.redirect(`/jobs/${job.id}`);
 });
 

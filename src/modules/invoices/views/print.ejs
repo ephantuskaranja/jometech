@@ -67,7 +67,7 @@
             <td class="qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
             <td class="desc">
               <% let list = []; const flush = () => { if (list.length) { %><ul><% list.forEach((b) => { %><li><%= b %></li><% }) %></ul><% list = []; } }; %>
-              <% String(l.description).split('\n').forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
+              <% String(l.description).split('\n').filter((t) => t.trim()).forEach((text) => { if (bullet.test(text)) { list.push(text.replace(bullet, '')); return; } flush(); %><div><%= text %></div><% }); flush(); %>
               <% if (i === 0 && ids.length) { %><div class="vehicle"><% ids.forEach(([label, value]) => { %><div><%= label %>: <%= value %></div><% }) %></div><% } %>
               <% if (i === 0 && !ids.length && invoice.vehicle_description) { %><div class="vehicle"><%= invoice.vehicle_description %></div><% } %>
             </td>
@@ -100,8 +100,10 @@
       <div>Yours faithfully,</div>
       <div>For &amp; on behalf of</div>
       <div><%= company.name %></div>
-      <div class="pf-sign-line"></div>
-      <div><%= company.signatory %></div>
+      <%# The saved signature of whoever is responsible (Account → My signature), or a line to sign by hand. %>
+      <% const signer = locals.signs?.by; %>
+      <div class="pf-sign-line<%= signer?.url ? ' has-sig' : '' %>"><% if (signer?.url) { %><img src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %></div>
+      <div><%= signer?.url ? signer.name : company.signatory %></div>
     </div>
   </main>
 </body>

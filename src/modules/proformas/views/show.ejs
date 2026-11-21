@@ -34,19 +34,19 @@
     <section class="card">
       <div class="card-header"><h2 class="h6 mb-0">What is offered</h2></div>
       <div class="table-responsive">
-        <table class="table jt-table mb-0">
+        <table class="table jt-table mb-0 jt-stack-sm">
           <thead><tr><th>Qty</th><th>Description</th><th class="text-end">@</th><th class="text-end">Amount (KES)</th></tr></thead>
           <tbody>
             <% proforma.lines.forEach((l) => { %>
               <tr>
-                <td class="text-nowrap"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
-                <td>
+                <td class="text-nowrap" data-label="Qty"><%= fmt.qty(l.quantity) %> <%= l.unit %></td>
+                <td class="jt-stack-main">
                   <% lines(l.description).forEach((text) => { const bullet = /^\s*[-•*]\s+/.test(text); %>
                     <div class="<%= bullet ? 'jt-bullet' : '' %>"><%= bullet ? text.replace(/^\s*[-•*]\s+/, '') : text %></div>
                   <% }) %>
                 </td>
-                <td class="text-end jt-num"><%= fmt.money(l.unit_price) %></td>
-                <td class="text-end jt-num"><%= fmt.money(l.amount) %></td>
+                <td class="text-end jt-num" data-label="@"><%= fmt.money(l.unit_price) %></td>
+                <td class="text-end jt-num fw-semibold" data-label="KES"><%= fmt.money(l.amount) %></td>
               </tr>
             <% }) %>
           </tbody>

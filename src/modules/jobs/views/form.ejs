@@ -12,6 +12,9 @@
   sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : 'Only the customer and the work are needed. The vehicle can be added when it arrives.'),
 }) %>
 
+<%# What stops the job being opened (another job running, the vehicle at another site), with what to do. Outside the form: its buttons are forms too. %>
+<% if (locals.notice) { %><%- include('partials/notice', notice) %><% } %>
+
 <form method="post" action="<%= job ? `/jobs/${job.id}` : '/jobs' %>" novalidate
       x-data="jobForm(<%= JSON.stringify({ rows, vehicles: vehicleOptions, hasCustomer: Boolean(values.customer_id) }) %>)">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -88,8 +91,12 @@
       <% } %>
       <div class="jt-fields">
         <div>
+          <% if (supervisorLocked) { %>
+            <dl class="jt-kv mb-0"><div><dt>Supervisor</dt><dd><%= job.supervisor_name %><span class="d-block small text-body-secondary">Only a manager or admin can change it now.</span></dd></div></dl>
+          <% } else { %>
           <%- include('partials/field', { name: 'supervisor_id', label: 'Supervisor', type: 'select', options: supervisors, value: values.supervisor_id, error: errors.supervisor_id,
                 blank: 'Not decided yet', searchable: true }) %>
+          <% } %>
           <% if (supervisorHelp) { %>
             <div class="form-text">No supervisors at <%= supervisorHelp.site %> yet.<% if (supervisorHelp.canAdd) { %> <a href="/admin/users/new">Add one under Users</a> (role: Supervisor).<% } %></div>
           <% } %>

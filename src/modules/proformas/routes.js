@@ -11,6 +11,7 @@ import * as proformas from './service.js';
 import * as customers from '../customers/service.js';
 import * as enquiries from '../enquiries/service.js';
 import { typeOptions } from '../job-types/service.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Proformas: write one (or copy another), send it, then accepted / declined / revised.
 
@@ -162,7 +163,10 @@ router.post('/proformas/:id/send', manage, async (req, res) => {
 router.post('/proformas/:id/accept', manage, async (req, res) => {
   const proforma = await loadProforma(req);
   await proformas.closeProforma(proforma.id, { status: 'accepted' }, req);
-  req.session.flash = { type: 'success', text: `${proforma.number} accepted.${proforma.enquiry_id ? ` Enquiry ${proforma.enquiry_number} closed as won.` : ''}` };
+  req.session.flash = {
+    type: 'success', text: `${proforma.number} accepted.${proforma.enquiry_id ? ` Enquiry ${proforma.enquiry_number} closed as won.` : ''}`,
+    actions: req.user.can('jobs.manage') || req.user.can('quotations.manage') ? [{ label: 'Open the job', post: `/proformas/${proforma.id}/job`, icon: 'wrench', primary: true }] : [],
+  };
   res.redirect(`/proformas/${proforma.id}`);
 });
 
@@ -193,6 +197,7 @@ router.get('/proformas/:id/print', manage, async (req, res) => {
     title: fileTitle(`Proforma ${proforma.number}`, proforma.customer_name), // also the PDF's file name
     proforma, company: config.company,
     vat: proformas.vatIn(proforma.total), vatRate: config.vatRate,
+    signs: await staffSignatures({ by: proforma.created_by }), // who prepared it
   });
 });
 

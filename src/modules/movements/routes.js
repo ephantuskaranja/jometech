@@ -6,11 +6,14 @@ import { vehicleLabel } from '../../core/vehicle-format.js';
 import { getCheckin } from '../checkins/service.js';
 import * as movements from './service.js';
 
-// Sending a checked-in vehicle to another site, and receiving it there.
-// The forms live on the check-in page (checkins/views/show.ejs).
+// Sending a checked-in vehicle to another site, and receiving it there. The forms live on the
+// check-in page (checkins/views/show.ejs); the gate's two steps on Gate → Vehicles at the gate
+// (checkins/views/gate.ejs):  sent → cleared out (sending gate) → logged in (receiving gate) → received.
 
 export const router = Router();
 const manage = canAny('checkin.manage');
+const gate = canAny('checkin.gate');
+const text = (v, max) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max) || null;
 
 /** Staff act only for the sites they work at (admins and managers: all sites). */
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
@@ -42,7 +45,7 @@ router.post('/check-in/:id/send', manage, async (req, res) => {
   if (errors) return backWithErrors(req, res, checkin.id, 'send', req.body, errors);
   try {
     const { number, to } = await movements.sendVehicle(checkin.id, data, req);
-    req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} is on its way to ${to.name} (${number}). ${to.name} confirms when it arrives.` };
+    req.session.flash = { type: 'success', text: `${vehicleLabel(checkin)} is ready to go to ${to.name} (${number}). The gate clears it out; at ${to.name} the gate logs it in and a supervisor confirms it.` };
     res.redirect(`/check-in/${checkin.id}`);
   } catch (err) {
     if (!err.field) throw err;
@@ -54,6 +57,7 @@ router.post('/movements/:id/receive', manage, async (req, res) => {
   const move = await movements.getMovement(Number(req.params.id));
   if (!move) throw httpError(404, 'That movement doesn’t exist.');
   if (!worksAt(req, move.to_site_id)) throw httpError(403, 'Only staff at the receiving site can confirm it arrived.');
+  if (!movements.canConfirmArrival(req.user)) throw httpError(403, 'An admin, manager or supervisor at the receiving site confirms the vehicle arrived.');
   const { data, errors } = check(receiveSchema, req.body);
   if (errors) return backWithErrors(req, res, move.checkin_id, 'receive', req.body, errors);
   const received = await movements.receiveVehicle(move.id, data, req);
@@ -68,4 +72,37 @@ router.post('/movements/:id/cancel', manage, async (req, res) => {
   await movements.cancelMovement(move.id, req);
   req.session.flash = { type: 'warning', text: `Move ${move.number} cancelled. The vehicle stays where it was.` };
   res.redirect(`/check-in/${move.checkin_id}`);
+});
+
+// ---------- the gates ----------
+
+/** Back to where the guard was: the gate page, or the check-in. */
+const gateBack = (req, move) => (req.body.back === 'checkin' ? `/check-in/${move.checkin_id}` : '/gate/vehicles');
+
+router.post('/movements/:id/gate-out', gate, async (req, res) => {
+  const move = await movements.getMovement(Number(req.params.id));
+  if (!move) throw httpError(404, 'That movement doesn’t exist.');
+  if (!worksAt(req, move.from_site_id)) throw httpError(403, 'Only the gate at the sending site clears it out.');
+  try {
+    const m = await movements.gateOut(move.id, req);
+    req.session.flash = { type: 'success', text: `${m.number} cleared out for ${m.to_site_name}. Their gate logs it in when it arrives.` };
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(gateBack(req, move));
+});
+
+router.post('/movements/:id/gate-in', gate, async (req, res) => {
+  const move = await movements.getMovement(Number(req.params.id));
+  if (!move) throw httpError(404, 'That movement doesn’t exist.');
+  if (!worksAt(req, move.to_site_id)) throw httpError(403, 'Only the gate at the receiving site logs it in.');
+  try {
+    const m = await movements.gateIn(move.id, text(req.body.gate_in_note, 255), req);
+    req.session.flash = { type: 'success', text: `${m.number} logged in at the gate. An admin, manager or supervisor confirms it is received.` };
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(gateBack(req, move));
 });

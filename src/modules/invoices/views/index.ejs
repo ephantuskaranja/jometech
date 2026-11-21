@@ -38,7 +38,7 @@
   <% } else { %>
     <div class="table-responsive">
       <table class="table jt-table">
-        <thead><tr><th>Invoice</th><th>Customer</th><th class="d-none d-md-table-cell">Job</th><th class="d-none d-md-table-cell">Date</th><th class="text-end">Total (KES)</th><th class="text-end">Balance</th></tr></thead>
+        <thead><tr><th>Invoice</th><th>Customer</th><th class="d-none d-md-table-cell">Job</th><th class="d-none d-md-table-cell">Date</th><th class="text-end d-none d-sm-table-cell">Total (KES)</th><th class="text-end">Balance</th></tr></thead>
         <tbody>
           <% list.forEach((i) => { const st = i.status === 'issued' ? paidStates[i.balance <= 0 ? 'paid' : Number(i.paid) > 0 ? 'part' : 'unpaid'] : statuses[i.status]; %>
             <tr>
@@ -48,7 +48,7 @@
                 <% if (i.vehicle_label) { %><span class="jt-sub"><%= i.vehicle_label %></span><% } %></td>
               <td class="d-none d-md-table-cell"><span class="font-monospace small"><%= i.job_number %></span></td>
               <td class="d-none d-md-table-cell text-nowrap"><%= i.invoice_date ? fmt.date(`${i.invoice_date}T12:00:00Z`) : '—' %></td>
-              <td class="text-end jt-num"><%= fmt.money(i.total) %></td>
+              <td class="text-end jt-num d-none d-sm-table-cell"><%= fmt.money(i.total) %></td>
               <td class="text-end jt-num"><%= i.status === 'issued' ? fmt.money(Math.max(i.balance, 0)) : '—' %></td>
             </tr>
           <% }) %>

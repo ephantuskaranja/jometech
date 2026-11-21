@@ -5,8 +5,11 @@ import { audit } from '../../core/audit.js';
 import { hashPassword, safeNextUrl, verifyPassword } from '../../core/auth.js';
 import { check } from '../../core/validate.js';
 import { endSessionsOf } from '../../core/session.js';
+import { storagePath } from '../../core/storage.js';
+import { httpError } from '../../core/validate.js';
+import { deleteSignature, pngFromDataUrl, saveSignature, signaturePathOf } from '../../core/staff-signatures.js';
 
-// The logged-in user's own settings: password, theme, current site.
+// The logged-in user's own settings: password, theme, current site, their signature for documents.
 export const router = Router();
 
 const passwordSchema = z.object({
@@ -79,4 +82,43 @@ router.post('/account/site', (req, res) => {
     req.session.flash = { type: 'success', text: `Now working at ${site.name}.` };
   }
   res.redirect(safeNextUrl(req.body?.next));
+});
+
+// ---------- My signature: drawn once, printed on the documents this person is responsible for ----------
+
+const renderSignature = async (req, res, status = 200, error = null) => {
+  const user = await db('users').where({ id: req.user.id }).first('signature_path', 'signature_saved_at');
+  res.status(status).render('account/views/signature', {
+    title: 'My signature', error,
+    saved: user?.signature_path ? { url: `/staff-signatures/${req.user.id}.png?v=${new Date(user.signature_saved_at ?? 0).getTime()}`, at: user.signature_saved_at } : null,
+  });
+};
+
+router.get('/account/signature', (req, res) => renderSignature(req, res));
+
+router.post('/account/signature', async (req, res) => {
+  const raw = String(req.body?.signature ?? '');
+  if (!raw) return renderSignature(req, res, 422, 'Sign in the box above');
+  if (raw.length > 400_000) return renderSignature(req, res, 422, 'The signature is too large. Clear it and sign again.');
+  const png = pngFromDataUrl(raw);
+  if (!png) return renderSignature(req, res, 422, 'The signature didn’t come through. Clear it and sign again.');
+  await saveSignature(req.user.id, png);
+  await audit(db, req, { entity: 'user', id: req.user.id, action: 'signature_saved', summary: 'Saved their signature for documents' });
+  req.session.flash = { type: 'success', text: 'Signature saved. It is added to the documents you are responsible for when they are printed.' };
+  res.redirect('/account/signature');
+});
+
+router.post('/account/signature/delete', async (req, res) => {
+  await deleteSignature(req.user.id);
+  await audit(db, req, { entity: 'user', id: req.user.id, action: 'signature_removed', summary: 'Removed their signature' });
+  req.session.flash = { type: 'warning', text: 'Signature removed. Documents print with a blank line to sign by hand.' };
+  res.redirect('/account/signature');
+});
+
+// The image itself: for logged-in staff only (printed documents show it).
+router.get('/staff-signatures/:id.png', async (req, res) => {
+  const rel = await signaturePathOf(Number(req.params.id));
+  if (!rel) throw httpError(404, 'No signature saved.');
+  res.set('Cache-Control', 'private, max-age=604800'); // the address changes (?v=) when a new one is saved
+  res.type('image/png').sendFile(storagePath(rel));
 });
