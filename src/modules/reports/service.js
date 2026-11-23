@@ -3,6 +3,7 @@ import { dayStart, isDay, localDay, nextDay } from '../../core/dates.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
 import { forPeriod as moneyFor } from '../invoices/service.js';
 import { PURPOSES, purposeLabel } from '../checkins/service.js';
+import { ENQUIRY_KINDS } from '../../core/work-kinds.js';
 
 // Period summary for admins and managers: what happened between two days, at one
 // site or all. "Now" figures (overdue jobs, low stock, orders waiting) are today's
@@ -196,6 +197,12 @@ async function frontOffice(p, siteId) {
 
   const enquiries = await atSite(inPeriod(db('enquiries'), 'created_at', p), 'site_id', siteId)
     .groupBy('work_type').orderBy('n', 'desc').select('work_type').count({ n: '*' });
+  // Per enquiry type, in the list's order; those from before the type was asked come last.
+  const kinds = await atSite(inPeriod(db('enquiries'), 'created_at', p), 'site_id', siteId)
+    .groupBy('kind').select('kind').count({ n: '*' });
+  const byKind = [...ENQUIRY_KINDS, { value: null, label: 'Not recorded' }]
+    .map((k) => ({ kind: k.label, n: num(kinds.find((r) => r.kind === k.value)?.n ?? 0) }))
+    .filter((k) => k.n);
   const closed = await atSite(inPeriod(db('enquiries'), 'closed_at', p), 'site_id', siteId)
     .whereIn('status', ['won', 'lost']).groupBy('status').select('status').count({ n: '*' });
   const closedCount = (status) => num(closed.find((c) => c.status === status)?.n ?? 0);
@@ -211,7 +218,8 @@ async function frontOffice(p, siteId) {
       acceptedValue: sum(accepted, (r) => r.total),
     },
     enquiries: {
-      byWorkType: enquiries.map((e) => ({ work_type: e.work_type, n: num(e.n) })),
+      byKind,
+      byWorkType: enquiries.map((e) => ({ work_type: e.work_type ?? 'Not given', n: num(e.n) })),
       count: sum(enquiries, (e) => e.n),
       won: closedCount('won'),
       lost: closedCount('lost'),

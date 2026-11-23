@@ -119,7 +119,7 @@ test('copying another proforma brings its lines and notes, for any customer', as
 
 test('from an enquiry: a prospect becomes a customer; sent → "Proforma sent", accepted → won', async () => {
   const csrf = csrfFrom((await sales.get('/enquiries')).text);
-  await sales.post('/enquiries').type('form').send({ _csrf: csrf, caller_name: 'Wanjiru Kamau', caller_phone: '0700 000 803', work_type: 'Tipper', description: '18 m³ tipper body' });
+  await sales.post('/enquiries').type('form').send({ _csrf: csrf, caller_name: 'Wanjiru Kamau', caller_phone: '0700 000 803', kind: 'fabrication', work_type: 'Tipper', description: '18 m³ tipper body' });
   const enquiry = await db('enquiries').where({ caller_name: 'Wanjiru Kamau' }).first();
 
   let res = await post(`/enquiries/${enquiry.id}/proforma`, {});
@@ -142,7 +142,7 @@ test('from an enquiry: a prospect becomes a customer; sent → "Proforma sent", 
 
 test('declined needs a reason and closes the enquiry as lost; revising it reopens the enquiry', async () => {
   const csrf = csrfFrom((await sales.get('/enquiries')).text);
-  await sales.post('/enquiries').type('form').send({ _csrf: csrf, customer_id: customer.id, caller_name: 'Komu', work_type: 'Dropside', description: 'Dropside 20 ft' });
+  await sales.post('/enquiries').type('form').send({ _csrf: csrf, customer_id: customer.id, caller_name: 'Komu', kind: 'fabrication', work_type: 'Dropside', description: 'Dropside 20 ft' });
   const enquiry = await db('enquiries').where({ caller_name: 'Komu' }).first();
   let res = await post('/proformas', { enquiry_id: enquiry.id, customer_id: customer.id, proforma_date: localDay(), line_description: ['Dropside 20 ft'], line_price: ['600000'] });
   const id = idOf(res.headers.location);

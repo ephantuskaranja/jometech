@@ -47,7 +47,7 @@
                 <span class="d-block mt-1"><%- include('partials/pill', { text: st.label, tone: st.tone }) %></span></td>
               <td><%= e.customer_name ?? e.caller_name %>
                 <span class="jt-sub"><%= e.customer_id ? (e.caller_name !== e.customer_name ? `Called: ${e.caller_name}` : '') : 'Prospect' %><%= e.caller_phone ? ` · ${fmt.phone(e.caller_phone)}` : '' %></span></td>
-              <td><%= e.work_type %><span class="jt-sub jt-clamp"><%= e.description %></span></td>
+              <td><%= e.title %><span class="jt-sub jt-clamp"><%= e.description %></span></td>
               <td class="d-none d-lg-table-cell text-end jt-num"><%= e.budget != null ? fmt.money(e.budget) : '—' %></td>
               <td class="text-nowrap">
                 <% if (tab === 'closed' && !q) { %><%= fmt.date(e.closed_at) %><% if (e.lost_reason) { %><span class="jt-sub"><%= e.lost_reason %></span><% } %>

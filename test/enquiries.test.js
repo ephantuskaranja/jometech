@@ -35,10 +35,11 @@ test('a new caller is a prospect: name, phone and what they want', async () => {
   let res = await post('/enquiries', { caller_name: 'Musa Hassan', work_type: '', description: '' });
   assert.equal(res.status, 422);
   assert.match(res.text, /so they can be called back/);
-  assert.match(res.text, /Choose what they want/);
+  assert.match(res.text, /Choose the type of enquiry/);
+  assert.match(res.text, /Choose the body type/);
   assert.match(res.text, /Describe what they want/);
 
-  res = await post('/enquiries', { caller_name: 'Musa Hassan', caller_phone: '0700 000 702', work_type: 'Tipper', description: '18 m³ tipper on a new FVZ', budget: '2,400,000', follow_up_on: localDay() });
+  res = await post('/enquiries', { caller_name: 'Musa Hassan', caller_phone: '0700 000 702', kind: 'fabrication', work_type: 'Tipper', description: '18 m³ tipper on a new FVZ', budget: '2,400,000', follow_up_on: localDay() });
   assert.equal(res.status, 302, res.text);
   assert.equal(res.headers.location, '/enquiries?show=follow', 'back to the list: due today');
   const e = await db('enquiries').where({ id: await newest('Musa Hassan') }).first();
@@ -55,9 +56,9 @@ test('a new caller is a prospect: name, phone and what they want', async () => {
 
 test('an existing customer’s enquiry can name one of their vehicles, but not someone else’s', async () => {
   const other = await db('vehicles').whereNot({ customer_id: customer.id }).first('id');
-  let res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: other?.id ?? 999999 });
+  let res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: other?.id ?? 999999 });
   assert.equal(res.status, 422);
-  res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: vehicle.id });
+  res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: vehicle.id });
   assert.equal(res.status, 302, res.text);
   assert.equal(res.headers.location, '/enquiries?show=open');
   const page = (await sales.get(`/enquiries/${await newest('Driver Otieno')}`)).text;
@@ -84,7 +85,7 @@ test('a prospect becomes a customer; a phone that is already a customer is linke
   assert.equal(c.name, 'Musa Hassan');
   assert.equal(c.phone, '+254700000702');
 
-  const res = await post('/enquiries', { caller_name: 'Wekesa', caller_phone: '0700 000 701', work_type: 'Trailer', description: 'Needs a 3-axle trailer' });
+  const res = await post('/enquiries', { caller_name: 'Wekesa', caller_phone: '0700 000 701', kind: 'fabrication', work_type: 'Trailer', description: 'Needs a 3-axle trailer' });
   assert.equal(res.status, 302, res.text);
   const id = await newest('Wekesa');
   assert.match((await sales.get(`/enquiries/${id}`)).text, /already belongs to/);
@@ -111,16 +112,33 @@ test('search finds an enquiry by phone in any format', async () => {
 });
 
 test('“Other” lets you type the kind of work, and adds it to the list', async () => {
-  let res = await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', work_type: 'Other', other_work_type: '', description: 'Body for carrying cattle' });
+  let res = await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', kind: 'fabrication', work_type: 'Other', other_work_type: '', description: 'Body for carrying cattle' });
   assert.equal(res.status, 422);
   assert.match(res.text, /Say what kind of work/);
-  res = await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', work_type: 'Other', other_work_type: 'Cattle body', save_work_type: '1', description: 'Body for carrying cattle' });
+  res = await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', kind: 'fabrication', work_type: 'Other', other_work_type: 'Cattle body', save_work_type: '1', description: 'Body for carrying cattle' });
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('enquiries').where({ id: await newest('Kamau Farm') }).first()).work_type, 'Cattle body');
   const types = await db('enquiry_work_types').orderBy('sort_order').pluck('name');
   assert.ok(types.indexOf('Cattle body') > -1 && types.indexOf('Cattle body') < types.indexOf('Other'), 'added before Other');
   // Typed again in other capitals: not added twice
-  await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', work_type: 'Other', other_work_type: 'cattle body', save_work_type: '1', description: 'Another one' });
+  await post('/enquiries', { caller_name: 'Kamau Farm', caller_phone: '0700 000 703', kind: 'fabrication', work_type: 'Other', other_work_type: 'cattle body', save_work_type: '1', description: 'Another one' });
   assert.equal((await db('enquiry_work_types').where({ name: 'Cattle body' })).length, 1);
   await db('enquiry_work_types').where({ name: 'Cattle body' }).delete(); // leave the list as the seed made it
+});
+
+test('the enquiry type is asked every time; a general enquiry needs no body type', async () => {
+  let res = await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'meeting', work_type: 'Tipper', description: 'Asked about prices' });
+  assert.equal(res.status, 422, 'only the listed types');
+  assert.match(res.text, /Choose the type of enquiry/);
+  res = await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'general', work_type: '', description: 'Asked what we make and our prices' });
+  assert.equal(res.status, 302, res.text);
+  const id = await newest('Achieng Otieno');
+  const e = await db('enquiries').where({ id }).first();
+  assert.equal(e.kind, 'general');
+  assert.equal(e.work_type, null);
+  assert.match((await sales.get(`/enquiries/${id}`)).text, /<h1 class="h3">General enquiry /);
+  assert.match((await sales.get('/enquiries?q=Achieng')).text, /General enquiry/);
+  // Work names both: "Fabrication · Tipper".
+  await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'fabrication', work_type: 'Tipper', description: 'Wants a tipper after all' });
+  assert.match((await sales.get(`/enquiries/${await newest('Achieng Otieno')}`)).text, /<h1 class="h3">Fabrication · Tipper /);
 });

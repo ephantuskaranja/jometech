@@ -10,7 +10,7 @@
     <div class="jt-crumb">Sales <i class="bi bi-chevron-right"></i><a href="/enquiries">Enquiries</a><i class="bi bi-chevron-right"></i><span><%= enquiry.number %></span></div>
     <div class="jt-record-top">
       <div class="jt-record-title">
-        <h1 class="h3"><%= enquiry.work_type %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %></h1>
+        <h1 class="h3"><%= enquiry.title %> <%- include('partials/pill', { text: st.label, tone: st.tone }) %></h1>
         <div class="jt-meta">
           <span><i class="bi bi-person"></i><% if (enquiry.customer_id) { %><a href="/customers/<%= enquiry.customer_id %>"><%= enquiry.customer_name %></a><% } else { %><%= enquiry.caller_name %> <span class="text-body-tertiary">(prospect)</span><% } %></span>
           <span><i class="bi bi-telephone"></i><%= sourceLabel(enquiry.source) %>, <%= fmt.dateTime(enquiry.created_at) %></span>

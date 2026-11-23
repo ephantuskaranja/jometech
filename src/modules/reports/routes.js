@@ -126,7 +126,8 @@ function workbook(s, { p, site, today }) {
     ...front.proformas.declined.map((r) => ({ ...r, what: 'Declined' })),
   ].map((r) => ({ ...r, when: fmt.dateTime(r.at), total: Number(r.total) })));
   sheet(book, 'Check-ins by purpose', [['Purpose', 'purpose', 24], ['Vehicles checked in', 'n', 20]], front.byPurpose);
-  sheet(book, 'Enquiries', [['Work type', 'work_type', 30], ['New enquiries', 'n', 14]], front.enquiries.byWorkType)
+  sheet(book, 'Enquiries by type', [['Enquiry type', 'kind', 24], ['New enquiries', 'n', 14]], front.enquiries.byKind);
+  sheet(book, 'Enquiries', [['Body type', 'work_type', 30], ['New enquiries', 'n', 14]], front.enquiries.byWorkType)
     .addRows([[], ['Won in the period', front.enquiries.won], ['Lost in the period', front.enquiries.lost]]);
   sheet(book, 'Invoices', [['Invoice', 'number'], ['Issued', 'when', 20], ['Job', 'job_number'], ['Customer', 'customer_name', 28], ['Total incl. VAT (KES)', 'total', 20, MONEY], ['Note', 'note', 12]],
     money.issued.map((i) => ({ ...i, when: fmt.dateTime(i.issued_at), total: Number(i.total), note: i.status === 'cancelled' ? 'Cancelled' : '' })));

@@ -554,8 +554,8 @@ document.addEventListener('alpine:init', () => {
   }));
 
   // Enquiry form (enquiries/views/form.ejs): the customer's vehicles, and "this phone is a customer".
-  Alpine.data('enquiryForm', ({ hasCustomer = false, vehicles = [], workType = '' } = {}) => ({
-    hasCustomer, vehicles, workType, match: null,
+  Alpine.data('enquiryForm', ({ hasCustomer = false, vehicles = [], workType = '', kind = '' } = {}) => ({
+    hasCustomer, vehicles, workType, kind, match: null,
     async customerChanged(id) {
       this.hasCustomer = Boolean(id);
       this.match = null;

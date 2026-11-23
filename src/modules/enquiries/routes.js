@@ -22,7 +22,8 @@ const enquirySchema = z.object({
   caller_phone: optionalPhone(),
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
-  work_type: z.string().trim().min(1, 'Choose what they want').max(60),
+  kind: z.enum(enquiries.KINDS.map((k) => k.value), { message: 'Choose the type of enquiry' }),
+  work_type: z.string().trim().max(60).transform((v) => v || null),
   other_work_type: optionalText(60),
   save_work_type: z.preprocess((v) => v === '1' || v === 'on', z.boolean()),
   description: z.string().trim().min(3, 'Describe what they want, in a few words').max(2000, 'Use 2,000 characters or fewer'),
@@ -38,7 +39,7 @@ const noteSchema = z.object({
 
 const plusDays = (days) => new Date(Date.parse(`${localDay()}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 const blank = () => ({
-  customer_id: '', caller_name: '', caller_phone: '', vehicle_id: '', vehicle_description: '', work_type: '', other_work_type: '', save_work_type: '1', description: '',
+  customer_id: '', caller_name: '', caller_phone: '', vehicle_id: '', vehicle_description: '', kind: '', work_type: '', other_work_type: '', save_work_type: '1', description: '',
   budget: '', source: 'call', follow_up_on: plusDays(2),
 });
 
@@ -55,6 +56,8 @@ function validate(body) {
   // From what was typed, so it shows together with the form's other problems.
   if (!String(body.customer_id ?? '').trim() && !String(body.caller_phone ?? '').trim()) all.caller_phone ??= 'Enter their phone number, so they can be called back';
   if (data && !data.customer_id) data.vehicle_id = null;
+  // The body type is needed for work; a general enquiry may leave it out.
+  if (body.kind !== 'general' && !String(body.work_type ?? '').trim()) all.work_type = 'Choose the body type';
   // "Other": the kind of work as typed, optionally added to the quick picks for next time.
   if (body.work_type === 'Other') {
     const typed = String(body.other_work_type ?? '').trim();
@@ -75,6 +78,7 @@ async function renderForm(res, { status = 200, enquiry = null, values, errors = 
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await enquiries.vehicleOptions(customer.id) : [],
     workTypes,
+    kinds: enquiries.KINDS,
     sources: enquiries.SOURCES,
     today: localDay(),
   });

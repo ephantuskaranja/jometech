@@ -7,6 +7,7 @@ import { normalizePhone } from '../../core/phone.js';
 import { httpError } from '../../core/validate.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
 import { createCustomer } from '../customers/service.js';
+import { ENQUIRY_KINDS, kindLabel as labelIn } from '../../core/work-kinds.js';
 
 // Enquiries, mostly phone calls. A caller who isn't a customer yet stays a
 // prospect (caller_name / caller_phone) until "Add as customer".
@@ -21,6 +22,10 @@ export const SOURCES = [
   { value: 'other', label: 'Other' },
 ];
 export const sourceLabel = (v) => SOURCES.find((s) => s.value === v)?.label ?? v;
+
+/** Enquiry type (Fabrication, Repair Works, Modification, General enquiry): the same list as the check-in's purpose. */
+export const KINDS = ENQUIRY_KINDS;
+export const kindLabel = (v) => labelIn(KINDS, v);
 
 export const STATUSES = {
   open: { label: 'Open', tone: 'info' },
@@ -59,7 +64,7 @@ async function checkLinks(trx, input) {
   }
 }
 
-const FIELDS = ['customer_id', 'caller_name', 'caller_phone', 'vehicle_id', 'vehicle_description', 'work_type', 'description', 'budget', 'source', 'follow_up_on'];
+const FIELDS = ['customer_id', 'caller_name', 'caller_phone', 'vehicle_id', 'vehicle_description', 'kind', 'work_type', 'description', 'budget', 'source', 'follow_up_on'];
 const pick = (input) => Object.fromEntries(FIELDS.map((k) => [k, input[k] ?? null]));
 
 /** @returns {Promise<{ id: number, number: string }>} */
@@ -70,7 +75,7 @@ export async function createEnquiry(input, actor) {
     const [id] = await trx('enquiries').insert({
       ...pick(input), number, site_id: actor.site?.id ?? null, assigned_to: actor.user.id, created_by: actor.user.id,
     });
-    await audit(trx, actor, { entity: 'enquiry', id, action: 'create', summary: `${input.work_type} for ${input.caller_name} (${number})` });
+    await audit(trx, actor, { entity: 'enquiry', id, action: 'create', summary: `${labels(input).title} for ${input.caller_name} (${number})` });
     return { id, number };
   });
 }
@@ -149,10 +154,14 @@ export async function getEnquiry(id) {
       'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 'a.name as assigned_name');
   if (!e) return null;
   e.vehicle_label = e.vehicle_id ? vehicleLabel(e) : null;
+  Object.assign(e, labels(e));
   e.notes = await db('enquiry_notes as n').leftJoin('users as u', 'u.id', 'n.created_by')
     .where('n.enquiry_id', id).orderBy('n.id', 'desc').select('n.*', 'u.name as by_name');
   return e;
 }
+
+/** kind_label ("Fabrication") and what the enquiry is called ("Fabrication · Tipper"). */
+const labels = (e) => ({ kind_label: kindLabel(e.kind), title: [kindLabel(e.kind), e.work_type].filter(Boolean).join(' · ') || 'Enquiry' });
 
 function tabFilter(q, tab, today) {
   if (tab === 'follow') q.whereIn('e.status', ['open', 'quoted']).where('e.follow_up_on', '<=', today);
@@ -166,7 +175,7 @@ export async function listEnquiries({ tab = 'follow', q = '' } = {}) {
     .leftJoin('customers as c', 'c.id', 'e.customer_id')
     .leftJoin('users as a', 'a.id', 'e.assigned_to')
     .limit(200)
-    .select('e.id', 'e.number', 'e.status', 'e.caller_name', 'e.caller_phone', 'e.work_type', 'e.description', 'e.budget',
+    .select('e.id', 'e.number', 'e.status', 'e.caller_name', 'e.caller_phone', 'e.kind', 'e.work_type', 'e.description', 'e.budget',
       'e.follow_up_on', 'e.created_at', 'e.closed_at', 'e.lost_reason', 'e.customer_id', 'c.name as customer_name', 'a.name as assigned_name');
   const term = q.trim();
   if (term) {
@@ -182,7 +191,7 @@ export async function listEnquiries({ tab = 'follow', q = '' } = {}) {
   if (tab === 'follow' && !term) query.orderBy('e.follow_up_on').orderBy('e.id');
   else if (tab === 'closed' && !term) query.orderBy('e.closed_at', 'desc');
   else query.orderBy('e.created_at', 'desc');
-  return query;
+  return (await query).map((e) => ({ ...e, ...labels(e) }));
 }
 
 export async function countByTab() {
