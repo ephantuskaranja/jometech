@@ -23,8 +23,10 @@ export async function afterJobChange(user, jobId) {
     actions.push({ label: 'Start the job', post: `/jobs/${job.id}/start`, icon: 'play-fill', primary: true });
   }
   if (job.status === 'in_progress') {
-    const step = await db('job_steps').where({ job_id: job.id, status: 'pending' }).orderBy('sort_order').first('id', 'name', 'is_qc', 'is_signoff');
-    if (step?.is_qc && user.can('qc.manage')) actions.push({ label: 'Start the quality check', post: `/jobs/${job.id}/qc`, icon: 'shield-check', primary: true });
+    const step = await db('job_steps').where({ job_id: job.id, status: 'pending' }).orderBy('sort_order').first('id', 'name', 'is_receive', 'is_qc', 'is_signoff');
+    const vehicle = step?.is_receive ? await db('jobs').where({ id: job.id }).first('vehicle_id') : null;
+    if (vehicle?.vehicle_id && user.can('checkin.manage')) actions.push({ label: 'Check the vehicle in', href: `/check-in/new?vehicle_id=${vehicle.vehicle_id}`, icon: 'truck', primary: true });
+    else if (step?.is_qc && user.can('qc.manage')) actions.push({ label: 'Start the quality check', post: `/jobs/${job.id}/qc`, icon: 'shield-check', primary: true });
     else if (step?.is_signoff && user.can('jobs.manage')) actions.push({ label: 'Customer sign-off', href: `/jobs/${job.id}/signoff`, icon: 'pen', primary: true });
   }
   if (job.status === 'completed') {

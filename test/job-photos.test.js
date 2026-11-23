@@ -40,7 +40,7 @@ test('photos are filed under the step the job is at; anyone who sees the job see
   assert.equal(first.step_name, 'Vehicle Received');
 
   const step = await db('job_steps').where({ job_id: jobId, name: 'Vehicle Received' }).first();
-  await post(supervisor, `/jobs/${jobId}/steps/${step.id}/done`);
+  await post(supervisor, `/jobs/${jobId}/steps/${step.id}/skip`); // no vehicle: nothing to receive
   res = await upload(supervisor);
   assert.equal((await db('job_photos').where({ id: res.body.id }).first()).step_name, 'Inspection / Measurement');
 

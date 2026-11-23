@@ -35,11 +35,26 @@
   // The same main button as the "Next step" card, at the top on phones and tablets (where that card
   // is far down the page, under the steps). Big screens show the card beside the steps instead.
   const openQc = qcChecks.find((q) => q.status === 'in_progress');
+  // Vehicle Received waits for the vehicle's check-in (or, with no vehicle at all, may be skipped).
+  const noVehicle = !job.vehicle_id && !job.vehicle_description;
+  const waitVehicle = job.status === 'in_progress' && current?.is_receive ? {
+    tone: 'warning',
+    text: job.vehicle_id ? `Waiting for ${job.vehicle_label} to be checked in. ${current.name} is ticked off by its check-in.`
+      : job.vehicle_description ? `Waiting for the vehicle (${job.vehicle_description}). Once it is checked in, choose it on the job.`
+      : 'This job has no vehicle. Skip this step if none is coming.',
+    actions: [
+      ...(job.vehicle_id && canCheckIn ? [{ label: 'Check the vehicle in', href: `/check-in/new?vehicle_id=${job.vehicle_id}`, icon: 'truck', primary: true }] : []),
+      ...(!job.vehicle_id && job.vehicle_description && canManage ? [{ label: 'Choose the vehicle', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }] : []),
+      ...(noVehicle && canManage ? [{ label: 'Skip: no vehicle', post: `/jobs/${job.id}/steps/${current.id}/skip`, icon: 'dash-circle', primary: true }] : []),
+    ],
+  } : null;
   let top = null;
   if (job.status === 'open' && canManage) {
     top = { tone: 'info', text: 'Print the job card, then start the job when work begins.', actions: [
       { label: 'Start the job', post: `/jobs/${job.id}/start`, icon: 'play-fill', primary: true },
       { label: 'Job card', href: `/jobs/${job.id}/print`, icon: 'printer' }] };
+  } else if (waitVehicle) {
+    top = waitVehicle;
   } else if (job.status === 'in_progress' && current?.is_qc) {
     top = { tone: 'warning', text: `Now: ${current.name}.`, actions: canInspect
       ? [openQc ? { label: `Carry on with ${openQc.number}`, href: `/qc/${openQc.id}`, icon: 'clipboard-check', primary: true } : { label: 'Start quality check', post: `/jobs/${job.id}/qc`, icon: 'clipboard-check', primary: true }]
@@ -71,7 +86,7 @@
           <% job.steps.forEach((s) => { const isCurrent = current?.id === s.id; %>
             <li class="list-group-item is-<%= isCurrent ? 'current' : s.status %>">
               <i class="bi bi-<%= isCurrent ? 'arrow-right-circle-fill' : { done: 'check-circle-fill', skipped: 'dash-circle', pending: 'circle' }[s.status] %>" aria-hidden="true"></i>
-              <span class="jt-job-step-name"><%= s.name %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (s.is_signoff) { %> <i class="bi bi-pen text-body-tertiary" title="Ticked off by the customer’s sign-off"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %>
+              <span class="jt-job-step-name"><%= s.name %><% if (s.is_receive) { %> <i class="bi bi-truck text-body-tertiary" title="Ticked off by the vehicle’s check-in"></i><% } %><% if (s.is_qc) { %> <i class="bi bi-shield-check text-body-tertiary" title="Ticked off by a passed quality check"></i><% } %><% if (s.is_signoff) { %> <i class="bi bi-pen text-body-tertiary" title="Ticked off by the customer’s sign-off"></i><% } %><% if (isCurrent) { %> <span class="visually-hidden">(current step)</span><% } %>
                 <% if (s.rework_signoff_id && s.status === 'pending') { %>
                   <span class="d-block small mt-1"><span class="badge text-bg-danger">Rework</span> customer’s concerns</span>
                   <ul class="jt-rework-list small mb-0"><li><% if (s.rework_signer_name) { %><span class="text-body-secondary"><%= s.rework_signer_name %>:</span> <% } %><%= s.rework_concerns %></li></ul>
@@ -208,6 +223,21 @@
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-play-fill"></i>Start the job</button>
             </form>
+          <% } else if (waitVehicle) { %>
+            <%# Vehicle Received: ticked off only by the vehicle's check-in. %>
+            <div class="d-grid gap-2" x-show="!step">
+              <p class="small mb-0"><i class="bi bi-truck"></i> <%= waitVehicle.text %></p>
+              <% waitVehicle.actions.forEach((a) => { %>
+                <% if (a.post) { %>
+                  <form method="post" action="<%= a.post %>">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-outline-secondary w-100" type="submit"><i class="bi bi-<%= a.icon %>"></i><%= a.label %></button>
+                  </form>
+                <% } else { %>
+                  <a class="btn btn-primary btn-lg w-100" href="<%= a.href %>"><i class="bi bi-<%= a.icon %>"></i><%= a.label %></a>
+                <% } %>
+              <% }) %>
+            </div>
           <% } else if (current?.is_qc) { %>
             <%# The quality check step: ticked off only by a passed check. %>
             <% const openCheck = qcChecks.find((q) => q.status === 'in_progress'); %>

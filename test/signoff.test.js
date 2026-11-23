@@ -20,11 +20,11 @@ before(async () => {
   await post(sales, '/customers', { name: 'Signoff Transporters', phone: '0700000871' });
   customer = await db('customers').where({ phone: '+254700000871' }).first();
   repair = await db('job_types').where({ name: 'Repair', is_active: true }).first();
-  savedTypes = await db('job_types').select('id', 'qc_step', 'signoff_step');
+  savedTypes = await db('job_types').select('id', 'receive_step', 'qc_step', 'signoff_step');
 });
 
 after(async () => {
-  for (const t of savedTypes) await db('job_types').where({ id: t.id }).update({ qc_step: t.qc_step, signoff_step: t.signoff_step });
+  for (const t of savedTypes) await db('job_types').where({ id: t.id }).update({ receive_step: t.receive_step, qc_step: t.qc_step, signoff_step: t.signoff_step });
   await db('audit_log').where({ entity: 'job_type', entity_id: repair.id }).whereIn('user_id', db('users').where('phone', 'like', '+25470000%').select('id')).delete();
   await cleanup();
 });
@@ -40,7 +40,7 @@ const stepOf = (jobId, name) => db('job_steps').where({ job_id: jobId, name }).f
 /** Ticks the current steps off until the quality check; passes it if `pass`. */
 async function tickTo(id, { pass = true } = {}) {
   for (let step = await currentStep(id); step && !step.is_qc && !step.is_signoff; step = await currentStep(id)) {
-    await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
+    await post(supervisor, `/jobs/${id}/steps/${step.id}/${step.is_receive ? 'skip' : 'done'}`); // no vehicle: nothing to receive
   }
   if (!pass || !(await currentStep(id))?.is_qc) return;
   const check = idOf((await post(supervisor, `/jobs/${id}/qc`)).headers.location);

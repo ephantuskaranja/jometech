@@ -103,14 +103,15 @@ async function resolveType(trx, id) {
   return type?.id ?? null;
 }
 
-/** The job's own copy of its type's steps, with its quality check and customer sign-off steps marked. */
+/** The job's own copy of its type's steps, with its vehicle received, quality check and customer sign-off steps marked. */
 async function copySteps(trx, jobId, typeId) {
   await trx('job_steps').where({ job_id: jobId }).delete();
   if (!typeId) return;
-  const { qc_step: qcStep, signoff_step: signoffStep } = await trx('job_types').where({ id: typeId }).first('qc_step', 'signoff_step');
+  const { receive_step: receiveStep, qc_step: qcStep, signoff_step: signoffStep } = await trx('job_types').where({ id: typeId }).first('receive_step', 'qc_step', 'signoff_step');
   const steps = await trx('job_type_steps').where({ job_type_id: typeId }).orderBy('sort_order').pluck('name');
   if (steps.length) {
-    await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name, is_qc: name === qcStep, is_signoff: name === signoffStep && name !== qcStep })));
+    await trx('job_steps').insert(steps.map((name, i) => ({ job_id: jobId, sort_order: i + 1, name,
+      is_receive: i === 0 && name === receiveStep, is_qc: name === qcStep, is_signoff: name === signoffStep && name !== qcStep })));
   }
 }
 
@@ -233,6 +234,8 @@ export async function updateJob(id, input, actor) {
       before: await snapshot(trx, before, beforeLines),
       after: await snapshot(trx, { ...before, ...changes }, lines),
     });
+    // A vehicle chosen once it is checked in (the job had only a description): it has arrived.
+    if (vehicleChanged) await tickReceived(trx, id, actor);
   });
 }
 
@@ -273,6 +276,7 @@ export async function startJob(id, actor) {
     if (job.status !== 'open') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}, so it can’t be started.`);
     await trx('jobs').where({ id }).update({ status: 'in_progress', started_at: trx.fn.now() });
     await audit(trx, actor, { entity: 'job', id, action: 'job_started' });
+    await tickReceived(trx, id, actor);
   });
 }
 
@@ -315,6 +319,10 @@ export async function finishStep(jobId, stepId, status, actor) {
     if (step?.id !== stepId) return null;
     if (step.is_qc) throw httpError(409, `${step.name} is ticked off by a passed quality check. Start the quality check on the job.`);
     if (step.is_signoff) throw httpError(409, `${step.name} is ticked off by the customer’s sign-off. Open Customer sign-off on the job.`);
+    // Only a job with no vehicle at all may skip it; otherwise the vehicle's check-in ticks it off.
+    if (step.is_receive && (status === 'done' || job.vehicle_id || job.vehicle_description)) {
+      throw httpError(409, `${step.name} is ticked off when the vehicle is checked in. ${job.vehicle_id ? 'Check the vehicle in.' : 'Choose the vehicle on the job once it is checked in.'}`);
+    }
     await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(3), finished_by: actor.user.id });
     await audit(trx, actor, { entity: 'job', id: jobId, action: status === 'done' ? 'step_done' : 'step_skipped', summary: step.name });
     const next = await pendingStep(trx, jobId);
@@ -376,6 +384,7 @@ export async function undoStep(jobId, actor) {
     if (job.status !== 'in_progress') throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
     const step = await lastFinishedStep(trx, jobId);
     if (!step) throw httpError(409, 'No step has been ticked off yet.');
+    if (step.is_receive && step.status === 'done') throw httpError(409, `${step.name} follows the vehicle’s check-in, so it can’t be undone here.`);
     await reopenStep(trx, step);
     await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_undone', summary: step.name });
     return step.name;
@@ -408,6 +417,7 @@ export async function reopenJob(id, actor) {
       ...(checkin && checkin.id !== job.checkin_id ? { checkin_id: checkin.id } : {}),
     });
     await audit(trx, actor, { entity: 'job', id, action: 'reopened' });
+    await tickReceived(trx, id, actor);
   });
 }
 
@@ -418,7 +428,27 @@ export async function linkCheckin(trx, vehicleId, checkin, actor) {
   const jobs = await trx('jobs').where({ vehicle_id: vehicleId }).whereIn('status', ACTIVE).select('id');
   if (!jobs.length) return;
   await trx('jobs').whereIn('id', jobs.map((j) => j.id)).update({ checkin_id: checkin.id, site_id: checkin.site_id });
-  for (const { id } of jobs) await audit(trx, actor, { entity: 'job', id, action: 'vehicle_arrived', summary: `Check-in ${checkin.number}` });
+  for (const { id } of jobs) {
+    await audit(trx, actor, { entity: 'job', id, action: 'vehicle_arrived', summary: `Check-in ${checkin.number}` });
+    await tickReceived(trx, id, actor);
+  }
+}
+
+/**
+ * The job's Vehicle Received step is ticked off by the vehicle's check-in: when the job is under way,
+ * it is at that step, and its vehicle is checked in (at start, at check-in, when the vehicle is chosen,
+ * on reopening). Otherwise nothing happens; the job waits for its vehicle.
+ */
+export async function tickReceived(trx, jobId, actor) {
+  const job = await trx('jobs').where({ id: jobId }).first('id', 'status', 'checkin_id');
+  if (job?.status !== 'in_progress' || !job.checkin_id) return;
+  const step = await pendingStep(trx, jobId);
+  if (!step?.is_receive) return;
+  const checkin = await trx('checkins').where({ id: job.checkin_id }).whereIn('status', ['in_workshop', 'released']).first('number');
+  if (!checkin) return;
+  await trx('job_steps').where({ id: step.id }).update({ status: 'done', finished_at: trx.fn.now(3), finished_by: actor.user.id });
+  await audit(trx, actor, { entity: 'job', id: jobId, action: 'step_done', summary: `${step.name} (check-in ${checkin.number})` });
+  if (!(await pendingStep(trx, jobId))) await markCompleted(trx, jobId, actor);
 }
 
 /** The vehicle was received at another site: its active jobs go with it. */
@@ -465,7 +495,7 @@ export async function getJob(id) {
     .leftJoin('qc_inspections as rq', 'rq.id', 's.rework_qc_id')
     .leftJoin('customer_signoffs as rs', 'rs.id', 's.rework_signoff_id')
     .where('s.job_id', id).orderBy('s.sort_order')
-    .select('s.id', 's.name', 's.status', 's.is_qc', 's.is_signoff', 's.finished_at', 'u.name as finished_by_name', 's.rework_qc_id', 'rq.number as rework_qc_number',
+    .select('s.id', 's.name', 's.status', 's.is_receive', 's.is_qc', 's.is_signoff', 's.finished_at', 'u.name as finished_by_name', 's.rework_qc_id', 'rq.number as rework_qc_number',
       's.rework_signoff_id', 'rs.concerns as rework_concerns', 'rs.signer_name as rework_signer_name');
   // A step a failed quality check sent back: what to put right there.
   const reworked = job.steps.filter((s) => s.rework_qc_id && s.status === 'pending');

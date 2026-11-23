@@ -48,7 +48,7 @@ async function loadType(req) {
 }
 
 async function save(req, res, type) {
-  const values = { name: req.body.name ?? '', is_default: Boolean(req.body.is_default), qc_step: String(req.body.qc_step ?? '').replace(/\s+/g, ' ').trim(), signoff_step: String(req.body.signoff_step ?? '').replace(/\s+/g, ' ').trim() };
+  const values = { name: req.body.name ?? '', is_default: Boolean(req.body.is_default), receive_first: Boolean(req.body.receive_first), qc_step: String(req.body.qc_step ?? '').replace(/\s+/g, ' ').trim(), signoff_step: String(req.body.signoff_step ?? '').replace(/\s+/g, ' ').trim() };
   const { data, errors } = check(typeSchema, req.body);
   const { rows, steps, error } = readSteps(req.body);
   const all = { ...errors, ...(error ? { steps: error } : {}) };
@@ -59,11 +59,14 @@ async function save(req, res, type) {
   const signoffStep = values.signoff_step ? steps.find((s) => s.toLowerCase() === values.signoff_step.toLowerCase()) : null;
   if (values.signoff_step && !signoffStep) all.signoff_step = 'Choose one of the steps above, or No customer sign-off';
   else if (signoffStep && qcStep && steps.indexOf(signoffStep) <= steps.indexOf(qcStep)) all.signoff_step = 'The customer signs at a step after the quality check';
+  // The first step can be the one the vehicle's check-in ticks off (not also the quality check or sign-off).
+  const receiveStep = values.receive_first && steps.length ? steps[0] : null;
+  if (receiveStep && (receiveStep === qcStep || receiveStep === signoffStep)) all.receive_first = 'The first step is the quality check or sign-off, so the check-in can’t tick it off';
   const entries = type ? await history('job_type', type.id) : [];
   if (Object.keys(all).length) return renderForm(res, { status: 422, type, values, rows, errors: all, entries });
   try {
-    if (type) await types.updateType(type.id, { ...data, steps, qc_step: qcStep, signoff_step: signoffStep }, req);
-    else await types.createType({ ...data, steps, qc_step: qcStep, signoff_step: signoffStep }, req);
+    if (type) await types.updateType(type.id, { ...data, steps, receive_step: receiveStep, qc_step: qcStep, signoff_step: signoffStep }, req);
+    else await types.createType({ ...data, steps, receive_step: receiveStep, qc_step: qcStep, signoff_step: signoffStep }, req);
     req.session.flash = { type: 'success', text: `Saved “${data.name}”. New jobs of this type will use these steps.` };
     res.redirect('/admin/job-types');
   } catch (err) {
@@ -82,14 +85,14 @@ router.get('/admin/job-types/new', async (req, res) => {
   const steps = source?.steps ?? [];
   // A new type starts with a quality check at "Quality Inspection" when its list has one.
   const qcStep = source ? source.qc_step : null;
-  renderForm(res, { values: { name: '', is_default: false, qc_step: qcStep ?? '', signoff_step: source?.signoff_step ?? '' }, rows: steps });
+  renderForm(res, { values: { name: '', is_default: false, receive_first: source ? Boolean(source.receive_step) : true, qc_step: qcStep ?? '', signoff_step: source?.signoff_step ?? '' }, rows: steps });
 });
 
 router.post('/admin/job-types', (req, res) => save(req, res, null));
 
 router.get('/admin/job-types/:id', async (req, res) => {
   const type = await loadType(req);
-  renderForm(res, { type, values: { name: type.name, is_default: Boolean(type.is_default), qc_step: type.qc_step ?? '', signoff_step: type.signoff_step ?? '' }, rows: type.steps, entries: await history('job_type', type.id) });
+  renderForm(res, { type, values: { name: type.name, is_default: Boolean(type.is_default), receive_first: Boolean(type.receive_step), qc_step: type.qc_step ?? '', signoff_step: type.signoff_step ?? '' }, rows: type.steps, entries: await history('job_type', type.id) });
 });
 
 router.post('/admin/job-types/:id', async (req, res) => save(req, res, await loadType(req)));

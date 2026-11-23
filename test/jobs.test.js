@@ -236,6 +236,7 @@ test('start, complete, reopen and cancel, in the right order', async () => {
       await post(supervisor, `/jobs/${id}/signoff/not-signed`, { reason: 'other', other_reason: 'Owner approved by phone' });
       continue;
     }
+    if (step.is_receive) { await post(supervisor, `/jobs/${id}/steps/${step.id}/skip`); continue; } // no vehicle: nothing to receive
     if (!step.is_qc) { await post(supervisor, `/jobs/${id}/steps/${step.id}/done`); continue; }
     // The quality check step is ticked off by a passed check, not by hand.
     assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);
@@ -268,4 +269,85 @@ test('jobs are found by number, in the jobs list and the top-bar search', async 
   assert.ok(body.results.some((r) => r.url === `/jobs/${job.id}`));
   const found = await siteBOnly.get(`/api/search?q=${job.number}`).expect(200);
   assert.ok(!found.body.results.some((r) => r.url === `/jobs/${job.id}`), 'only jobs at the user’s own sites');
+});
+
+test('Vehicle Received is ticked off by the vehicle’s check-in, never by hand', async () => {
+  const csrf = csrfFrom((await sales.get('/vehicles/new')).text);
+  await sales.post('/vehicles').type('form').send({ _csrf: csrf, reg_no: 'KZW 812A', customer_id: other.id, type: 'truck', make: 'Isuzu' });
+  await sales.post('/vehicles').type('form').send({ _csrf: csrf, reg_no: 'KZW 813A', customer_id: other.id, type: 'truck', make: 'Hino' });
+  const [late, here] = await Promise.all(['KZW 812A', 'KZW 813A'].map((reg) => db('vehicles').where({ reg_no: reg }).first()));
+  const step1 = (jobId) => db('job_steps').where({ job_id: jobId, sort_order: 1 }).first();
+
+  // Opened and started before the vehicle comes: the job waits at Vehicle Received.
+  let res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: late.id, ...work });
+  const waiting = idOf(res.headers.location);
+  await post(supervisor, `/jobs/${waiting}/start`);
+  const step = await step1(waiting);
+  assert.equal(step.name, 'Vehicle Received');
+  assert.equal(step.is_receive, 1);
+  assert.equal(step.status, 'pending');
+  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/${step.id}/done`)).status, 409, 'not by hand');
+  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/${step.id}/skip`)).status, 409, 'nor skipped: a vehicle is coming');
+  const page = (await supervisor.get(`/jobs/${waiting}`)).text;
+  assert.match(page, /Waiting for KZW 812A to be checked in/);
+  assert.ok(page.includes(`href="/check-in/new?vehicle_id=${late.id}"`), 'a button to check it in');
+
+  // It arrives: the check-in ticks the step and the job moves on.
+  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: late.id });
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await step1(waiting)).status, 'done');
+  assert.equal((await step1(waiting)).finished_by, (await db('users').where({ phone: '+254700000081' }).first('id')).id);
+  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/undo`)).status, 409, 'only the check-in undoes it');
+  const logged = await db('audit_log').where({ entity: 'job', entity_id: waiting, action: 'step_done' }).first();
+  assert.match(logged.summary, /^Vehicle Received \(check-in CHK-/);
+
+  // Already checked in when the job starts: ticked at the start.
+  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: here.id });
+  res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: here.id, ...work });
+  const ready = idOf(res.headers.location);
+  assert.equal((await step1(ready)).status, 'pending', 'not before the job starts');
+  await post(supervisor, `/jobs/${ready}/start`);
+  assert.equal((await step1(ready)).status, 'done');
+  await post(supervisor, `/jobs/${ready}/cancel`, { reason: 'Test over' });
+  await post(supervisor, `/jobs/${waiting}/cancel`, { reason: 'Test over' });
+});
+
+test('a job with only a description waits until its vehicle is chosen; one with no vehicle skips the step', async () => {
+  let res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_description: 'New Isuzu NQR chassis', ...work });
+  const chassis = idOf(res.headers.location);
+  await post(supervisor, `/jobs/${chassis}/start`);
+  const step = await db('job_steps').where({ job_id: chassis, sort_order: 1 }).first();
+  assert.equal((await post(supervisor, `/jobs/${chassis}/steps/${step.id}/skip`)).status, 409, 'a vehicle is coming');
+  assert.match((await supervisor.get(`/jobs/${chassis}`)).text, /Once it is checked in, choose it on the job/);
+  // The chassis arrives and is checked in (KZW 813A stands in for it); choosing it on the job ticks the step.
+  const vehicle = await db('vehicles').where({ reg_no: 'KZW 813A' }).first();
+  res = await post(supervisor, `/jobs/${chassis}`, { customer_id: other.id, vehicle_id: vehicle.id, ...work });
+  assert.equal(res.status, 302, res.text);
+  assert.equal((await db('job_steps').where({ id: step.id }).first()).status, 'done');
+  await post(supervisor, `/jobs/${chassis}/cancel`, { reason: 'Test over' });
+
+  res = await post(supervisor, '/jobs', { customer_id: other.id, ...work });
+  const none = idOf(res.headers.location);
+  await post(supervisor, `/jobs/${none}/start`);
+  const first = await db('job_steps').where({ job_id: none, sort_order: 1 }).first();
+  assert.match((await supervisor.get(`/jobs/${none}`)).text, /This job has no vehicle/);
+  assert.equal((await post(supervisor, `/jobs/${none}/steps/${first.id}/done`)).status, 409);
+  assert.equal((await post(supervisor, `/jobs/${none}/steps/${first.id}/skip`)).status, 302, 'no vehicle: nothing to receive');
+  assert.equal((await db('job_steps').where({ id: first.id }).first()).status, 'skipped');
+  await post(supervisor, `/jobs/${none}/cancel`, { reason: 'Test over' });
+});
+
+test('job types say whether the check-in ticks off their first step', async () => {
+  const admin = await loginAs(app, await makeUser(85, ['admin']));
+  const repair = await db('job_types').where({ name: 'Repair' }).first();
+  assert.equal(repair.receive_step, 'Vehicle Received');
+  const steps = await db('job_type_steps').where({ job_type_id: repair.id }).orderBy('sort_order').pluck('name');
+  const form = { name: repair.name, step: steps, qc_step: repair.qc_step ?? '', signoff_step: repair.signoff_step ?? '' };
+  let res = await post(admin, `/admin/job-types/${repair.id}`, form);
+  assert.equal(res.status, 302);
+  assert.equal((await db('job_types').where({ id: repair.id }).first()).receive_step, null, 'unticked');
+  res = await post(admin, `/admin/job-types/${repair.id}`, { ...form, receive_first: '1' });
+  assert.equal(res.status, 302);
+  assert.equal((await db('job_types').where({ id: repair.id }).first()).receive_step, 'Vehicle Received');
+  assert.match((await admin.get(`/admin/job-types/${repair.id}`)).text, /name="receive_first" value="1" checked/);
 });

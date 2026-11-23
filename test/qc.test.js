@@ -10,7 +10,7 @@ import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
 
 const app = createApp();
 const FAB_RE = FAB.replace(/[()]/g, '\\$&');
-let admin, supervisor, technician, sales, customer, maintenance, repair, savedChecklist, savedQcStep, savedSignoffStep;
+let admin, supervisor, technician, sales, customer, maintenance, repair, savedChecklist, savedQcStep, savedSignoffStep, savedReceiveStep;
 
 before(async () => {
   admin = await loginAs(app, await makeUser(61, ['admin']));
@@ -23,6 +23,7 @@ before(async () => {
   repair = await db('job_types').where({ name: 'Repair', is_active: true }).first();
   savedQcStep = maintenance.qc_step;
   savedSignoffStep = maintenance.signoff_step;
+  savedReceiveStep = maintenance.receive_step;
   savedChecklist = await checklist();
 });
 
@@ -34,7 +35,7 @@ after(async () => {
     await db('qc_checklist_items').insert(s.items.map((text, j) => ({ section_id: id, sort_order: j + 1, text })));
   }
   await db('audit_log').where({ entity: 'qc_checklist' }).where('created_at', '>=', db.raw('NOW() - INTERVAL 1 HOUR')).whereIn('user_id', db('users').where('phone', 'like', '+25470000%').select('id')).delete();
-  await db('job_types').where({ id: maintenance.id }).update({ qc_step: savedQcStep, signoff_step: savedSignoffStep });
+  await db('job_types').where({ id: maintenance.id }).update({ receive_step: savedReceiveStep, qc_step: savedQcStep, signoff_step: savedSignoffStep });
   await db('audit_log').where({ entity: 'job_type', entity_id: maintenance.id }).whereIn('user_id', db('users').where('phone', 'like', '+25470000%').select('id')).delete();
   await cleanup();
 });
@@ -52,7 +53,7 @@ async function jobAtQc(type = maintenance) {
   await post(supervisor, `/jobs/${id}/start`);
   for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) {
     if (step.is_qc) break;
-    await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
+    await post(supervisor, `/jobs/${id}/steps/${step.id}/${step.is_receive ? 'skip' : 'done'}`); // no vehicle: nothing to receive
   }
   return id;
 }

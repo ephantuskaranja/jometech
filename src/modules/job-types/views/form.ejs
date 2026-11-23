@@ -45,6 +45,12 @@
 
       <section class="card mb-4">
         <div class="card-body d-grid gap-2">
+          <label class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="receive_first" value="1" <%= values.receive_first ? 'checked' : '' %>>
+            <span class="form-check-label">The first step (<span x-text="stepNames[0] || 'the first step'"></span>) is ticked off by the vehicle’s check-in</span>
+          </label>
+          <% if (errors.receive_first) { %><div class="jt-error-text"><%= errors.receive_first %></div><% } %>
+          <div class="form-text mt-0 mb-3">On a job, nobody ticks it by hand: it is done when the vehicle is checked in, so the job can’t move on without it.</div>
           <label class="form-label mb-0" for="f-qc_step">Quality check at</label>
           <select class="form-select<%= errors.qc_step ? ' is-invalid' : '' %>" id="f-qc_step" name="qc_step" x-model="qcStep" style="max-width: 24rem">
             <option value="">No quality check</option>
@@ -88,7 +94,7 @@
       <% } %>
       <section class="card">
         <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
-        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', default: 'Default', steps: 'Steps', qc_step: 'Quality check at', signoff_step: 'Customer signs at' } }) %></div>
+        <div class="card-body"><%- include('partials/history', { entries, labels: { name: 'Name', default: 'Default', steps: 'Steps', receive_step: 'Ticked by the check-in', qc_step: 'Quality check at', signoff_step: 'Customer signs at' } }) %></div>
       </section>
     </div>
   <% } %>

@@ -216,6 +216,7 @@ router.get('/jobs/:id', view, async (req, res) => {
     qcChecks: await qcForJob(job.id), qcStatuses: QC_STATUSES,
     signoffs: await signoffsForJob(job.id), signoffOutcomes: SIGNOFF_OUTCOMES,
     canInspect: req.user.can('qc.manage'),
+    canCheckIn: req.user.can('checkin.manage'),
     // Once the work is done: invoice, payment, release (core/next-steps.js).
     afterDone: job.status === 'completed' ? await afterJobChange(req.user, job.id) : [],
     // What the job earned: managers and admins.
