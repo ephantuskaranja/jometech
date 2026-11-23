@@ -8,6 +8,7 @@ import { httpError } from '../../core/validate.js';
 import { saveFile, removeFile } from '../../core/storage.js';
 import { createVehicle, typeLabel } from '../vehicles/service.js';
 import { linkCheckin } from '../jobs/service.js';
+import { PURPOSES as WORK_PURPOSES, kindLabel } from '../../core/work-kinds.js';
 
 // Check-in: the digital Truck Receiving Document.
 // The driver's signature (part 3), photos (part 4) and check-out (part 5) build on this.
@@ -18,16 +19,9 @@ export const FUEL_LEVELS = [
 ];
 export const fuelLabel = (q) => FUEL_LEVELS.find((f) => f.value === q)?.label ?? null;
 
-/** Why the vehicle came in. A fixed list (not the job types): many visits are not workshop jobs. */
-export const PURPOSES = [
-  { value: 'fabrication', label: 'Fabrication' },
-  { value: 'repairs', label: 'Repairs' },
-  { value: 'delivery', label: 'Delivery' },
-  { value: 'customer', label: 'Customer visit' },
-  { value: 'meeting', label: 'Official meeting' },
-  { value: 'other', label: 'Other' },
-];
-export const purposeLabel = (value) => PURPOSES.find((p) => p.value === value)?.label ?? null;
+/** Why the vehicle came in: the shared work kinds, or Others (deliveries and visits sign in as visitors). */
+export const PURPOSES = WORK_PURPOSES;
+export const purposeLabel = (value) => kindLabel(PURPOSES, value);
 
 export const STATUSES = {
   in_workshop: { label: 'In the workshop', tone: 'info' },

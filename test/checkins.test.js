@@ -36,12 +36,13 @@ test('purpose of visit is required and shows on the check-in and the list', asyn
   assert.equal(missing.status, 422);
   assert.match(missing.text, /Choose why the vehicle came in/);
 
-  const res = await checkIn({ purpose: 'meeting', vehicle_mode: 'existing', vehicle_id: vehicle.id });
+  assert.equal((await checkIn({ purpose: 'meeting', vehicle_mode: 'existing', vehicle_id: vehicle.id })).status, 422, 'meetings sign in as visitors');
+  const res = await checkIn({ purpose: 'modification', vehicle_mode: 'existing', vehicle_id: vehicle.id });
   assert.equal(res.status, 302);
   const id = Number(res.headers.location.match(/\/check-in\/(\d+)/)[1]);
-  assert.equal((await db('checkins').where({ id }).first('purpose')).purpose, 'meeting');
-  assert.match((await supervisor.get(`/check-in/${id}`)).text, /Purpose of visit[\s\S]*Official meeting/);
-  assert.match((await supervisor.get('/check-in')).text, /Official meeting/);
+  assert.equal((await db('checkins').where({ id }).first('purpose')).purpose, 'modification');
+  assert.match((await supervisor.get(`/check-in/${id}`)).text, /Purpose of visit[\s\S]*Modification/);
+  assert.match((await supervisor.get('/check-in')).text, /Modification/);
   // Remove it so the other tests find only their own check-in for this vehicle.
   await db('checkins').where({ id }).delete();
 });
