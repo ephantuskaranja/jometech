@@ -1,7 +1,7 @@
 // Quick picks for "what they want" on an enquiry (approved 2026-11-03).
 // Safe to run again: existing names are left alone, so edits made later are kept.
 
-const TYPES = ['Tipper', 'Dropside', 'Water bowser', 'Fuel tanker', 'Box body / van', 'Flatbed', 'Trailer', 'Repair / modification', 'Other'];
+const TYPES = ['Tipper', 'Dropside', 'Water bowser', 'Fuel tanker', 'Box body / van', 'Flatbed', 'Trailer', 'Other'];
 
 /** @param {import('knex').Knex} knex */
 export async function seed(knex) {

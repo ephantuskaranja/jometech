@@ -56,9 +56,9 @@ test('a new caller is a prospect: name, phone and what they want', async () => {
 
 test('an existing customer’s enquiry can name one of their vehicles, but not someone else’s', async () => {
   const other = await db('vehicles').whereNot({ customer_id: customer.id }).first('id');
-  let res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: other?.id ?? 999999 });
+  let res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Dropside', description: 'Tailgate hinge broken', vehicle_id: other?.id ?? 999999 });
   assert.equal(res.status, 422);
-  res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Repair / modification', description: 'Tailgate hinge broken', vehicle_id: vehicle.id });
+  res = await post('/enquiries', { customer_id: customer.id, caller_name: 'Driver Otieno', kind: 'repairs', work_type: 'Dropside', description: 'Tailgate hinge broken', vehicle_id: vehicle.id });
   assert.equal(res.status, 302, res.text);
   assert.equal(res.headers.location, '/enquiries?show=open');
   const page = (await sales.get(`/enquiries/${await newest('Driver Otieno')}`)).text;
@@ -130,6 +130,7 @@ test('the enquiry type is asked every time; a general enquiry needs no body type
   let res = await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'meeting', work_type: 'Tipper', description: 'Asked about prices' });
   assert.equal(res.status, 422, 'only the listed types');
   assert.match(res.text, /Choose the type of enquiry/);
+  assert.doesNotMatch(res.text, /Repair \/ modification/, 'the enquiry type covers repairs, so it is no longer a body type');
   res = await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'general', work_type: '', description: 'Asked what we make and our prices' });
   assert.equal(res.status, 302, res.text);
   const id = await newest('Achieng Otieno');
