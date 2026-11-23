@@ -28,7 +28,7 @@ after(cleanup);
 
 async function checkIn(fields) {
   const page = await supervisor.get('/check-in/new');
-  return supervisor.post('/check-in').type('form').send({ _csrf: csrfFrom(page.text), purpose: 'repairs', ...fields });
+  return supervisor.post('/check-in').type('form').send({ _csrf: csrfFrom(page.text), purpose: 'repairs', no_arrival_reason: 'Test: not through the gate', ...fields });
 }
 
 test('purpose of visit is required and shows on the check-in and the list', async () => {
@@ -402,4 +402,101 @@ test('a vehicle’s page lists its visits', async () => {
   assert.equal(numbers.length, 2, 'checked out, then back in');
   for (const n of numbers) assert.match(page, new RegExp(n));
   assert.match(page, /In the workshop/, 'the current visit shows its status');
+});
+
+// ---------- vehicles arriving at the gate ----------
+
+/** A vehicle of its own for each test here (KZY 300C is still in the workshop from the tests above). */
+async function ownVehicle(reg) {
+  const csrf = csrfFrom((await sales.get('/vehicles/new')).text);
+  await sales.post('/vehicles').type('form').send({ _csrf: csrf, reg_no: reg, customer_id: owner.id, type: 'truck', make: 'Isuzu' });
+  return db('vehicles').where({ reg_no: reg }).first();
+}
+
+test('a check-in is made from the gate’s arrival, or gives a reason', async () => {
+  const page = await supervisor.get('/check-in/new');
+  const res = await supervisor.post('/check-in').type('form').send({ _csrf: csrfFrom(page.text), purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: vehicle.id });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Choose the vehicle the gate logged in, or say why the gate didn’t log it/);
+});
+
+test('the gate logs a vehicle in; the workshop checks it in from there, or it is closed with a reason', async () => {
+  const vehicle = await ownVehicle('KZY 351C');
+  const gate = await loginAs(app, await makeUser(63, ['gate']));
+  const csrf = csrfFrom((await gate.get('/gate/vehicles').expect(200)).text);
+  const log = (fields) => gate.post('/gate/arrivals').type('form').send({ _csrf: csrf, ...fields });
+  await sales.get('/gate/vehicles').expect(403);
+
+  let res = await log({ vehicle_text: '', driver_name: '', purpose: '' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Type the reg, chassis or tag number/);
+  assert.match(res.text, /Type the driver’s name/);
+  assert.match(res.text, /Choose why it came/);
+
+  // A vehicle we know, typed any old way; a second tap gives the same arrival.
+  res = await log({ vehicle_text: 'kzy-351c', driver_name: 'Peter Mwangi', driver_phone: '0700 000 309', purpose: 'repairs', note: 'Brakes noisy' });
+  assert.equal(res.status, 302, res.text);
+  const known = await db('vehicle_arrivals').where({ vehicle_id: vehicle.id, status: 'waiting' }).first();
+  assert.match(known.number, /^ARR-\d{4}-\d{4}$/);
+  assert.equal(known.vehicle_text, 'KZY 351C');
+  assert.equal(known.driver_phone, '+254700000309');
+  await log({ vehicle_text: 'KZY 351C', driver_name: 'Peter Mwangi', purpose: 'repairs' });
+  assert.equal((await db('vehicle_arrivals').where({ vehicle_id: vehicle.id, status: 'waiting' })).length, 1, 'not logged twice');
+
+  // One we don't know yet: kept as typed.
+  res = await log({ vehicle_text: 'New Hino 500 chassis', driver_name: 'Ali Hassan', purpose: 'fabrication' });
+  assert.equal(res.status, 302);
+  const unknown = await db('vehicle_arrivals').where({ vehicle_text: 'New Hino 500 chassis' }).first();
+  assert.equal(unknown.vehicle_id, null);
+
+  // Both wait on the gate page and the check-in list.
+  assert.match((await gate.get('/gate/vehicles')).text, /Logged in, waiting for check-in[\s\S]*New Hino 500 chassis/);
+  const list = (await supervisor.get('/check-in')).text;
+  assert.ok(list.includes(`href="/check-in/new?arrival=${known.id}"`));
+  assert.ok(list.includes(`href="/check-in/new?arrival=${unknown.id}"`));
+
+  // Checked in from the arrival: the vehicle, the driver and the purpose come with it.
+  const form = (await supervisor.get(`/check-in/new?arrival=${known.id}`)).text;
+  assert.match(form, new RegExp(`name="arrival_id" value="${known.id}"`));
+  assert.match(form, /Peter Mwangi/);
+  assert.match(form, /value="repairs"[^>]*checked/);
+  const page = await supervisor.get(`/check-in/new?arrival=${known.id}`);
+  res = await supervisor.post('/check-in').type('form').send({ _csrf: csrfFrom(page.text), purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: vehicle.id, arrival_id: known.id, contact_id: 'name:Peter Mwangi', brought_by_phone: '0700 000 309' });
+  assert.equal(res.status, 302, res.text);
+  const checkin = await db('checkins').where({ vehicle_id: vehicle.id, status: 'in_workshop' }).first();
+  assert.equal(checkin.arrival_id, known.id);
+  assert.equal((await db('vehicle_arrivals').where({ id: known.id }).first()).status, 'checked_in');
+  assert.match((await supervisor.get(`/check-in/${checkin.id}`)).text, new RegExp(`At the gate[\\s\\S]*${known.number}`));
+  // Used once only.
+  res = await supervisor.post('/check-in').type('form').send({ _csrf: csrfFrom(page.text), purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: vehicle.id, arrival_id: known.id });
+  assert.equal(res.status, 422);
+  // Already inside: logging it in again is refused.
+  res = await log({ vehicle_text: 'KZY 351C', driver_name: 'Peter Mwangi', purpose: 'repairs' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /already checked in/);
+  await db('checkins').where({ id: checkin.id }).update({ status: 'cancelled' }); // leave the vehicle free for the next test
+
+  // Waiting over two hours: a warning on the workshop's dashboard.
+  await db('vehicle_arrivals').where({ id: unknown.id }).update({ arrived_at: new Date(Date.now() - 3 * 3_600_000) });
+  assert.match((await supervisor.get('/')).text, /1 vehicle at the gate over 2 hours, not checked in/);
+
+  // Nobody checks it in: closed with a reason, and it leaves the lists.
+  res = await gate.post(`/gate/arrivals/${unknown.id}/close`).type('form').send({ _csrf: csrf, reason: '' });
+  assert.equal((await db('vehicle_arrivals').where({ id: unknown.id }).first()).status, 'waiting', 'a reason is needed');
+  await gate.post(`/gate/arrivals/${unknown.id}/close`).type('form').send({ _csrf: csrf, reason: 'Driver left; back on Monday' });
+  const closed = await db('vehicle_arrivals').where({ id: unknown.id }).first();
+  assert.equal(closed.status, 'closed');
+  assert.equal(closed.close_reason, 'Driver left; back on Monday');
+  assert.doesNotMatch((await gate.get('/gate/vehicles')).text, /New Hino 500 chassis/);
+  assert.doesNotMatch((await supervisor.get('/')).text, /at the gate over 2 hours/);
+});
+
+test('a check-in without the gate says so, with the reason', async () => {
+  const vehicle = await ownVehicle('KZY 352C');
+  const res = await checkIn({ vehicle_mode: 'existing', vehicle_id: vehicle.id, no_arrival_reason: 'Gate not manned on Sunday' });
+  assert.equal(res.status, 302, res.text);
+  const id = Number(res.headers.location.match(/\/check-in\/(\d+)/)[1]);
+  assert.equal((await db('checkins').where({ id }).first()).no_arrival_reason, 'Gate not manned on Sunday');
+  assert.match((await supervisor.get(`/check-in/${id}`)).text, /Not logged at the gate[\s\S]*Gate not manned on Sunday/);
+  await db('checkins').where({ id }).delete();
 });

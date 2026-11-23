@@ -4,6 +4,7 @@ import { fmt } from '../../core/format.js';
 import { waiting as qcWaiting } from '../qc/service.js';
 import { monthLabel } from '../costing/running-costs.js';
 import { openRequests } from '../purchasing/requests.js';
+import { waitingAt as arrivalsAt, WAIT_WARN_HOURS } from '../checkins/arrivals.js';
 
 // "Needs attention" at the top of the dashboard: the actual things that are late or waiting, named,
 // each with a link. Only what this person deals with (by permission); nothing shows when all is well.
@@ -29,6 +30,18 @@ async function overdueJobs(site, today) {
   return group('jobs', 'bad', 'alarm', `${plural(rows.length, 'job')} past the promised date`, rows.map((j) => ({
     text: `${j.number} · ${j.customer_name}`, sub: `Promised ${day(j.due_on)}: ${plural(daysBetween(j.due_on, today), 'day')} late`, href: `/jobs/${j.id}`,
   })), '/jobs');
+}
+
+/**
+ * Vehicles the gate logged in more than WAIT_WARN_HOURS ago that nobody has checked in. One query for
+ * all those waiting: their number also feeds the dashboard's cards (hidden group `arrivals_waiting`).
+ */
+async function arrivalsWaiting(site) {
+  const all = await arrivalsAt(site.id);
+  const rows = all.filter((a) => a.hours_waiting >= WAIT_WARN_HOURS);
+  return [{ key: 'arrivals_waiting', total: all.length, hidden: true }, group('arrivals', 'warn', 'box-arrow-in-down', `${plural(rows.length, 'vehicle')} at the gate over ${WAIT_WARN_HOURS} hours, not checked in`, rows.map((a) => ({
+    text: `${a.vehicle_text} · ${a.driver_name}`, sub: `Logged in ${fmt.dateTime(a.arrived_at)} (${a.number}): check it in, or close it with a reason`, href: `/check-in/new?arrival=${a.id}`,
+  })), '/check-in')];
 }
 
 async function lowStock() {
@@ -137,6 +150,7 @@ export async function alertsFor(user, site) {
     site && can(user, 'jobs.manage', 'jobs.progress', 'checkin.manage') ? overdueJobs(site, today) : null,
     can(user, 'invoices.manage') ? overdueInvoices(today) : null,
     site && can(user, 'qc.manage') ? qcToDo(site) : null,
+    site && can(user, 'checkin.manage') ? arrivalsWaiting(site) : null,
     can(user, 'payroll.approve') ? payrollToApprove(siteIds) : null,
     can(user, 'inventory.approve') ? adjustmentsToApprove(siteIds) : null,
     can(user, 'purchasing.approve', 'purchasing.manage') ? purchaseRequests(user, siteIds, today) : null,
@@ -145,5 +159,5 @@ export async function alertsFor(user, site) {
     site && can(user, 'costing.view') ? runningCostsMissing(site, today, state) : null,
   ]);
   const done = list.flat().filter(Boolean);
-  return { groups: done.filter((g) => g.total > 0), totals: Object.fromEntries(done.map((g) => [g.key, g.total])) };
+  return { groups: done.filter((g) => g.total > 0 && !g.hidden), totals: Object.fromEntries(done.map((g) => [g.key, g.total])) };
 }

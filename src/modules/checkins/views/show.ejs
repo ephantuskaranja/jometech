@@ -27,6 +27,15 @@
       <div class="card-body">
         <dl class="jt-kv">
           <div><dt>Purpose of visit</dt><dd><%= purpose ?? '—' %></dd></div>
+          <div><dt>At the gate</dt><dd>
+            <% if (arrival) { %>
+              Logged in <%= fmt.dateTime(arrival.arrived_at) %> <span class="text-body-tertiary small font-monospace"><%= arrival.number %></span>
+              <span class="d-block small text-body-secondary">by <%= arrival.logged_name ?? 'a removed user' %>; driver <%= arrival.driver_name %></span>
+            <% } else if (checkin.no_arrival_reason) { %>
+              <span class="text-warning-emphasis">Not logged at the gate</span>
+              <span class="d-block small text-body-secondary"><%= checkin.no_arrival_reason %></span>
+            <% } else { %>—<% } %>
+          </dd></div>
           <div><dt>Owner</dt><dd><a href="/customers/<%= checkin.customer_id %>"><%= checkin.customer_name %></a> <span class="text-body-tertiary small"><%= checkin.customer_number %></span></dd></div>
           <div><dt>Brought in by</dt><dd>
             <% if (checkin.contact_name) { %>

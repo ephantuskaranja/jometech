@@ -179,7 +179,7 @@ test('a vehicle added later links its check-in; a later check-in links too; the 
   assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, null);
 
   // It arrives: the check-in finds the job.
-  res = await post(supervisor, '/check-in', { purpose: 'fabrication', vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job' });
+  res = await post(supervisor, '/check-in', { purpose: 'fabrication', vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job', no_arrival_reason: 'Test: not through the gate' });
   assert.equal(res.status, 302, res.text);
   const checkin = await db('checkins').where({ vehicle_id: vehicle.id, status: 'in_workshop' }).first();
   assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, checkin.id);
@@ -292,9 +292,20 @@ test('Vehicle Received is ticked off by the vehicle’s check-in, never by hand'
   assert.match(page, /Waiting for KZW 812A to be checked in/);
   assert.ok(page.includes(`href="/check-in/new?vehicle_id=${late.id}"`), 'a button to check it in');
 
-  // It arrives: the check-in ticks the step and the job moves on.
-  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: late.id });
+  // It arrives: the gate logs it in, the check-in is made from that, and the check-in ticks the step.
+  res = await post(gate, '/gate/arrivals', { vehicle_text: 'kzw812a', driver_name: 'Juma Otieno', driver_phone: '0700 000 819', purpose: 'repairs' });
   assert.equal(res.status, 302, res.text);
+  const arrival = await db('vehicle_arrivals').where({ vehicle_id: late.id, status: 'waiting' }).first();
+  assert.ok(arrival, 'the plate as typed finds the vehicle');
+  assert.ok((await supervisor.get(`/jobs/${waiting}`)).text.includes(`href="/check-in/new?vehicle_id=${late.id}"`));
+  const form = (await supervisor.get(`/check-in/new?vehicle_id=${late.id}`)).text;
+  assert.match(form, new RegExp(`name="arrival_id" value="${arrival.id}"`), 'the check-in picks up the gate’s arrival');
+  assert.match(form, /Juma Otieno/);
+  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: late.id, arrival_id: arrival.id, contact_id: 'name:Juma Otieno' });
+  assert.equal(res.status, 302, res.text);
+  const checkedIn = await db('vehicle_arrivals').where({ id: arrival.id }).first();
+  assert.equal(checkedIn.status, 'checked_in');
+  assert.equal((await db('checkins').where({ id: checkedIn.checkin_id }).first()).arrival_id, arrival.id);
   assert.equal((await step1(waiting)).status, 'done');
   assert.equal((await step1(waiting)).finished_by, (await db('users').where({ phone: '+254700000081' }).first('id')).id);
   assert.equal((await post(supervisor, `/jobs/${waiting}/steps/undo`)).status, 409, 'only the check-in undoes it');
@@ -302,7 +313,7 @@ test('Vehicle Received is ticked off by the vehicle’s check-in, never by hand'
   assert.match(logged.summary, /^Vehicle Received \(check-in CHK-/);
 
   // Already checked in when the job starts: ticked at the start.
-  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: here.id });
+  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: here.id, no_arrival_reason: 'Test: not through the gate' });
   res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: here.id, ...work });
   const ready = idOf(res.headers.location);
   assert.equal((await step1(ready)).status, 'pending', 'not before the job starts');

@@ -24,6 +24,37 @@
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <input type="hidden" name="vehicle_mode" :value="mode">
 
+  <%# ---------- From the gate: the arrival this check-in is made from ---------- %>
+  <section class="card mb-4" id="f-arrival_id" tabindex="-1">
+    <div class="card-header"><h2 class="h6 mb-0">From the gate</h2></div>
+    <div class="card-body d-grid gap-3">
+      <% if (arrival) { %>
+        <input type="hidden" name="arrival_id" value="<%= arrival.id %>">
+        <div class="jt-info-box"><i class="bi bi-box-arrow-in-down"></i><span>
+          <strong><%= arrival.vehicle_text %></strong> logged in <%= fmt.dateTime(arrival.arrived_at) %> (<%= arrival.number %>),
+          driven by <%= arrival.driver_name %><%= arrival.driver_phone ? `, ${fmt.phone(arrival.driver_phone)}` : '' %>.
+          <a href="/check-in/new">Not this one?</a></span></div>
+      <% } else { %>
+        <% if (waitingArrivals.length) { %>
+          <p class="small mb-0">Choose the vehicle the gate logged in:</p>
+          <div class="list-group">
+            <% waitingArrivals.forEach((a) => { %>
+              <a class="list-group-item list-group-item-action d-flex flex-wrap gap-2 align-items-center" href="/check-in/new?arrival=<%= a.id %>">
+                <strong class="font-monospace"><%= a.vehicle_text %></strong>
+                <span class="text-body-secondary small"><%= a.driver_name %> · <%= fmt.dateTime(a.arrived_at) %></span>
+                <span class="ms-auto small font-monospace text-body-tertiary"><%= a.number %></span>
+              </a>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="small mb-0">No vehicle is waiting at the gate. <a href="/gate/vehicles#arriving">Log it in</a> first, or say why the gate didn’t.</p>
+        <% } %>
+        <%- include('partials/field', { name: 'no_arrival_reason', label: 'Not logged at the gate? Say why', value: values.no_arrival_reason, error: errors.arrival_id,
+              placeholder: 'e.g. Gate not manned on Sunday', hint: 'Only when the gate didn’t log it in. The check-in is marked “Not logged at the gate”.' }) %>
+      <% } %>
+    </div>
+  </section>
+
   <%# ---------- Why it came in ---------- %>
   <section class="card mb-4">
     <div class="card-body">

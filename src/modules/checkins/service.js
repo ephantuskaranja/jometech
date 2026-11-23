@@ -8,6 +8,7 @@ import { httpError } from '../../core/validate.js';
 import { saveFile, removeFile } from '../../core/storage.js';
 import { createVehicle, typeLabel } from '../vehicles/service.js';
 import { linkCheckin } from '../jobs/service.js';
+import { claimArrival } from './arrivals.js';
 import { PURPOSES as WORK_PURPOSES, kindLabel } from '../../core/work-kinds.js';
 
 // Check-in: the digital Truck Receiving Document.
@@ -86,7 +87,11 @@ export async function createCheckin(input, actor) {
       fuel_quarters: input.fuel_quarters,
       remarks: input.remarks,
       received_by: actor.user.id,
+      // From the gate's log of the vehicle arriving, or (gate didn't log it) the reason why not.
+      arrival_id: input.arrival_id ?? null,
+      no_arrival_reason: input.arrival_id ? null : input.no_arrival_reason ?? null,
     });
+    if (input.arrival_id) await claimArrival(trx, input.arrival_id, { siteId: actor.site.id, checkinId: id, checkinNumber: number, vehicleId }, actor);
     if (input.items.length) {
       await trx('checkin_items').insert(input.items.map((item, i) => ({ checkin_id: id, ...item, sort_order: i + 1 })));
     }

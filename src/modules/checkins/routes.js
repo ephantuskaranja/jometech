@@ -9,6 +9,7 @@ import { check, httpError, optionalId, optionalPhone, optionalReading, optionalT
 import { storagePath } from '../../core/storage.js';
 import * as checkins from './service.js';
 import * as release from './release.js';
+import * as arrivals from './arrivals.js';
 import * as movements from '../movements/service.js';
 import { forCheckin, STATUSES as JOB_STATUSES } from '../jobs/service.js';
 import { afterCheckin, forCheckin as nextForCheckin } from '../../core/next-steps.js';
@@ -35,6 +36,8 @@ const checkinSchema = z.object({
   odometer_not_working: ticked,
   fuel_quarters: z.union([z.literal(''), z.coerce.number().int().min(0).max(4)]).optional().catch('').transform((v) => (v === '' || v === undefined ? null : v)),
   remarks: optionalText(2000),
+  arrival_id: optionalId(),
+  no_arrival_reason: optionalText(255),
 });
 
 // Only checked when "New vehicle" is chosen.
@@ -50,6 +53,7 @@ const newVehicleSchema = z.object({
 
 const blank = {
   vehicle_mode: 'existing', purpose: '', vehicle_id: '', contact_id: '', brought_by_phone: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
+  arrival_id: '', no_arrival_reason: '',
   reg_no: '', chassis_no: '', issue_tag: '', customer_id: '', type: 'truck', make: '', model: '',
 };
 
@@ -82,9 +86,13 @@ function readItems(body) {
 async function renderForm(res, { status = 200, values, rows = [], errors = {}, existingId = null }) {
   const vehicle = values.vehicle_mode !== 'new' && values.vehicle_id ? await checkins.vehicleSummary(Number(values.vehicle_id)) : null;
   const owner = values.vehicle_mode === 'new' && values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
+  const arrival = values.arrival_id ? await arrivals.getArrival(Number(values.arrival_id)) : null;
   res.status(status).render('checkins/views/form', {
     title: 'New check-in',
     values, errors, existingId, vehicle,
+    // From the gate: the arrival this check-in is made from, or those waiting here to choose from.
+    arrival: arrival?.status === 'waiting' ? arrival : null,
+    waitingArrivals: arrival?.status === 'waiting' ? [] : await arrivals.waitingAt(res.req.site.id),
     rows: rows.length ? rows : [{ description: '', quantity: '1' }],
     contact: broughtByName(values.contact_id) !== null
       ? { value: values.contact_id, label: `${broughtByName(values.contact_id)} (not a saved contact)` }
@@ -111,6 +119,7 @@ router.get('/check-in', view, async (req, res) => {
     list: tab === 'moves' ? [] : await checkins.listCheckins(req.site.id, tab === 'out' ? 'checked_out' : 'on_site'),
     moves: tab === 'moves' ? await movements.listMovements(req.site.id) : [],
     arriving: tab === 'in' ? await movements.arriving(req.site.id) : [],
+    atGate: tab === 'in' ? await arrivals.waitingAt(req.site.id) : [], warnHours: arrivals.WAIT_WARN_HOURS,
     hasOtherSites: (await movements.otherSites(req.site.id)).length > 0,
     inCount: await checkins.countInWorkshop(req.site.id),
     vehicleLabel, daysIn: checkins.daysIn, purposeLabel: checkins.purposeLabel,
@@ -124,6 +133,15 @@ router.get('/check-in/new', manage, async (req, res) => {
   const values = { ...blank };
   const vehicle = req.query.vehicle_id ? await checkins.vehicleSummary(Number(req.query.vehicle_id)) : null;
   if (vehicle) Object.assign(values, { vehicle_id: vehicle.id, contact_id: vehicle.contact?.value ?? '' });
+  // Made from the gate's log of it arriving (?arrival=7, or the vehicle's waiting arrival): what the gate wrote comes with it.
+  const arrival = req.query.arrival ? await arrivals.getArrival(Number(req.query.arrival)) : vehicle ? await arrivals.waitingFor(req.site.id, vehicle.id) : null;
+  if (arrival?.status === 'waiting' && arrival.site_id === req.site.id) {
+    Object.assign(values, {
+      arrival_id: arrival.id, purpose: arrival.purpose ?? values.purpose,
+      ...(arrival.vehicle_id && !vehicle ? { vehicle_id: arrival.vehicle_id, contact_id: (await checkins.vehicleSummary(arrival.vehicle_id))?.contact?.value ?? '' } : {}),
+      ...(values.contact_id ? {} : { contact_id: `name:${arrival.driver_name}`, brought_by_phone: arrival.driver_phone ?? '' }),
+    });
+  }
   renderForm(res, { values });
 });
 
@@ -150,6 +168,10 @@ router.post('/check-in', manage, async (req, res) => {
     errors.vehicle_id ??= 'Choose the vehicle, or switch to “New vehicle”';
   }
   if (itemsError) errors.items = itemsError;
+  // Every vehicle comes through the gate: choose its arrival, or say why the gate didn't log it.
+  if (!String(req.body.arrival_id ?? '').trim() && String(req.body.no_arrival_reason ?? '').trim().length < 3) {
+    errors.arrival_id = 'Choose the vehicle the gate logged in, or say why the gate didn’t log it';
+  }
   if (Object.keys(errors).length) return renderForm(res, { status: 422, values, rows, errors });
 
   try {
@@ -183,6 +205,7 @@ router.get('/check-in/:id', view, async (req, res) => {
     status: checkins.STATUSES[checkin.status],
     fuel: checkins.fuelLabel(checkin.fuel_quarters),
     purpose: checkins.purposeLabel(checkin.purpose),
+    arrival: checkin.arrival_id ? await arrivals.getArrival(checkin.arrival_id) : null,
     entries: await history('checkin', checkin.id),
     canConfirm: req.user.can('checkin.manage') && checkin.status === 'in_workshop' && !checkin.driver_signed_at && !checkin.not_signed_reason,
     canCheckOut: manages && atSite && checkin.status === 'in_workshop' && !move,
@@ -283,13 +306,62 @@ router.post('/check-in/:id/withdraw-release', allow, async (req, res) => {
 // ---------- the gate: released vehicles leave ----------
 
 const gate = canAny('checkin.gate');
+// Vehicles arriving: logged by the gate, or by someone who checks vehicles in (gate not manned).
+const logsArrivals = canAny('checkin.gate', 'checkin.manage');
 
-router.get('/gate/vehicles', gate, async (req, res) => {
+const ARRIVAL_BLANK = { vehicle_text: '', driver_name: '', driver_phone: '', purpose: '', note: '' };
+const arrivalSchema = z.object({
+  vehicle_text: z.string().trim().min(2, 'Type the reg, chassis or tag number, or describe the vehicle').max(60, 'Use 60 characters or fewer'),
+  driver_name: z.string().trim().min(2, 'Type the driver’s name').max(100, 'Use 100 characters or fewer'),
+  driver_phone: optionalPhone(),
+  purpose: z.enum(checkins.PURPOSES.map((p) => p.value), { message: 'Choose why it came' }),
+  note: optionalText(255),
+});
+
+async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, errors = {} } = {}) {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
-  res.render('checkins/views/gate', {
-    title: 'Vehicles at the gate', list: await release.waitingAtGate(req.site.id), vehicleLabel,
-    moves: await movements.atGate(req.site.id), // to and from the other sites
+  const canRelease = req.user.can('checkin.gate');
+  res.status(status).render('checkins/views/gate', {
+    title: 'Vehicles at the gate', vehicleLabel,
+    list: canRelease ? await release.waitingAtGate(req.site.id) : [],
+    moves: canRelease ? await movements.atGate(req.site.id) : { leaving: [], arriving: [] }, // to and from the other sites
+    waiting: await arrivals.waitingAt(req.site.id), // logged in, not yet checked in
+    canCheckIn: req.user.can('checkin.manage'), canRelease,
+    purposes: checkins.PURPOSES, warnHours: arrivals.WAIT_WARN_HOURS,
+    values, errors,
   });
+}
+
+router.get('/gate/vehicles', logsArrivals, (req, res) => renderGate(req, res));
+
+router.post('/gate/arrivals', logsArrivals, async (req, res) => {
+  if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
+  const values = { ...ARRIVAL_BLANK, ...req.body };
+  const { data, errors } = check(arrivalSchema, req.body);
+  if (errors && Object.keys(errors).length) return renderGate(req, res, { status: 422, values, errors });
+  try {
+    const a = await arrivals.logArrival({ siteId: req.site.id, vehicleText: data.vehicle_text, driverName: data.driver_name, driverPhone: data.driver_phone, purpose: data.purpose, note: data.note }, req);
+    req.session.flash = a.existed
+      ? { type: 'info', text: `${a.number}: already logged in, waiting for check-in.` }
+      : { type: 'success', text: `Logged in as ${a.number}${a.vehicle ? ` (${vehicleLabel(a.vehicle)}, ${a.vehicle.customer_name})` : ''}. The workshop checks it in next.` };
+    res.redirect(req.body.back === 'checkin' ? `/check-in/new?arrival=${a.id}` : '/gate/vehicles');
+  } catch (err) {
+    if (!err.field) throw err;
+    renderGate(req, res, { status: 422, values, errors: { [err.field]: err.message } });
+  }
+});
+
+router.post('/gate/arrivals/:id/close', logsArrivals, async (req, res) => {
+  const reason = String(req.body.reason ?? '').trim().replace(/\s+/g, ' ');
+  const a = await arrivals.getArrival(Number(req.params.id));
+  if (!a) throw httpError(404, 'That arrival doesn’t exist.');
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'danger', text: `Say why ${a.number} is being closed (3 to 255 characters).` };
+    return res.redirect('/gate/vehicles');
+  }
+  await arrivals.closeArrival(a.id, reason, req);
+  req.session.flash = { type: 'success', text: `${a.number} closed: ${reason}` };
+  res.redirect(req.body.back === 'checkin' ? '/check-in' : '/gate/vehicles');
 });
 
 router.post('/check-in/:id/clear', gate, async (req, res) => {

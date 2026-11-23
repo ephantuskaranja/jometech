@@ -1,0 +1,44 @@
+<%#
+  Vehicles the gate logged in that nobody has checked in yet (arrivals.js), on the gate page and the
+  check-in list. Check in (workshop) or close with a reason (left, logged by mistake), so none hangs.
+  Locals: waiting (arrivals.waitingAt), back ('gate' | 'checkin': where closing returns to)
+%>
+<% if (waiting.length) { %>
+  <h2 class="h6 text-body-secondary text-uppercase mb-3">Logged in, waiting for check-in</h2>
+  <div class="d-grid gap-3 mb-4">
+    <% waiting.forEach((a) => { const late = a.hours_waiting >= warnHours; %>
+      <section class="card<%= late ? ' border-warning' : '' %>">
+        <div class="card-body d-grid gap-3">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <% if (a.reg_no) { %><%- include('partials/plate', { reg: a.reg_no, size: 'lg' }) %><% } else { %><strong class="font-monospace fs-5"><%= a.vehicle_text %></strong><% } %>
+            <div>
+              <div class="fw-semibold"><%= [a.make, a.model].filter(Boolean).join(' ') || (a.vehicle_id ? 'Vehicle' : 'Not on file yet') %></div>
+              <% if (a.customer_name) { %><div class="small text-body-secondary"><%= a.customer_name %></div><% } %>
+            </div>
+            <span class="ms-auto"><%- include('partials/pill', { text: late ? `Waiting over ${warnHours} h` : 'Waiting for check-in', tone: 'warn' }) %></span>
+          </div>
+          <dl class="jt-kv mb-0">
+            <div><dt>Driver</dt><dd><strong><%= a.driver_name %></strong><% if (a.driver_phone) { %><span class="d-block small"><%= fmt.phone(a.driver_phone) %></span><% } %></dd></div>
+            <% if (a.purpose_label) { %><div><dt>Why</dt><dd><%= a.purpose_label %></dd></div><% } %>
+            <div><dt>Arrived</dt><dd><%= fmt.dateTime(a.arrived_at) %><span class="d-block small text-body-secondary"><%= a.number %> · by <%= a.logged_name ?? 'a removed user' %></span></dd></div>
+            <% if (a.note) { %><div><dt>Note</dt><dd><%= a.note %></dd></div><% } %>
+          </dl>
+          <div class="d-grid gap-2">
+            <% if (canCheckIn) { %>
+              <a class="btn btn-primary btn-lg w-100" href="/check-in/new?arrival=<%= a.id %>"><i class="bi bi-truck"></i>Check it in</a>
+            <% } %>
+            <details>
+              <summary class="small text-body-secondary">Left without a check-in, or logged by mistake?</summary>
+              <form method="post" action="/gate/arrivals/<%= a.id %>/close" class="d-grid gap-2 mt-2">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="back" value="<%= back %>">
+                <%- include('partials/field', { name: 'reason', id: `close-reason-${a.id}`, label: 'Why close it?', required: true, placeholder: 'e.g. Driver left; will come back on Monday' }) %>
+                <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-x-circle"></i>Close <%= a.number %></button>
+              </form>
+            </details>
+          </div>
+        </div>
+      </section>
+    <% }) %>
+  </div>
+<% } %>

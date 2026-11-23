@@ -8,7 +8,7 @@ import { makeUser, loginAs, cleanup } from './helpers.js';
 // (for a manager, who sees the most). If a change goes over, make the page do less
 // work (one query for several counts, no query inside a loop) before raising a limit.
 const BUDGET = {
-  '/': 32, // 30 → 32 with Needs attention (8 checks; the number cards reuse their totals; 39 → 32)
+  '/': 33, // 30 → 32 with Needs attention (8 checks; the number cards reuse their totals; 39 → 32); 33: vehicles at the gate (one list feeds the warning and both cards; 35 → 33)
   '/visitors': 10,
   '/jobs': 10,
   '/check-in': 10,

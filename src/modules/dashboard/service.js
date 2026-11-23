@@ -15,6 +15,7 @@ import { passesAtGate } from '../issues/service.js';
 import { counts as visitorCounts } from '../visitors/service.js';
 import { counts as bookingCounts } from '../visitors/bookings.js';
 import { waitingAtGate } from '../checkins/release.js';
+import { waitingAt as arrivalsWaiting } from '../checkins/arrivals.js';
 
 // The dashboard: one section per area the person works in (from their permissions),
 // each a strip of numbers that open the list behind them. Workshop, visitors and
@@ -39,6 +40,7 @@ async function workshop(user, site, known) {
     { label: 'Overdue', value: overdue, foot: 'past the promised date', icon: 'exclamation-triangle', href: '/jobs', tone: 'warn' },
     { label: 'Due this week', value: dueWeek, foot: 'promised in the next 7 days', icon: 'calendar-week', href: '/jobs' },
   ];
+  if (can(user, 'checkin.manage')) items.push({ label: 'At the gate', value: known.arrivals_waiting ?? (await arrivalsWaiting(site.id)).length, foot: 'logged in, to check in', icon: 'box-arrow-in-down', href: '/check-in', tone: 'warn', hideZero: true });
   if (can(user, 'checkin.manage')) items.push({ label: 'Arriving', value: coming.length, foot: 'vehicles sent from another site', icon: 'arrow-left-right', href: '/check-in?show=moves', tone: 'info', hideZero: true });
   if (can(user, 'jobs.manage')) {
     const waiting = await jobs.waitingProformas([site.id]);
@@ -109,7 +111,7 @@ async function people(user, site, siteIds, known) {
 }
 
 /** Visitors today at the site. The gate also sees vehicles to release; reception, those received today and why people came. */
-async function visitors(user, site) {
+async function visitors(user, site, known = {}) {
   if (!can(user, 'visitors.view', 'visitors.gate', 'visitors.receive')) {
     if (!can(user, 'visitors.book')) return null;
     // Booking only (sales): what they booked is on the expected list.
@@ -129,6 +131,7 @@ async function visitors(user, site) {
   ];
   items.push({ label: 'Expected today', value: (await bookingCounts(site.id)).today, foot: 'booked, not yet arrived', icon: 'calendar-event', href: '/visitors/expected', tone: 'info' });
   if (can(user, 'checkin.gate')) {
+    items.push({ label: 'Waiting for check-in', value: known.arrivals_waiting ?? (await arrivalsWaiting(site.id)).length, foot: 'vehicles logged in here', icon: 'box-arrow-in-down', href: '/gate/vehicles', tone: 'warn', hideZero: true });
     items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' });
   }
   if (can(user, 'goods.gate')) {
@@ -152,7 +155,7 @@ export async function sectionsFor(user, site, known = {}) {
     sales(user),
     stores(user, siteIds, known),
     site ? people(user, site, siteIds, known) : null,
-    site ? visitors(user, site) : null,
+    site ? visitors(user, site, known) : null,
   ]);
   // A card marked hideZero only matters when there is something in it.
   return list.filter(Boolean).map((sec) => ({ ...sec, items: sec.items.filter((k) => !(k.hideZero && k.value === 0)) }));

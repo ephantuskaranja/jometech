@@ -9,7 +9,7 @@
 export const PERMISSIONS = [
   // module, key, description
   ['Workshop', 'checkin.manage', 'Check vehicles in and out'],
-  ['Workshop', 'checkin.gate', 'Clear released vehicles out at the gate'],
+  ['Workshop', 'checkin.gate', 'Log vehicles in at the gate, and clear released vehicles out'],
   ['Workshop', 'jobs.view', 'See jobs and their details'],
   ['Workshop', 'jobs.manage', 'Create jobs, move stages, assign work'],
   ['Workshop', 'jobs.progress', 'Update own tasks and add photos'],
@@ -74,7 +74,7 @@ export const ROLES = [
   // Gate and Reception choose their site when they log in and keep it until they log out.
   {
     key: 'gate', name: 'Gate', site_at_login: true,
-    description: 'The gate: visitors in and out, and released vehicles out',
+    description: 'The gate: visitors in and out, vehicles in, and released vehicles out',
     permissions: ['visitors.gate', 'visitors.view', 'checkin.gate', 'goods.gate'],
   },
   {
