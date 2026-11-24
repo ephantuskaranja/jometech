@@ -16,7 +16,7 @@ import { forJob as qcForJob, STATUSES as QC_STATUSES } from '../qc/service.js';
 import { forJob as signoffsForJob, OUTCOMES as SIGNOFF_OUTCOMES } from '../qc/signoff.js';
 import { jobCosting } from '../costing/service.js';
 import * as customers from '../customers/service.js';
-import { vehicleOptions } from '../enquiries/service.js';
+import { vehicleLabel } from '../../core/vehicle-format.js';
 import { getVehicle } from '../vehicles/service.js';
 import { typeOptions } from '../job-types/service.js';
 import { ordersForJob, STATUSES as ORDER_STATUSES } from '../purchasing/service.js';
@@ -102,6 +102,10 @@ function blockerNotice(req, blocker, next) {
       if (req.user.can('jobs.manage')) actions.push({ label: `Edit ${job.number}`, href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true });
       actions.push({ label: `Open ${job.number}`, href: `/jobs/${job.id}`, icon: 'box-arrow-up-right' });
     } else text += ` It is at ${job.site_name}: ask someone there.`;
+  } else if (blocker.kind === 'not_in') {
+    // Sheet row 49: the gate logs the vehicle in, the workshop checks it in, then its job is opened.
+    if (req.user.can('checkin.manage')) actions.push({ label: 'Check it in', href: `/check-in/new?vehicle_id=${blocker.vehicle.id}`, icon: 'box-arrow-in-down', primary: true });
+    else text += ' Ask the supervisor to check it in.';
   } else if (blocker.kind === 'site') {
     const { site } = blocker;
     if (worksAt(req, site.id) && !req.session.siteLocked) {
@@ -130,7 +134,9 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
     supervisorHelp: noSupervisors ? { site: job?.site_name ?? req.site.name, canAdd: req.user.can('users.manage') } : null,
     rows: rows.length ? rows : [blankRow()],
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
-    vehicleOptions: customer ? await vehicleOptions(customer.id) : [],
+    // Only vehicles checked in here can be chosen; the others say why not (sheet row 49).
+    vehicleOptions: customer ? await jobs.vehicleChoices(customer.id, job?.site_id ?? req.site.id, job?.vehicle_id ?? null) : [],
+    canCheckIn: req.user.can('checkin.manage'),
     categories: customers.CATEGORIES, // "Add new customer" window
   });
 }
@@ -149,6 +155,8 @@ router.get('/jobs', view, async (req, res) => {
     waiting: canStart && tab === 'active' && !q ? await jobs.waitingProformas(siteIds) : [],
     jobTypes: await typeOptions(),
     canManage: req.user.can('jobs.manage'),
+    canCheckIn: req.user.can('checkin.manage'),
+    vehicleLabel,
     manySites: siteIds.length > 1,
   });
 });
@@ -359,10 +367,10 @@ router.post('/proformas/:id/job', fromProforma, async (req, res) => {
   needSite(req);
   let job;
   try {
-    job = await jobs.createFromProforma(Number(req.params.id), Number(req.body.job_type_id) || null, req);
+    job = await jobs.createFromProforma(Number(req.params.id), Number(req.body.job_type_id) || null, req, Number(req.body.vehicle_id) || null);
   } catch (err) {
     if (!err.blocker) throw err;
-    const notice = blockerNotice(req, err.blocker, `/proformas/${req.params.id}`);
+    const notice = err.blocker.kind === 'no_vehicle' ? { text: err.blocker.message, actions: [] } : blockerNotice(req, err.blocker, `/proformas/${req.params.id}`);
     req.session.flash = { type: 'warning', text: notice.text, actions: notice.actions };
     return res.redirect(`/proformas/${req.params.id}`);
   }
@@ -376,7 +384,7 @@ router.post('/proformas/:id/job', fromProforma, async (req, res) => {
 
 router.get('/api/jobs/vehicles', manage, async (req, res) => {
   const id = Number(req.query.customer_id);
-  res.json(id ? await vehicleOptions(id) : []);
+  res.json(id && req.site ? await jobs.vehicleChoices(id, req.site.id) : []);
 });
 
 // ---------- variations: extra work agreed after the job was priced (sales, managers, admins) ----------

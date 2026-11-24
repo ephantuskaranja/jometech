@@ -11,6 +11,7 @@ import * as proformas from './service.js';
 import * as customers from '../customers/service.js';
 import * as enquiries from '../enquiries/service.js';
 import { typeOptions } from '../job-types/service.js';
+import { vehicleBlocker, vehicleChoices } from '../jobs/service.js';
 import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Proformas: write one (or copy another), send it, then accepted / declined / revised.
@@ -117,14 +118,33 @@ router.post('/proformas', manage, async (req, res) => {
   }
 });
 
+/**
+ * Can the accepted proforma's job start now? Only once its vehicle is checked in here (sheet row 49).
+ * startBlock says why not (and links to the check-in); startVehicles are the customer's vehicles
+ * to choose from when the proforma only described one.
+ */
+async function jobStart(req, proforma) {
+  const checkInHref = (id) => (req.user.can('checkin.manage') ? `/check-in/new${id ? `?vehicle_id=${id}` : ''}` : null);
+  if (proforma.vehicle_id) {
+    const blocker = await vehicleBlocker(proforma.vehicle_id, { siteId: req.site?.id ?? null });
+    return { startBlock: blocker ? { text: blocker.message, checkInHref: blocker.kind === 'not_in' ? checkInHref(proforma.vehicle_id) : null } : null, startVehicles: [] };
+  }
+  const startVehicles = req.site ? await vehicleChoices(proforma.customer_id, req.site.id) : [];
+  const startBlock = startVehicles.some((v) => !v.disabled) ? null
+    : { text: `${proforma.number} has no vehicle on file. Check the customer’s vehicle in here, then choose it to start the job.`, checkInHref: checkInHref(null) };
+  return { startBlock, startVehicles };
+}
+
 router.get('/proformas/:id', manage, async (req, res) => {
   const proforma = await loadProforma(req);
+  const waitingForJob = proforma.status === 'accepted' && !proforma.job;
   res.render('proformas/views/show', {
     title: `Proforma ${proforma.number}`, proforma,
     statuses: proformas.STATUSES, declineReasons: proformas.DECLINE_REASONS,
     vat: proformas.vatIn(proforma.total), vatRate: config.vatRate,
     entries: await history('proforma', proforma.id),
-    jobTypes: proforma.status === 'accepted' && !proforma.job ? await typeOptions() : [],
+    jobTypes: waitingForJob ? await typeOptions() : [],
+    ...(waitingForJob ? await jobStart(req, proforma) : { startBlock: null, startVehicles: [] }),
     // Pricing advice while it can still change (managers and admins).
     guide: ['draft', 'sent'].includes(proforma.status) ? await guideFor(req.user, Number(proforma.total)) : null,
   });
@@ -165,7 +185,9 @@ router.post('/proformas/:id/accept', manage, async (req, res) => {
   await proformas.closeProforma(proforma.id, { status: 'accepted' }, req);
   req.session.flash = {
     type: 'success', text: `${proforma.number} accepted.${proforma.enquiry_id ? ` Enquiry ${proforma.enquiry_number} closed as won.` : ''}`,
-    actions: req.user.can('jobs.manage') || req.user.can('quotations.manage') ? [{ label: 'Open the job', post: `/proformas/${proforma.id}/job`, icon: 'wrench', primary: true }] : [],
+    // One click opens the job when its vehicle is already checked in here; otherwise the proforma page says what's needed.
+    actions: (req.user.can('jobs.manage') || req.user.can('quotations.manage')) && proforma.vehicle_id && !(await jobStart(req, proforma)).startBlock
+      ? [{ label: 'Open the job', post: `/proformas/${proforma.id}/job`, icon: 'wrench', primary: true }] : [],
   };
   res.redirect(`/proformas/${proforma.id}`);
 });

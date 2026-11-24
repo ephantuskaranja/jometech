@@ -12,7 +12,8 @@ import { httpError } from '../../core/validate.js';
 //
 // From an accepted proforma the customer, vehicle and lines are copied, without prices,
 // and stay fixed: later changes will be variations. A job with no proforma can be edited.
-// The vehicle may come later. Its check-in links by itself, and the job follows it between sites.
+// A job is opened only for a vehicle checked in at that site (sheet row 49), and follows it between sites.
+// Older jobs opened before that rule may still have no vehicle; their check-in links by itself.
 //
 // Steps: a job copies the list of its job type (System → Job types & steps) and keeps that copy.
 // One step is current at a time. Finishing or skipping the last one completes the job.
@@ -38,8 +39,10 @@ const openCheckin = (trx, vehicleId) => (vehicleId
 /**
  * What stops a job being opened on this vehicle, or null:
  *   running  it already has a job open or in progress: that job is edited instead of opening another
+ *   not_in   it isn't checked in: the gate logs it in and the workshop checks it in first (sheet row 49)
  *   site     it is checked in at another site: the person switches to that site to open its job
  * @returns {Promise<null | { kind: 'running', message: string, job: { id: number, number: string, site_id: number, site_name: string } }
+ *                        | { kind: 'not_in', message: string, vehicle: { id: number, label: string } }
  *                        | { kind: 'site', message: string, site: { id: number, name: string } }>}
  */
 export async function vehicleBlocker(vehicleId, { siteId = null, exceptJobId = null } = {}, trx = db) {
@@ -54,8 +57,9 @@ export async function vehicleBlocker(vehicleId, { siteId = null, exceptJobId = n
   if (running) {
     return { kind: 'running', job: running, message: `${label} already has job ${running.number} ${running.status === 'open' ? 'open' : 'in progress'}. Add the work to that job instead of opening another.` };
   }
-  const checkin = siteId ? await openCheckin(trx, vehicleId) : null;
-  if (checkin && checkin.site_id !== siteId) {
+  const checkin = await openCheckin(trx, vehicleId);
+  if (!checkin) return { kind: 'not_in', vehicle: { id: vehicleId, label }, message: `${label} isn’t checked in. Check it in first, then open its job.` };
+  if (siteId && checkin.site_id !== siteId) {
     const site = await trx('sites').where({ id: checkin.site_id }).first('id', 'name');
     return { kind: 'site', site, message: `${label} is checked in at ${site.name}, not here. Switch to ${site.name} to open its job.` };
   }
@@ -140,10 +144,35 @@ async function snapshot(trx, job, lines) {
   };
 }
 
-/** A job with no proforma. @returns {Promise<{ id: number, number: string }>} */
+/**
+ * The customer's vehicles for the job form, each saying whether a job can be opened on it here:
+ * checked in at this site with no other job running. `keepId` (the job's own vehicle) is always open.
+ * @returns {Promise<Array<{ value: number, label: string, disabled: boolean }>>}
+ */
+export async function vehicleChoices(customerId, siteId, keepId = null) {
+  const rows = await db('vehicles').where({ customer_id: customerId }).orderBy('reg_no').select('id', 'reg_no', 'chassis_no', 'temp_tag', 'make', 'model');
+  const ids = rows.map((v) => v.id);
+  const inside = new Map((await db('checkins as c').join('sites as s', 's.id', 'c.site_id').whereIn('c.vehicle_id', ids).where('c.status', 'in_workshop')
+    .select('c.vehicle_id', 'c.site_id', 's.name as site_name')).map((c) => [c.vehicle_id, c]));
+  const running = new Map((await db('jobs').whereIn('vehicle_id', ids).whereIn('status', ACTIVE).select('vehicle_id', 'number')).map((j) => [j.vehicle_id, j.number]));
+  return rows.map((v) => {
+    const label = [vehicleLabel(v), [v.make, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+    const at = inside.get(v.id);
+    const why = v.id === keepId ? null
+      : running.has(v.id) ? `job ${running.get(v.id)} running`
+        : !at ? 'not checked in'
+          : at.site_id !== siteId ? `checked in at ${at.site_name}` : null;
+    return { value: v.id, label: why ? `${label} (${why})` : label, disabled: Boolean(why) };
+  });
+}
+
+/** A job with no proforma, for a vehicle checked in here. @returns {Promise<{ id: number, number: string }>} */
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
-    // One running job per vehicle, opened at the site the vehicle is at.
+    if (!input.vehicle_id) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
+    const owner = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
+    if (owner?.customer_id !== input.customer_id) throw err(422, 'Choose one of this customer’s vehicles', 'vehicle_id');
+    // One running job per vehicle, opened at the site the vehicle is checked in at.
     await refuseIfBlocked(trx, input.vehicle_id, { siteId: actor.site.id });
     const checkin = await openCheckin(trx, input.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
@@ -166,21 +195,30 @@ export async function createJob(input, actor) {
  * One click on an accepted proforma. Asking twice (a double click, two people) gives the same job.
  * @returns {Promise<{ id: number, number: string, site_id: number, existed: boolean }>}
  */
-export async function createFromProforma(proformaId, jobTypeId, actor) {
+export async function createFromProforma(proformaId, jobTypeId, actor, chosenVehicleId = null) {
   return db.transaction(async (trx) => {
     const p = await trx('proformas').where({ id: proformaId }).forUpdate().first();
     if (!p) throw httpError(404, 'That proforma doesn’t exist.');
     const existing = await trx('jobs').where({ proforma_id: p.id }).first('id', 'number', 'site_id');
     if (existing) return { ...existing, existed: true };
     if (p.status !== 'accepted') throw httpError(409, `Only an accepted proforma can become a job. ${p.number} hasn’t been accepted.`);
-    await refuseIfBlocked(trx, p.vehicle_id, { siteId: actor.site.id });
+    // The job starts once the vehicle is checked in. A proforma priced for a vehicle not yet on file
+    // (only described) gets the customer's vehicle chosen when it has been checked in.
+    const vehicleId = p.vehicle_id ?? chosenVehicleId;
+    if (!vehicleId) {
+      throw Object.assign(httpError(422, 'no vehicle'), { blocker: { kind: 'no_vehicle', message: `${p.number} has no vehicle on file. Check the vehicle in, then choose it here to start the job.` } });
+    }
+    if (!p.vehicle_id && !(await trx('vehicles').where({ id: vehicleId, customer_id: p.customer_id }).first('id'))) {
+      throw httpError(422, 'Choose one of this customer’s vehicles.');
+    }
+    await refuseIfBlocked(trx, vehicleId, { siteId: actor.site.id });
 
-    const checkin = await openCheckin(trx, p.vehicle_id);
+    const checkin = await openCheckin(trx, vehicleId);
     const siteId = checkin?.site_id ?? actor.site.id;
     const typeId = await resolveType(trx, jobTypeId);
     const number = await nextNumber(trx, 'job');
     const [id] = await trx('jobs').insert({
-      number, site_id: siteId, job_type_id: typeId, proforma_id: p.id, customer_id: p.customer_id, vehicle_id: p.vehicle_id, vehicle_description: p.vehicle_description,
+      number, site_id: siteId, job_type_id: typeId, proforma_id: p.id, customer_id: p.customer_id, vehicle_id: vehicleId, vehicle_description: p.vehicle_description,
       checkin_id: checkin?.id ?? null, created_by: actor.user.id,
     });
     await writeLines(trx, id, await trx('proforma_lines').where({ proforma_id: p.id }).orderBy('sort_order'));
@@ -202,7 +240,8 @@ export async function updateJob(id, input, actor) {
 
     // A newly chosen vehicle brings its open check-in, and the job goes to that vehicle's site.
     const vehicleChanged = input.vehicle_id !== before.vehicle_id;
-    // Giving the job a vehicle that already has another job running would make two.
+    if (before.vehicle_id && !input.vehicle_id) throw err(422, 'A job’s vehicle can be changed to another checked-in vehicle, not removed', 'vehicle_id');
+    // The new vehicle must be checked in, with no other job running on it.
     if (vehicleChanged) await refuseIfBlocked(trx, input.vehicle_id, { exceptJobId: id });
     const checkin = vehicleChanged ? await openCheckin(trx, input.vehicle_id) : null;
     const siteId = checkin?.site_id ?? before.site_id;
@@ -220,7 +259,8 @@ export async function updateJob(id, input, actor) {
     const beforeLines = await trx('job_lines').where({ job_id: id }).orderBy('sort_order');
     const lines = fixed ? beforeLines : input.lines;
     const changes = {
-      customer_id: customerId, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
+      // The description is only typed on an older job with no vehicle; once it has one, what was there stays.
+      customer_id: customerId, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_id ? before.vehicle_description : input.vehicle_description,
       supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
       due_on: input.due_on, instructions: input.instructions, site_id: siteId,
       ...(vehicleChanged ? { checkin_id: checkin?.id ?? null } : {}),
@@ -551,15 +591,21 @@ export async function countByTab(siteId) {
   return countTabs(TABS, (tab) => { const q = db('jobs as j').where('j.site_id', siteId); tabFilter(q, tab); return q; });
 }
 
-/** Accepted proformas with no job yet, for the jobs page. Prices stay on the proforma. */
+/**
+ * Accepted proformas with no job yet, for the jobs page. Prices stay on the proforma.
+ * `vehicle_site_id` is where its vehicle is checked in (null: not checked in, or no vehicle on file).
+ */
 export function waitingProformas(siteIds) {
   return db('proformas as p')
     .join('customers as c', 'c.id', 'p.customer_id')
     .leftJoin('jobs as j', 'j.proforma_id', 'p.id')
+    .leftJoin('vehicles as v', 'v.id', 'p.vehicle_id')
+    .leftJoin('checkins as ck', (q) => q.on('ck.vehicle_id', 'p.vehicle_id').andOnVal('ck.status', 'in_workshop'))
     .where('p.status', 'accepted').whereNull('j.id')
     .where((w) => w.whereIn('p.site_id', siteIds).orWhereNull('p.site_id'))
     .orderBy('p.closed_at').limit(20)
-    .select('p.id', 'p.number', 'p.closed_at', 'c.name as customer_name',
+    .select('p.id', 'p.number', 'p.closed_at', 'c.name as customer_name', 'p.vehicle_id', 'ck.site_id as vehicle_site_id',
+      'v.reg_no', 'v.chassis_no', 'v.temp_tag',
       db('proforma_lines').where('proforma_id', db.ref('p.id')).orderBy('sort_order').limit(1).select('description').as('first_line'));
 }
 

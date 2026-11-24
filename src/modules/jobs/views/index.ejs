@@ -25,6 +25,15 @@
         <li class="list-group-item d-flex align-items-center gap-3 flex-wrap">
           <span class="font-monospace small"><%= p.number %></span>
           <span class="flex-grow-1" style="min-width: 12rem"><%= p.customer_name %><span class="jt-sub jt-clamp"><%= String(p.first_line ?? '').split('\n')[0] %></span></span>
+          <%# Its job starts once the vehicle is checked in here (sheet row 49). %>
+          <% if (!p.vehicle_id) { %>
+            <a class="btn btn-outline-primary btn-sm text-nowrap" href="/proformas/<%= p.id %>"><i class="bi bi-truck"></i>Choose its vehicle</a>
+          <% } else if (!p.vehicle_site_id) { %>
+            <span class="small text-body-secondary">Waiting for <%= vehicleLabel(p) %> to be checked in</span>
+            <% if (canCheckIn) { %><a class="btn btn-outline-secondary btn-sm text-nowrap" href="/check-in/new?vehicle_id=<%= p.vehicle_id %>"><i class="bi bi-box-arrow-in-down"></i>Check it in</a><% } %>
+          <% } else if (p.vehicle_site_id !== site.id) { %>
+            <span class="small text-body-secondary"><%= vehicleLabel(p) %> is checked in at another site</span>
+          <% } else { %>
           <form class="d-flex gap-2" method="post" action="/proformas/<%= p.id %>/job">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <select class="form-select form-select-sm w-auto" name="job_type_id" aria-label="Job type for proforma <%= p.number %>">
@@ -32,6 +41,7 @@
             </select>
             <button class="btn btn-outline-primary btn-sm text-nowrap" type="submit"><i class="bi bi-wrench-adjustable"></i>Start job</button>
           </form>
+          <% } %>
         </li>
       <% }) %>
     </ul>

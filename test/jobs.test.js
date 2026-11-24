@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let sales, supervisor, technician, gate, siteBOnly, customer, other, vehicle, hq, siteB;
@@ -32,6 +32,9 @@ async function post(agent, url, fields = {}) {
 }
 const work = { line_quantity: ['1', ''], line_unit: ['Unit', ''], line_description: ['Repair tipper floor\n- Replace rear hinge', ''] };
 const idOf = (location) => Number(location.split('/')[2]);
+let plate = 0;
+/** A vehicle of this customer checked in at HQ: a job is opened only for one (sheet row 49). */
+const arrived = (customerId) => checkedInVehicle(customerId, `KJR 7${String(plate++).padStart(2, '0')}A`);
 
 async function acceptedProforma(customerId, vehicleId = null) {
   let res = await post(sales, '/proformas', { customer_id: customerId, vehicle_id: vehicleId ?? '', vehicle_description: vehicleId ? '' : 'Howo 6 wheeler', proforma_date: localDay(), line_description: ['Fabrication of water bowser\n- Toolbox'], line_price: ['987,654'], line_quantity: ['1'], line_unit: ['Unit'] });
@@ -52,23 +55,37 @@ test('who can do what', async () => {
   assert.equal((await post(sales, '/jobs', { customer_id: customer.id, ...work })).status, 403);
 });
 
-test('a job can start with no proforma and no vehicle; it needs a customer and the work', async () => {
+test('a job is opened only for a vehicle checked in here; it needs the customer, the vehicle and the work', async () => {
   let res = await post(supervisor, '/jobs', { customer_id: '', line_description: [''] });
   assert.equal(res.status, 422);
   assert.match(res.text, /Choose the customer/);
   assert.match(res.text, /Say what work is to be done/);
 
-  res = await post(supervisor, '/jobs', { customer_id: customer.id, due_on: '2020-01-01', ...work });
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, ...work });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Choose the vehicle\. It must be checked in here first/);
+
+  // Sheet row 49: not checked in, no job. The form says so, with a way to check it in.
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: vehicle.id, ...work });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /KZW 811A isn’t checked in\. Check it in first, then open its job/);
+  assert.ok(res.text.includes(`href="/check-in/new?vehicle_id=${vehicle.id}"`), 'a button to check it in');
+  assert.equal((await db('jobs').where({ vehicle_id: vehicle.id })).length, 0);
+  assert.match((await supervisor.get(`/jobs/new?customer_id=${customer.id}`)).text, /KZW 811A · Isuzu FRR \(not checked in\)/, 'offered, but greyed out');
+
+  const inside = await arrived(customer.id);
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: inside, due_on: '2020-01-01', ...work });
   assert.equal(res.status, 422, 'a promise can’t be in the past');
   assert.match(res.text, /Promise a date from today on/);
   assert.match((await supervisor.get('/jobs/new')).text, new RegExp(`name="due_on"[^>]*min="${localDay()}"`));
 
-  res = await post(supervisor, '/jobs', { customer_id: customer.id, due_on: localDay(), ...work });
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: inside, due_on: localDay(), ...work });
   assert.equal(res.status, 302, res.text);
   const job = await db('jobs').where({ id: idOf(res.headers.location) }).first();
   assert.match(job.number, /^JOB-\d{4}-\d{4,}$/);
   assert.equal(job.status, 'open');
-  assert.equal(job.vehicle_id, null);
+  assert.equal(job.vehicle_id, inside);
+  assert.equal(job.checkin_id, (await db('checkins').where({ vehicle_id: inside, status: 'in_workshop' }).first()).id, 'linked to its check-in');
   assert.equal(job.proforma_id, null);
   assert.equal(job.site_id, hq.id);
   assert.equal((await db('job_lines').where({ job_id: job.id })).length, 1, 'the empty row is skipped');
@@ -77,12 +94,20 @@ test('a job can start with no proforma and no vehicle; it needs a customer and t
   assert.match(list, new RegExp(job.number));
   const page = (await supervisor.get(`/jobs/${job.id}`).expect(200)).text;
   assert.match(page, /Repair tipper floor/);
-  assert.match(page, /Not chosen yet/);
+
+  // Its vehicle can be changed to another checked-in one, not taken off.
+  res = await post(supervisor, `/jobs/${job.id}`, { customer_id: customer.id, vehicle_id: '', ...work });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /not removed/);
+  res = await post(supervisor, `/jobs/${job.id}`, { customer_id: customer.id, vehicle_id: vehicle.id, ...work });
+  assert.equal(res.status, 422, 'nor changed to one not checked in');
+  assert.match(res.text, /isn’t checked in/);
 });
 
 test('a supervisor (app user) and, optionally, a responsible employee who doesn’t use the app', async () => {
   const me = await db('users').where({ phone: '+254700000081' }).first('id');
-  let res = await post(supervisor, '/jobs', { customer_id: customer.id, supervisor_id: me.id, responsible_name: 'Otieno (welding foreman)', ...work });
+  const inside = await arrived(customer.id);
+  let res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: inside, supervisor_id: me.id, responsible_name: 'Otieno (welding foreman)', ...work });
   assert.equal(res.status, 302, res.text);
   const id = idOf(res.headers.location);
   const job = await db('jobs').where({ id }).first();
@@ -91,7 +116,7 @@ test('a supervisor (app user) and, optionally, a responsible employee who doesn�
   assert.match((await supervisor.get(`/jobs/${id}`)).text, /<dt>Responsible<\/dt><dd>Otieno \(welding foreman\)/);
   assert.match((await supervisor.get(`/jobs/${id}/print`)).text, /Responsible:<\/span> Otieno \(welding foreman\)/);
 
-  res = await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, supervisor_id: me.id, responsible_name: '', ...work });
+  res = await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, vehicle_id: inside, supervisor_id: me.id, responsible_name: '', ...work });
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('jobs').where({ id }).first()).responsible_name, null, 'not mandatory');
   assert.match((await supervisor.get(`/jobs/${id}`)).text, /Responsible/, 'the change is in the history');
@@ -107,7 +132,7 @@ test('with no supervisors at the site, admins are pointed to Users', async () =>
 });
 
 test('a vehicle must be the customer’s own', async () => {
-  const res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: vehicle.id, ...work });
+  const res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: await arrived(customer.id), ...work });
   assert.equal(res.status, 422);
   assert.match(res.text, /one of this customer/);
 });
@@ -122,16 +147,26 @@ test('the job card prints the details and blank sections to fill in', async () =
   assert.match(card, /Approved for release/);
 });
 
-test('an accepted proforma becomes a job in one click, with no prices, and only once', async () => {
+test('an accepted proforma becomes a job in one click once its vehicle is checked in, with no prices, and only once', async () => {
+  // Priced for a vehicle only described: it is chosen once it has been checked in.
   const proformaId = await acceptedProforma(other.id);
   const proforma = await db('proformas').where({ id: proformaId }).first();
-
-  assert.match((await supervisor.get('/jobs')).text, /Accepted proformas waiting for a job/, 'the workshop can see what is waiting');
+  let jobs = (await supervisor.get('/jobs')).text;
+  assert.match(jobs, /Accepted proformas waiting for a job/, 'the workshop can see what is waiting');
+  assert.ok(jobs.includes(`href="/proformas/${proformaId}"`), 'with a link to choose its vehicle');
   let res = await post(sales, `/proformas/${proformaId}/job`);
+  assert.equal(res.headers.location, `/proformas/${proformaId}`, 'no vehicle chosen: back to the proforma');
+  assert.equal((await db('jobs').where({ proforma_id: proformaId })).length, 0);
+  assert.match((await sales.get(`/proformas/${proformaId}`)).text, /has no vehicle on file\. Check the customer’s vehicle in here/);
+
+  const inside = await arrived(other.id);
+  assert.match((await sales.get(`/proformas/${proformaId}`)).text, /name="vehicle_id"/, 'now it can be chosen');
+  res = await post(sales, `/proformas/${proformaId}/job`, { vehicle_id: inside });
   assert.equal(res.status, 302);
   const job = await db('jobs').where({ proforma_id: proformaId }).first();
   assert.equal(res.headers.location, `/jobs/${job.id}`);
   assert.equal(job.customer_id, other.id);
+  assert.equal(job.vehicle_id, inside);
   assert.equal(job.vehicle_description, 'Howo 6 wheeler');
   assert.doesNotMatch((await supervisor.get('/jobs')).text, new RegExp(`/proformas/${proformaId}/job`), 'no longer waiting');
 
@@ -150,6 +185,16 @@ test('an accepted proforma becomes a job in one click, with no prices, and only 
   assert.equal(res.headers.location, `/jobs/${job.id}`, 'asking again opens the same job');
   assert.equal((await db('jobs').where({ proforma_id: proformaId })).length, 1);
   assert.equal(proforma.status, 'accepted');
+
+  // Priced for a vehicle on file that isn't checked in yet: it waits for the check-in.
+  const waitingId = await acceptedProforma(customer.id, vehicle.id);
+  jobs = (await supervisor.get('/jobs')).text;
+  assert.match(jobs, /Waiting for KZW 811A to be checked in/);
+  res = await post(sales, `/proformas/${waitingId}/job`);
+  assert.equal(res.headers.location, `/proformas/${waitingId}`);
+  assert.equal((await db('jobs').where({ proforma_id: waitingId })).length, 0);
+  assert.match((await sales.get(`/proformas/${waitingId}`)).text, /KZW 811A isn’t checked in/);
+  await db('proformas').where({ id: waitingId }).update({ status: 'declined' }); // out of the way of later tests
 });
 
 test('a proforma that isn’t accepted can’t become a job', async () => {
@@ -161,28 +206,29 @@ test('a proforma that isn’t accepted can’t become a job', async () => {
 
 test('a job from a proforma keeps its customer and work when edited', async () => {
   const job = await db('jobs').where({ customer_id: other.id }).whereNotNull('proforma_id').first();
-  const res = await post(supervisor, `/jobs/${job.id}`, { customer_id: customer.id, line_description: ['Something else'], instructions: 'Call before fitting', vehicle_description: 'Howo 6 wheeler' });
+  const res = await post(supervisor, `/jobs/${job.id}`, { customer_id: customer.id, vehicle_id: job.vehicle_id, line_description: ['Something else'], instructions: 'Call before fitting' });
   assert.equal(res.status, 302, res.text);
   const after = await db('jobs').where({ id: job.id }).first();
   assert.equal(after.customer_id, other.id);
   assert.equal(after.instructions, 'Call before fitting');
+  assert.equal(after.vehicle_description, 'Howo 6 wheeler', 'what the proforma described stays');
   const [line] = await db('job_lines').where({ job_id: job.id });
   assert.match(line.description, /water bowser/);
   assert.match((await supervisor.get(`/jobs/${job.id}`)).text, /Call before fitting/);
 });
 
-test('a vehicle added later links its check-in; a later check-in links too; the job follows the vehicle', async () => {
-  // The vehicle isn't in yet: chosen on the job, no check-in to link.
-  const job = await db('jobs').where({ customer_id: customer.id }).whereNull('proforma_id').first();
-  let res = await post(supervisor, `/jobs/${job.id}`, { customer_id: customer.id, vehicle_id: vehicle.id, ...work });
-  assert.equal(res.status, 302, res.text);
-  assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, null);
+test('checked in, then its job: one job per vehicle, and the job follows the vehicle between sites', async () => {
+  // Not in yet: the new-job page says so straight away.
+  assert.match((await supervisor.get(`/jobs/new?vehicle_id=${vehicle.id}`)).text, /isn’t checked in\. Check it in first/);
+  assert.doesNotMatch((await supervisor.get(`/vehicles/${vehicle.id}`)).text, /href="\/jobs\/new\?vehicle_id=/, 'no New job button on the vehicle');
 
-  // It arrives: the check-in finds the job.
-  res = await post(supervisor, '/check-in', { purpose: 'fabrication', vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job', no_arrival_reason: 'Test: not through the gate' });
+  let res = await post(supervisor, '/check-in', { purpose: 'fabrication', vehicle_mode: 'existing', vehicle_id: vehicle.id, remarks: 'For the job', no_arrival_reason: 'Test: not through the gate' });
   assert.equal(res.status, 302, res.text);
   const checkin = await db('checkins').where({ vehicle_id: vehicle.id, status: 'in_workshop' }).first();
-  assert.equal((await db('jobs').where({ id: job.id }).first()).checkin_id, checkin.id);
+  res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: vehicle.id, ...work });
+  assert.equal(res.status, 302, res.text);
+  const job = await db('jobs').where({ id: idOf(res.headers.location) }).first();
+  assert.equal(job.checkin_id, checkin.id);
   assert.match((await supervisor.get(`/check-in/${checkin.id}`)).text, new RegExp(`/jobs/${job.id}`), 'the check-in shows its job');
   assert.match((await supervisor.get(`/vehicles/${vehicle.id}`)).text, new RegExp(`/jobs/${job.id}`), 'the vehicle shows its job');
 
@@ -218,7 +264,7 @@ test('a vehicle added later links its check-in; a later check-in links too; the 
 });
 
 test('start, complete, reopen and cancel, in the right order', async () => {
-  const res = await post(supervisor, '/jobs', { customer_id: other.id, ...work });
+  const res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: await arrived(other.id), ...work });
   const id = idOf(res.headers.location);
   const status = async () => (await db('jobs').where({ id }).first()).status;
 
@@ -230,13 +276,13 @@ test('start, complete, reopen and cancel, in the right order', async () => {
 
   assert.equal((await post(supervisor, `/jobs/${id}/complete`)).status, 409, 'its steps aren’t finished');
   for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) {
+    if (step.is_receive) { assert.equal(step.status, 'done', 'the check-in ticked it at the start'); continue; }
     if (step.is_signoff) {
       // So is the customer's sign-off step: here, no one was there to sign.
       assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);
       await post(supervisor, `/jobs/${id}/signoff/not-signed`, { reason: 'other', other_reason: 'Owner approved by phone' });
       continue;
     }
-    if (step.is_receive) { await post(supervisor, `/jobs/${id}/steps/${step.id}/skip`); continue; } // no vehicle: nothing to receive
     if (!step.is_qc) { await post(supervisor, `/jobs/${id}/steps/${step.id}/done`); continue; }
     // The quality check step is ticked off by a passed check, not by hand.
     assert.equal((await post(supervisor, `/jobs/${id}/steps/${step.id}/done`)).status, 409);
@@ -271,33 +317,22 @@ test('jobs are found by number, in the jobs list and the top-bar search', async 
   assert.ok(!found.body.results.some((r) => r.url === `/jobs/${job.id}`), 'only jobs at the user’s own sites');
 });
 
-test('Vehicle Received is ticked off by the vehicle’s check-in, never by hand', async () => {
+test('the gate logs the vehicle in, it is checked in, then its job opens; Vehicle Received is ticked by the check-in, never by hand', async () => {
   const csrf = csrfFrom((await sales.get('/vehicles/new')).text);
   await sales.post('/vehicles').type('form').send({ _csrf: csrf, reg_no: 'KZW 812A', customer_id: other.id, type: 'truck', make: 'Isuzu' });
   await sales.post('/vehicles').type('form').send({ _csrf: csrf, reg_no: 'KZW 813A', customer_id: other.id, type: 'truck', make: 'Hino' });
-  const [late, here] = await Promise.all(['KZW 812A', 'KZW 813A'].map((reg) => db('vehicles').where({ reg_no: reg }).first()));
+  const late = await db('vehicles').where({ reg_no: 'KZW 812A' }).first();
   const step1 = (jobId) => db('job_steps').where({ job_id: jobId, sort_order: 1 }).first();
 
-  // Opened and started before the vehicle comes: the job waits at Vehicle Received.
+  // Not here yet: no job.
   let res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: late.id, ...work });
-  const waiting = idOf(res.headers.location);
-  await post(supervisor, `/jobs/${waiting}/start`);
-  const step = await step1(waiting);
-  assert.equal(step.name, 'Vehicle Received');
-  assert.equal(step.is_receive, 1);
-  assert.equal(step.status, 'pending');
-  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/${step.id}/done`)).status, 409, 'not by hand');
-  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/${step.id}/skip`)).status, 409, 'nor skipped: a vehicle is coming');
-  const page = (await supervisor.get(`/jobs/${waiting}`)).text;
-  assert.match(page, /Waiting for KZW 812A to be checked in/);
-  assert.ok(page.includes(`href="/check-in/new?vehicle_id=${late.id}"`), 'a button to check it in');
+  assert.equal(res.status, 422);
 
-  // It arrives: the gate logs it in, the check-in is made from that, and the check-in ticks the step.
+  // It arrives: the gate logs it in, and the check-in is made from that.
   res = await post(gate, '/gate/arrivals', { vehicle_text: 'kzw812a', driver_name: 'Juma Otieno', driver_phone: '0700 000 819', purpose: 'repairs' });
   assert.equal(res.status, 302, res.text);
   const arrival = await db('vehicle_arrivals').where({ vehicle_id: late.id, status: 'waiting' }).first();
   assert.ok(arrival, 'the plate as typed finds the vehicle');
-  assert.ok((await supervisor.get(`/jobs/${waiting}`)).text.includes(`href="/check-in/new?vehicle_id=${late.id}"`));
   const form = (await supervisor.get(`/check-in/new?vehicle_id=${late.id}`)).text;
   assert.match(form, new RegExp(`name="arrival_id" value="${arrival.id}"`), 'the check-in picks up the gate’s arrival');
   assert.match(form, /Juma Otieno/);
@@ -306,40 +341,48 @@ test('Vehicle Received is ticked off by the vehicle’s check-in, never by hand'
   const checkedIn = await db('vehicle_arrivals').where({ id: arrival.id }).first();
   assert.equal(checkedIn.status, 'checked_in');
   assert.equal((await db('checkins').where({ id: checkedIn.checkin_id }).first()).arrival_id, arrival.id);
-  assert.equal((await step1(waiting)).status, 'done');
-  assert.equal((await step1(waiting)).finished_by, (await db('users').where({ phone: '+254700000081' }).first('id')).id);
-  assert.equal((await post(supervisor, `/jobs/${waiting}/steps/undo`)).status, 409, 'only the check-in undoes it');
-  const logged = await db('audit_log').where({ entity: 'job', entity_id: waiting, action: 'step_done' }).first();
-  assert.match(logged.summary, /^Vehicle Received \(check-in CHK-/);
 
-  // Already checked in when the job starts: ticked at the start.
-  res = await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: here.id, no_arrival_reason: 'Test: not through the gate' });
-  res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: here.id, ...work });
-  const ready = idOf(res.headers.location);
-  assert.equal((await step1(ready)).status, 'pending', 'not before the job starts');
-  await post(supervisor, `/jobs/${ready}/start`);
-  assert.equal((await step1(ready)).status, 'done');
-  await post(supervisor, `/jobs/${ready}/cancel`, { reason: 'Test over' });
-  await post(supervisor, `/jobs/${waiting}/cancel`, { reason: 'Test over' });
+  // Now its job opens; starting it ticks Vehicle Received from the check-in.
+  res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: late.id, ...work });
+  assert.equal(res.status, 302, res.text);
+  const id = idOf(res.headers.location);
+  const step = await step1(id);
+  assert.equal(step.name, 'Vehicle Received');
+  assert.equal(step.is_receive, 1);
+  assert.equal(step.status, 'pending', 'not before the job starts');
+  await post(supervisor, `/jobs/${id}/start`);
+  assert.equal((await step1(id)).status, 'done');
+  assert.equal((await step1(id)).finished_by, (await db('users').where({ phone: '+254700000081' }).first('id')).id);
+  assert.equal((await post(supervisor, `/jobs/${id}/steps/undo`)).status, 409, 'only the check-in undoes it');
+  const logged = await db('audit_log').where({ entity: 'job', entity_id: id, action: 'step_done' }).first();
+  assert.match(logged.summary, /^Vehicle Received \(check-in CHK-/);
+  await post(supervisor, `/jobs/${id}/cancel`, { reason: 'Test over' });
 });
 
-test('a job with only a description waits until its vehicle is chosen; one with no vehicle skips the step', async () => {
-  let res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_description: 'New Isuzu NQR chassis', ...work });
-  const chassis = idOf(res.headers.location);
-  await post(supervisor, `/jobs/${chassis}/start`);
+test('an older job with only a description waits until its vehicle is chosen; one with no vehicle skips the step', async () => {
+  // Jobs opened before a checked-in vehicle was needed: made here by taking the vehicle off.
+  const older = async (description) => {
+    const res = await post(supervisor, '/jobs', { customer_id: other.id, vehicle_id: await arrived(other.id), ...work });
+    const id = idOf(res.headers.location);
+    await db('jobs').where({ id }).update({ vehicle_id: null, checkin_id: null, vehicle_description: description });
+    await post(supervisor, `/jobs/${id}/start`);
+    return id;
+  };
+  const chassis = await older('New Isuzu NQR chassis');
   const step = await db('job_steps').where({ job_id: chassis, sort_order: 1 }).first();
+  assert.equal(step.status, 'pending');
   assert.equal((await post(supervisor, `/jobs/${chassis}/steps/${step.id}/skip`)).status, 409, 'a vehicle is coming');
   assert.match((await supervisor.get(`/jobs/${chassis}`)).text, /Once it is checked in, choose it on the job/);
+  assert.match((await supervisor.get(`/jobs/${chassis}/edit`)).text, /name="vehicle_description"/, 'its description can still be changed');
   // The chassis arrives and is checked in (KZW 813A stands in for it); choosing it on the job ticks the step.
   const vehicle = await db('vehicles').where({ reg_no: 'KZW 813A' }).first();
-  res = await post(supervisor, `/jobs/${chassis}`, { customer_id: other.id, vehicle_id: vehicle.id, ...work });
+  await post(supervisor, '/check-in', { purpose: 'repairs', vehicle_mode: 'existing', vehicle_id: vehicle.id, no_arrival_reason: 'Test: not through the gate' });
+  const res = await post(supervisor, `/jobs/${chassis}`, { customer_id: other.id, vehicle_id: vehicle.id, ...work });
   assert.equal(res.status, 302, res.text);
   assert.equal((await db('job_steps').where({ id: step.id }).first()).status, 'done');
   await post(supervisor, `/jobs/${chassis}/cancel`, { reason: 'Test over' });
 
-  res = await post(supervisor, '/jobs', { customer_id: other.id, ...work });
-  const none = idOf(res.headers.location);
-  await post(supervisor, `/jobs/${none}/start`);
+  const none = await older(null);
   const first = await db('job_steps').where({ job_id: none, sort_order: 1 }).first();
   assert.match((await supervisor.get(`/jobs/${none}`)).text, /This job has no vehicle/);
   assert.equal((await post(supervisor, `/jobs/${none}/steps/${first.id}/done`)).status, 409);

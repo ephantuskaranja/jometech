@@ -19,6 +19,19 @@ export async function makeUser(phoneSuffix, roles, extra = {}) {
   return phone;
 }
 
+/**
+ * A vehicle of this customer checked in at a site (HQ unless siteId is given), so a job can be opened on it
+ * (sheet row 49). Use a reg no other test uses. @returns {Promise<number>} the vehicle id
+ */
+export async function checkedInVehicle(customerId, reg, siteId = null) {
+  const site = siteId ?? (await db('sites').where({ code: 'HQ' }).first('id')).id;
+  const tag = reg.replace(/\s/g, '');
+  const by = await db('users').where('phone', 'like', '+25470000%').first('id');
+  const [vehicle] = await db('vehicles').insert({ reg_no: reg, chassis_no: `JALT${tag}`, customer_id: customerId, type: 'truck', make: 'Isuzu' });
+  await db('checkins').insert({ number: `CHK-T-${tag}`, site_id: site, vehicle_id: vehicle, customer_id: customerId, received_by: by.id, driver_name: 'Peter Kamau' });
+  return vehicle;
+}
+
 /** Reads the CSRF token out of a rendered page. */
 export function csrfFrom(html) {
   return /name="csrf-token" content="([^"]+)"/.exec(html)?.[1];

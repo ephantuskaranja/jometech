@@ -5,11 +5,13 @@
 <%
   const fixed = Boolean(job?.proforma_id);
   const typeLocked = Boolean(job?.steps?.some((s) => s.status !== 'pending'));
+  // A job opened before a checked-in vehicle was needed (sheet row 49) may still have only a description.
+  const legacy = Boolean(job) && !job.vehicle_id;
 %>
 <%- include('partials/page-header', {
   crumb: [{ label: 'Jobs', href: '/jobs' }, job ? job.number : 'New'],
   heading: job ? `Edit ${job.number}` : 'New job',
-  sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : 'Only the customer and the work are needed. The vehicle can be added when it arrives.'),
+  sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : 'For a vehicle checked in here: choose the customer, their vehicle and the work.'),
 }) %>
 
 <%# What stops the job being opened (another job running, the vehicle at another site), with what to do. Outside the form: its buttons are forms too. %>
@@ -31,17 +33,20 @@
               attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
       <% } %>
       <div class="jt-fields">
-        <div x-show="hasCustomer && vehicles.length" x-cloak>
+        <div x-show="hasCustomer" x-cloak>
           <div class="jt-field">
-            <label class="form-label" for="f-vehicle_id">Their vehicle</label>
+            <label class="form-label" for="f-vehicle_id">Their vehicle, checked in here</label>
             <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id">
-              <option value="">Not here yet, or not one of these</option>
-              <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
+              <option value=""><%= legacy ? 'Not here yet' : 'Choose the vehicle' %></option>
+              <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :disabled="v.disabled" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
             </select>
             <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
+            <div class="form-text" x-show="!vehicles.some((v) => !v.disabled)">None of their vehicles is checked in here. The gate logs it in, then it is checked in<% if (canCheckIn) { %> under <a href="/check-in">Check-in</a><% } %>; then open its job.</div>
           </div>
         </div>
-        <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
+        <% if (legacy) { %>
+          <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
+        <% } %>
       </div>
     </div>
   </section>

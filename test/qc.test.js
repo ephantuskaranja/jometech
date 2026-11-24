@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { checklist } from '../src/modules/qc/service.js';
 import { seed } from '../db/seeds/08_qc_checklist.js';
 import { FAB } from '../db/seeds/06_job_types.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 const FAB_RE = FAB.replace(/[()]/g, '\\$&');
@@ -40,6 +40,10 @@ after(async () => {
   await cleanup();
 });
 
+let plate = 0;
+/** A vehicle of the customer checked in at HQ: a job is opened only for one (sheet row 49). */
+const arrived = () => checkedInVehicle(customer.id, `KJR 3${String(plate++).padStart(2, '0')}A`);
+
 async function post(agent, url, fields = {}) {
   const csrf = csrfFrom((await agent.get('/')).text);
   return agent.post(url).type('form').send({ _csrf: csrf, ...fields });
@@ -48,12 +52,13 @@ const idOf = (location) => Number(location.split('/')[2]);
 
 /** A job (maintenance unless said) ticked up to its quality check step. */
 async function jobAtQc(type = maintenance) {
-  const res = await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: type.id, line_description: ['Service the tipper'] });
+  const res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: type.id, line_description: ['Service the tipper'] });
   const id = idOf(res.headers.location);
   await post(supervisor, `/jobs/${id}/start`);
   for (const step of await db('job_steps').where({ job_id: id }).orderBy('sort_order')) {
     if (step.is_qc) break;
-    await post(supervisor, `/jobs/${id}/steps/${step.id}/${step.is_receive ? 'skip' : 'done'}`); // no vehicle: nothing to receive
+    if (step.is_receive) continue; // ticked by the vehicle's check-in
+    await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
   }
   return id;
 }
@@ -72,7 +77,7 @@ test('the starting checklist is there; running the seed again changes nothing; j
 });
 
 test('the quality check step can’t be ticked or skipped by hand; only a supervisor starts the check, and only at that step', async () => {
-  const res = await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: maintenance.id, line_description: ['Weld a crack'] });
+  const res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: maintenance.id, line_description: ['Weld a crack'] });
   const early = idOf(res.headers.location);
   await post(supervisor, `/jobs/${early}/start`);
   assert.equal((await post(supervisor, `/jobs/${early}/qc`)).status, 409, 'not at the quality check step yet');
@@ -269,6 +274,6 @@ test('admins edit the checklist; new checks use it, earlier ones keep theirs; jo
   res = await post(admin, `/admin/job-types/${maintenance.id}`, { name: maintenance.name, step: ['Vehicle Received', 'Inspection / Measurement', 'Work Carried Out', 'Quality Inspection', 'Customer Inspection'], qc_step: '' });
   assert.equal(res.status, 302);
   assert.equal((await db('job_types').where({ id: maintenance.id }).first()).qc_step, null);
-  const plain = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: maintenance.id, line_description: ['No check'] })).headers.location);
+  const plain = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: maintenance.id, line_description: ['No check'] })).headers.location);
   assert.equal((await db('job_steps').where({ job_id: plain, is_qc: true }).count({ n: '*' }))[0].n, 0, 'no quality check step on new jobs');
 });

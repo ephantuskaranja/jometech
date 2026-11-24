@@ -5,7 +5,7 @@ import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
 import * as invoices from '../src/modules/invoices/service.js';
 import { getJob } from '../src/modules/jobs/service.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let manager, supervisor, sales, customer, managerId, jobId;
@@ -22,7 +22,7 @@ before(async () => {
   const proformaId = Number(res.headers.location.split('/')[2]);
   await post(sales, `/proformas/${proformaId}/send`);
   await post(sales, `/proformas/${proformaId}/accept`);
-  await post(sales, `/proformas/${proformaId}/job`);
+  await post(sales, `/proformas/${proformaId}/job`, { vehicle_id: await checkedInVehicle(customer.id, 'KJR 601A') });
   jobId = (await db('jobs').where({ proforma_id: proformaId }).first('id')).id;
 });
 after(cleanup);

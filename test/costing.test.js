@@ -4,7 +4,7 @@ import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { workDays, jobDays, jobCosting } from '../src/modules/costing/service.js';
 import * as invoices from '../src/modules/invoices/service.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let admin, manager, supervisor, sales, customer, managerId, hq;
@@ -84,7 +84,7 @@ test('admins list closed days for every site or one; the same day can’t be clo
 });
 
 test('a job’s work days run from start to completion (or today), less Sundays and the site’s closed days', async () => {
-  const id = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, line_description: ['Build a dropside'] })).headers.location);
+  const id = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await checkedInVehicle(customer.id, 'KJR 101A'), line_description: ['Build a dropside'] })).headers.location);
   const job = () => db('jobs').where({ id }).first();
   assert.equal(await jobDays(await job()), null, 'not started yet');
   // Started Monday 2 Nov (08:00 Nairobi), completed Saturday 14 Nov 2026.
@@ -98,7 +98,7 @@ test('a job’s work days run from start to completion (or today), less Sundays 
 });
 
 test('managers see what a job earned: price without VAT, materials, gross profit; the workshop and sales don’t', async () => {
-  const id = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, line_description: ['Tipper body'] })).headers.location);
+  const id = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await checkedInVehicle(customer.id, 'KJR 102A'), line_description: ['Tipper body'] })).headers.location);
   let page = (await manager.get(`/jobs/${id}`)).text;
   assert.match(page, /Job costing/);
   assert.match(page, /No price yet/);

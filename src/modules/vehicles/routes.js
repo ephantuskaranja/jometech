@@ -100,18 +100,20 @@ router.post('/vehicles', edit, (req, res) => save(req, res, null));
 
 router.get('/vehicles/:id', view, async (req, res) => {
   const vehicle = await loadVehicle(req);
+  const visits = await visitsOf(vehicle.id);
   res.render('vehicles/views/show', {
     title: vehicleLabel(vehicle),
     vehicle, vehicleLabel,
     entries: await history('vehicle', vehicle.id),
-    visits: await visitsOf(vehicle.id), daysIn, statuses: STATUSES,
+    visits, daysIn, statuses: STATUSES,
     // A visit at a site the user doesn't work at is listed, but not linked (its page would refuse).
     mySiteIds: req.user.sites.map((s) => s.id),
     typeLabel: vehicles.typeLabel,
     canEdit: EDIT_VEHICLES.some((p) => req.user.can(p)),
     canCheckIn: req.user.can('checkin.manage'),
     jobs: await forVehicle(vehicle.id), jobStatuses: JOB_STATUSES,
-    canStartJob: req.user.can('jobs.manage'),
+    // A job is opened only while the vehicle is checked in here (sheet row 49).
+    canStartJob: req.user.can('jobs.manage') && visits.some((v) => v.status === 'in_workshop' && v.site_id === req.site?.id),
   });
 });
 

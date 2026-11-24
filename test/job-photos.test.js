@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let supervisor, technician, sales, jobId, jpeg;
@@ -16,7 +16,7 @@ before(async () => {
   await sales.post('/customers').type('form').send({ _csrf: csrf, name: 'Photo Hauliers', phone: '0700000761' });
   const customer = await db('customers').where({ phone: '+254700000761' }).first();
   const repair = await db('job_types').where({ name: 'Repair', is_active: true }).first();
-  const res = await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: repair.id, line_description: ['Repair the tipper'] });
+  const res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await checkedInVehicle(customer.id, 'KJR 201A'), job_type_id: repair.id, line_description: ['Repair the tipper'] });
   jobId = Number(res.headers.location.split('/')[2]);
   await post(supervisor, `/jobs/${jobId}/start`);
   jpeg = await sharp({ create: { width: 640, height: 480, channels: 3, background: '#3a6' } }).jpeg().toBuffer();
@@ -37,12 +37,12 @@ test('photos are filed under the step the job is at; anyone who sees the job see
   assert.equal(res.status, 201, res.text);
   assert.equal(res.body.thumb, `/jobs/${jobId}/photos/${res.body.id}/thumb.webp`);
   const first = await db('job_photos').where({ id: res.body.id }).first();
-  assert.equal(first.step_name, 'Vehicle Received');
+  assert.equal(first.step_name, 'Inspection / Measurement', 'the check-in already ticked Vehicle Received');
 
-  const step = await db('job_steps').where({ job_id: jobId, name: 'Vehicle Received' }).first();
-  await post(supervisor, `/jobs/${jobId}/steps/${step.id}/skip`); // no vehicle: nothing to receive
+  const step = await db('job_steps').where({ job_id: jobId, name: 'Inspection / Measurement' }).first();
+  await post(supervisor, `/jobs/${jobId}/steps/${step.id}/done`);
   res = await upload(supervisor);
-  assert.equal((await db('job_photos').where({ id: res.body.id }).first()).step_name, 'Inspection / Measurement');
+  assert.equal((await db('job_photos').where({ id: res.body.id }).first()).step_name, 'Material Planning');
 
   const page = (await sales.get(`/jobs/${jobId}`)).text;
   assert.match(page, /Progress photos/);

@@ -4,7 +4,7 @@ import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { checklist as releaseChecklist } from '../src/modules/checkins/release.js';
 import { FAB } from '../db/seeds/06_job_types.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let admin, supervisor, technician, sales, customer, repair, savedTypes;
@@ -29,6 +29,10 @@ after(async () => {
   await cleanup();
 });
 
+let plate = 0;
+/** A vehicle of the customer checked in at HQ: a job is opened only for one (sheet row 49). */
+const arrived = () => checkedInVehicle(customer.id, `KJR 4${String(plate++).padStart(2, '0')}A`);
+
 async function post(agent, url, fields = {}) {
   const csrf = csrfFrom((await agent.get('/')).text);
   return agent.post(url).type('form').send({ _csrf: csrf, ...fields });
@@ -40,7 +44,8 @@ const stepOf = (jobId, name) => db('job_steps').where({ job_id: jobId, name }).f
 /** Ticks the current steps off until the quality check; passes it if `pass`. */
 async function tickTo(id, { pass = true } = {}) {
   for (let step = await currentStep(id); step && !step.is_qc && !step.is_signoff; step = await currentStep(id)) {
-    await post(supervisor, `/jobs/${id}/steps/${step.id}/${step.is_receive ? 'skip' : 'done'}`); // no vehicle: nothing to receive
+    if (step.is_receive) continue; // ticked by the vehicle's check-in
+    await post(supervisor, `/jobs/${id}/steps/${step.id}/done`);
   }
   if (!pass || !(await currentStep(id))?.is_qc) return;
   const check = idOf((await post(supervisor, `/jobs/${id}/qc`)).headers.location);
@@ -51,7 +56,7 @@ async function tickTo(id, { pass = true } = {}) {
 
 /** A Repair job at its customer sign-off step, with its passed check. */
 async function jobAtSignoff() {
-  const res = await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: repair.id, line_description: ['Rebuild the tailgate'] });
+  const res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: repair.id, line_description: ['Rebuild the tailgate'] });
   const id = idOf(res.headers.location);
   await post(supervisor, `/jobs/${id}/start`);
   const check = await tickTo(id);
@@ -171,6 +176,6 @@ test('a job type’s customer sign-off comes after its quality check', async () 
   res = await post(admin, `/admin/job-types/${repair.id}`, { name: repair.name, step: steps, qc_step: 'Quality Inspection', signoff_step: '' });
   assert.equal(res.status, 302);
   assert.equal((await db('job_types').where({ id: repair.id }).first()).signoff_step, null);
-  const plain = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: repair.id, line_description: ['No sign-off'] })).headers.location);
+  const plain = idOf((await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: repair.id, line_description: ['No sign-off'] })).headers.location);
   assert.equal(Number((await db('job_steps').where({ job_id: plain, is_signoff: true }).count({ n: '*' }))[0].n), 0);
 });

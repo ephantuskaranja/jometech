@@ -4,7 +4,7 @@ import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
 import { seed, FAB } from '../db/seeds/06_job_types.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let admin, manager, supervisor, technician, sales, customer, originalDefault;
@@ -42,10 +42,17 @@ async function makeType(name, step, extra = {}) {
   assert.equal(res.status, 302, res.text);
   return db('job_types').where({ name, is_active: true }).first();
 }
+let plate = 0;
+/** A vehicle of the customer checked in at HQ: a job is opened only for one (sheet row 49). */
+const arrived = () => checkedInVehicle(customer.id, `KJR 5${String(plate++).padStart(2, '0')}A`);
+const vehicleOf = new Map(); // job id → its vehicle, sent again when the job is edited
 async function makeJob(jobTypeId) {
-  const res = await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: jobTypeId ?? '', line_description: ['Repair floor'] });
+  const vehicleId = await arrived();
+  const res = await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: vehicleId, job_type_id: jobTypeId ?? '', line_description: ['Repair floor'] });
   assert.equal(res.status, 302, res.text);
-  return idOf(res.headers.location);
+  const id = idOf(res.headers.location);
+  vehicleOf.set(id, vehicleId);
+  return id;
 }
 
 test('the starting lists are there; running the seed again changes nothing', async () => {
@@ -154,15 +161,16 @@ test('from a proforma: the default type, or the one chosen', async () => {
     return id;
   };
   let id = await accepted();
+  const vehicleId = await arrived(); // the proforma only described it; it is chosen once checked in
   assert.match((await sales.get(`/proformas/${id}`)).text, /name="job_type_id"/);
-  await post(sales, `/proformas/${id}/job`);
+  await post(sales, `/proformas/${id}/job`, { vehicle_id: vehicleId });
   let job = await db('jobs').where({ proforma_id: id }).first();
   assert.equal(job.job_type_id, originalDefault.id);
   assert.ok((await stepsOf(job.id)).length > 0);
 
   const type = await makeType('Test proforma', ['Only Step']);
   id = await accepted();
-  await post(sales, `/proformas/${id}/job`, { job_type_id: type.id });
+  await post(sales, `/proformas/${id}/job`, { job_type_id: type.id, vehicle_id: await arrived() });
   job = await db('jobs').where({ proforma_id: id }).first();
   assert.deepEqual((await stepsOf(job.id)).map((s) => s.name), ['Only Step']);
 });
@@ -171,7 +179,7 @@ test('the job type can change until a step is ticked off', async () => {
   const a = await makeType('Test change A', ['One', 'Two']);
   const b = await makeType('Test change B', ['Alpha']);
   const id = await makeJob(a.id);
-  const edit = (jobTypeId) => post(supervisor, `/jobs/${id}`, { customer_id: customer.id, job_type_id: jobTypeId, line_description: ['Repair floor'] });
+  const edit = (jobTypeId) => post(supervisor, `/jobs/${id}`, { customer_id: customer.id, vehicle_id: vehicleOf.get(id), job_type_id: jobTypeId, line_description: ['Repair floor'] });
 
   assert.equal((await edit(b.id)).status, 302);
   assert.deepEqual((await stepsOf(id)).map((s) => s.name), ['Alpha']);
@@ -184,7 +192,7 @@ test('the job type can change until a step is ticked off', async () => {
   assert.equal(res.status, 422);
   assert.match(res.text, /can’t change now/);
   assert.deepEqual((await stepsOf(id)).map((s) => s.name), ['One', 'Two']);
-  assert.equal((await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, line_description: ['Repair floor'], instructions: 'Still editable' })).status, 302, 'the rest can still be edited');
+  assert.equal((await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, vehicle_id: vehicleOf.get(id), line_description: ['Repair floor'], instructions: 'Still editable' })).status, 302, 'the rest can still be edited');
 });
 
 test('a type can be removed, except the default; the default can move', async () => {
@@ -195,7 +203,7 @@ test('a type can be removed, except the default; the default can move', async ()
   await post(admin, `/admin/job-types/${type.id}/remove`);
   assert.equal((await db('job_types').where({ id: type.id }).first()).is_active, 0);
   assert.doesNotMatch((await admin.get('/admin/job-types')).text, new RegExp(`/admin/job-types/${type.id}"`));
-  assert.equal((await post(supervisor, '/jobs', { customer_id: customer.id, job_type_id: type.id, line_description: ['X'] })).status, 422, 'no longer offered');
+  assert.equal((await post(supervisor, '/jobs', { customer_id: customer.id, vehicle_id: await arrived(), job_type_id: type.id, line_description: ['X'] })).status, 422, 'no longer offered');
   assert.match((await supervisor.get(`/jobs/${id}`)).text, /Test remove/, 'the job keeps its name and steps');
   assert.equal((await stepsOf(id)).length, 1);
 
@@ -216,7 +224,7 @@ test('a job made before steps existed can still be completed, and can be given a
   assert.equal((await db('jobs').where({ id }).first()).status, 'completed');
   await post(supervisor, `/jobs/${id}/reopen`);
   assert.equal((await db('jobs').where({ id }).first()).status, 'in_progress');
-  const res = await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, job_type_id: originalDefault.id, line_description: ['Repair floor'] });
+  const res = await post(supervisor, `/jobs/${id}`, { customer_id: customer.id, vehicle_id: vehicleOf.get(id), job_type_id: originalDefault.id, line_description: ['Repair floor'] });
   assert.equal(res.status, 302, res.text);
   assert.ok((await stepsOf(id)).length > 0);
 });

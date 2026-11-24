@@ -111,8 +111,21 @@
           <% if (proforma.job) { %>
             <a class="btn btn-outline-primary" href="/jobs/<%= proforma.job.id %>"><i class="bi bi-wrench-adjustable"></i>Open job <%= proforma.job.number %></a>
           <% } else { %>
+            <%# The job starts once the vehicle is checked in here (sheet row 49). %>
+            <% if (startBlock) { %>
+              <p class="small mb-0"><%= startBlock.text %></p>
+              <% if (startBlock.checkInHref) { %><a class="btn btn-outline-primary" href="<%= startBlock.checkInHref %>"><i class="bi bi-box-arrow-in-down"></i>Check it in</a><% } %>
+            <% } else { %>
             <form class="d-grid gap-2" method="post" action="/proformas/<%= proforma.id %>/job">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <% if (!proforma.vehicle_id) { %>
+                <div>
+                  <label class="form-label small mb-1" for="job-vehicle">Vehicle, checked in here</label>
+                  <select class="form-select" id="job-vehicle" name="vehicle_id" required>
+                    <% startVehicles.forEach((v) => { %><option value="<%= v.value %>"<%= v.disabled ? ' disabled' : '' %>><%= v.label %></option><% }) %>
+                  </select>
+                </div>
+              <% } %>
               <div>
                 <label class="form-label small mb-1" for="job-type">Job type</label>
                 <select class="form-select" id="job-type" name="job_type_id">
@@ -121,6 +134,7 @@
               </div>
               <button class="btn btn-primary w-100" type="submit"><i class="bi bi-wrench-adjustable"></i>Start the job</button>
             </form>
+            <% } %>
           <% } %>
         <% } else if (proforma.status === 'declined') { %>
           <div><%- include('partials/pill', { text: st.label, tone: st.tone }) %> <span class="small text-body-secondary"><%= fmt.dateTime(proforma.closed_at) %></span>
