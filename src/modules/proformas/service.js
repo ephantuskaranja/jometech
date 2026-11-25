@@ -33,8 +33,24 @@ const err = (status, message, field) => Object.assign(httpError(status, message)
 /** The VAT inside a VAT-inclusive amount: 116 at 16% → 16. */
 export const vatIn = (total) => Math.round((Number(total) * config.vatRate / (100 + config.vatRate)) * 100) / 100;
 
+/**
+ * A proforma made from a running job (sheet row 49) prices that job: its customer and vehicle are the job's,
+ * and the job has no accepted proforma yet nor another one being prepared. Sets them on `input`.
+ */
+async function checkJob(trx, input, selfId = null) {
+  const job = await trx('jobs').where({ id: input.for_job_id }).forUpdate().first('id', 'number', 'status', 'customer_id', 'vehicle_id', 'proforma_id');
+  if (!job) throw err(422, 'That job no longer exists.', 'for_job_id');
+  if (job.status === 'cancelled') throw err(409, `${job.number} is cancelled. Reopen it before pricing it.`, 'for_job_id');
+  if (job.proforma_id) throw err(409, `${job.number} already has an accepted proforma. Extra work goes on it as a variation.`, 'for_job_id');
+  const other = await trx('proformas').where({ for_job_id: job.id }).whereIn('status', ['draft', 'sent'])
+    .modify((q) => { if (selfId) q.whereNot('id', selfId); }).first('number');
+  if (other) throw err(409, `${job.number} already has proforma ${other.number} being prepared. Change or revise that one.`, 'for_job_id');
+  Object.assign(input, { customer_id: job.customer_id, vehicle_id: job.vehicle_id, enquiry_id: null });
+}
+
 /** Customer and vehicle must exist, and the vehicle must be that customer's. */
-async function checkLinks(trx, input) {
+async function checkLinks(trx, input, selfId = null) {
+  if (input.for_job_id) await checkJob(trx, input, selfId);
   if (!(await trx('customers').where({ id: input.customer_id }).first('id'))) throw err(422, 'That customer no longer exists.', 'customer_id');
   if (input.vehicle_id) {
     const v = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
@@ -43,7 +59,7 @@ async function checkLinks(trx, input) {
   if (input.enquiry_id && !(await trx('enquiries').where({ id: input.enquiry_id }).first('id'))) throw err(422, 'That enquiry no longer exists.', 'enquiry_id');
 }
 
-const FIELDS = ['enquiry_id', 'customer_id', 'vehicle_id', 'vehicle_description', 'proforma_date', 'notes'];
+const FIELDS = ['enquiry_id', 'for_job_id', 'customer_id', 'vehicle_id', 'vehicle_description', 'proforma_date', 'notes'];
 const pick = (input) => Object.fromEntries(FIELDS.map((k) => [k, input[k] ?? null]));
 const totalOf = (lines) => Math.round(lines.reduce((sum, l) => sum + l.amount, 0) * 100) / 100;
 
@@ -79,7 +95,9 @@ export async function createProforma(input, actor) {
     });
     await writeLines(trx, id, input.lines);
     const copied = input.copied_from ? ` (copied from ${input.copied_from})` : '';
-    await audit(trx, actor, { entity: 'proforma', id, action: 'create', summary: `Proforma ${number}, KES ${totalOf(input.lines).toLocaleString('en-KE')}${copied}` });
+    const job = input.for_job_id ? await trx('jobs').where({ id: input.for_job_id }).first('number') : null;
+    await audit(trx, actor, { entity: 'proforma', id, action: 'create', summary: `Proforma ${number}, KES ${totalOf(input.lines).toLocaleString('en-KE')}${copied}${job ? ` for job ${job.number}` : ''}` });
+    if (job) await audit(trx, actor, { entity: 'job', id: input.for_job_id, action: 'proforma_made', summary: `Proforma ${number}` });
     return { id, number };
   });
 }
@@ -90,7 +108,8 @@ export async function updateProforma(id, input, actor) {
     const before = await trx('proformas').where({ id }).forUpdate().first();
     if (!before) throw httpError(404, 'That proforma doesn’t exist.');
     if (before.status !== 'draft') throw httpError(409, `${before.number} has been sent, so it can’t be changed. Use “Revise” to make a new version.`);
-    await checkLinks(trx, input);
+    input = { ...input, for_job_id: before.for_job_id }; // made for a job: it stays that job's
+    await checkLinks(trx, input, id);
     await trx('proformas').where({ id }).update({ ...pick(input), total: totalOf(input.lines) });
     await writeLines(trx, id, input.lines);
     await audit(trx, actor, { entity: 'proforma', id, action: 'update', summary: `Details changed (${before.number}), now KES ${totalOf(input.lines).toLocaleString('en-KE')}` });
@@ -111,6 +130,25 @@ export async function markSent(id, actor) {
   });
 }
 
+/**
+ * Accepted, a proforma made from a running job becomes that job's proforma: no second job is opened.
+ * The job's work becomes the lines agreed (without prices) and stays fixed; stores can now issue to it.
+ */
+async function attachToJob(trx, p, actor) {
+  const job = await trx('jobs').where({ id: p.for_job_id }).forUpdate().first('id', 'number', 'status', 'proforma_id');
+  if (!job) return; // the job was deleted: the proforma waits for a job like any other
+  if (job.status === 'cancelled') throw httpError(409, `${job.number} is cancelled. Reopen it, then accept ${p.number}.`);
+  if (job.proforma_id) throw httpError(409, `${job.number} already has an accepted proforma. Decline ${p.number}, or add the work to the job as a variation.`);
+  await trx('jobs').where({ id: job.id }).update({ proforma_id: p.id });
+  const lines = await trx('proforma_lines').where({ proforma_id: p.id }).orderBy('sort_order');
+  await trx('job_lines').where({ job_id: job.id }).delete();
+  if (lines.length) {
+    await trx('job_lines').insert(lines.map((l, i) => ({ job_id: job.id, sort_order: i + 1, quantity: l.quantity, unit: l.unit, description: l.description })));
+  }
+  await audit(trx, actor, { entity: 'job', id: job.id, action: 'proforma_accepted', summary: `${p.number}: the work is now as agreed on it, and stores can issue materials` });
+  await audit(trx, actor, { entity: 'proforma', id: p.id, action: 'job_attached', summary: `Job ${job.number}` });
+}
+
 /** The customer said yes, or no (with a reason). */
 export async function closeProforma(id, { status, reason = null }, actor) {
   await db.transaction(async (trx) => {
@@ -119,6 +157,7 @@ export async function closeProforma(id, { status, reason = null }, actor) {
     if (p.status !== 'sent') throw httpError(409, `Only a sent proforma can be ${status}. ${p.number} is ${STATUSES[p.status].label.toLowerCase()}.`);
     await trx('proformas').where({ id }).update({ status, declined_reason: status === 'declined' ? reason : null, closed_at: trx.fn.now() });
     await audit(trx, actor, { entity: 'proforma', id, action: status, summary: status === 'declined' ? `Declined: ${reason}` : `Accepted (${p.number})` });
+    if (status === 'accepted' && p.for_job_id) await attachToJob(trx, p, actor);
     if (status === 'accepted') await enquiryTo(trx, actor, p.enquiry_id, 'won', { from: ['open', 'quoted'], summary: `Won: proforma ${p.number} accepted` });
     else await enquiryTo(trx, actor, p.enquiry_id, 'lost', { from: ['open', 'quoted'], reason, summary: `Lost: proforma ${p.number} declined (${reason})` });
   });
@@ -162,10 +201,11 @@ export async function getProforma(id) {
     .leftJoin('enquiries as e', 'e.id', 'p.enquiry_id')
     .leftJoin('users as u', 'u.id', 'p.created_by')
     .leftJoin('proformas as r', 'r.id', 'p.replaced_by')
+    .leftJoin('jobs as fj', 'fj.id', 'p.for_job_id')
     .where('p.id', id)
     .first('p.*', 'c.name as customer_name', 'c.number as customer_number', 'c.phone as customer_phone', 'c.town as customer_town',
       'c.address as customer_address', 'c.kra_pin as customer_pin', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model',
-      'e.number as enquiry_number', 'u.name as created_name', 'r.number as replaced_by_number');
+      'e.number as enquiry_number', 'u.name as created_name', 'r.number as replaced_by_number', 'fj.number as for_job_number');
   if (!p) return null;
   p.vehicle_label = p.vehicle_id ? vehicleLabel(p) : null;
   p.lines = await db('proforma_lines').where({ proforma_id: id }).orderBy('sort_order');

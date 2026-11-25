@@ -5,7 +5,7 @@ import { history } from '../../core/audit.js';
 import { isDay, localDay } from '../../core/dates.js';
 import { check, httpError, optionalText } from '../../core/validate.js';
 import * as issues from './service.js';
-import { getJob } from '../jobs/service.js';
+import { getJob, materialsAllowed } from '../jobs/service.js';
 
 // Issuing materials to jobs, and returning what wasn't used.
 
@@ -88,6 +88,11 @@ router.get('/jobs/:id/issue', manage, async (req, res) => {
   needSite(req);
   const job = await loadJob(req);
   if (!['open', 'in_progress'].includes(job.status)) throw httpError(409, `${job.number} is finished, so materials can’t be issued to it. Reopen it first.`);
+  // Waiting for the customer's yes (sheet row 49): back to the job, which says what is needed.
+  if (!materialsAllowed(job)) {
+    req.session.flash = { type: 'warning', text: issues.waitingMessage(job) };
+    return res.redirect(`/jobs/${job.id}`);
+  }
   await renderForm(req, res, { job, values: { issued_on: localDay(), received_by: '', notes: '', leaves_site: '', destination: '' } });
 });
 

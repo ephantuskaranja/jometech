@@ -14,7 +14,7 @@
             <label class="form-label" for="issue-job">Which job is it for?</label>
             <select class="form-select" id="issue-job" name="job_id" required>
               <option value="">Choose a job</option>
-              <% jobs.forEach((j) => { %><option value="<%= j.id %>"><%= j.number %> · <%= j.customer_name %><%= j.reg_no ? ` · ${j.reg_no}` : '' %></option><% }) %>
+              <% jobs.forEach((j) => { const waiting = !j.proforma_id && !j.materials_allowed_at; %><option value="<%= j.id %>"<%= waiting ? ' disabled' : '' %>><%= j.number %> · <%= j.customer_name %><%= j.reg_no ? ` · ${j.reg_no}` : '' %><%= waiting ? ' (proforma not accepted yet)' : '' %></option><% }) %>
             </select>
           </div>
           <button class="btn btn-primary" type="submit"><i class="bi bi-box-seam"></i>Issue materials</button>

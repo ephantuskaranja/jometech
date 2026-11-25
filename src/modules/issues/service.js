@@ -2,6 +2,7 @@ import { db } from '../../core/db.js';
 import { audit } from '../../core/audit.js';
 import { nextNumber } from '../../core/numbering.js';
 import { httpError } from '../../core/validate.js';
+import { materialsAllowed } from '../jobs/service.js';
 
 // Materials issued to jobs.
 //
@@ -35,6 +36,9 @@ export async function availableStock(siteId) {
   });
 }
 
+/** Why stores can't issue to the job yet (sheet row 49). */
+export const waitingMessage = (job) => `${job.number} is waiting for the customer to accept its proforma, so materials can’t be issued yet. A supervisor can allow it early on the job.`;
+
 /**
  * @param {number} jobId
  * @param {{ issued_on: string, received_by: string|null, notes: string|null, leaves_site?: boolean, destination?: string|null, lines: { balance_id: number, quantity: number }[] }} input
@@ -42,9 +46,10 @@ export async function availableStock(siteId) {
  */
 export async function issueMaterials(jobId, input, actor) {
   return db.transaction(async (trx) => {
-    const job = await trx('jobs').where({ id: jobId }).forUpdate().first('id', 'number', 'status');
+    const job = await trx('jobs').where({ id: jobId }).forUpdate().first('id', 'number', 'status', 'proforma_id', 'materials_allowed_at');
     if (!job) throw httpError(404, 'That job doesn’t exist.');
     if (!['open', 'in_progress'].includes(job.status)) throw httpError(409, `${job.number} is finished, so materials can’t be issued to it. Reopen it first.`);
+    if (!materialsAllowed(job)) throw httpError(409, waitingMessage(job));
 
     const number = await nextNumber(trx, 'issue');
     const [id] = await trx('material_issues').insert({
@@ -177,7 +182,7 @@ export async function materialsForJob(jobId) {
 export function activeJobs(siteIds) {
   return db('jobs as j').join('customers as c', 'c.id', 'j.customer_id').leftJoin('vehicles as v', 'v.id', 'j.vehicle_id')
     .whereIn('j.site_id', siteIds).whereIn('j.status', ['open', 'in_progress']).orderBy('j.id', 'desc').limit(200)
-    .select('j.id', 'j.number', 'c.name as customer_name', 'v.reg_no');
+    .select('j.id', 'j.number', 'c.name as customer_name', 'v.reg_no', 'j.proforma_id', 'j.materials_allowed_at');
 }
 
 // ---------- gate passes (step 26c) ----------

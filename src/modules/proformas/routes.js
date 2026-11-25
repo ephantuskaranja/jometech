@@ -11,7 +11,7 @@ import * as proformas from './service.js';
 import * as customers from '../customers/service.js';
 import * as enquiries from '../enquiries/service.js';
 import { typeOptions } from '../job-types/service.js';
-import { vehicleBlocker, vehicleChoices } from '../jobs/service.js';
+import { vehicleBlocker, vehicleChoices, getJob } from '../jobs/service.js';
 import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Proformas: write one (or copy another), send it, then accepted / declined / revised.
@@ -22,6 +22,7 @@ const manage = canAny('quotations.manage');
 const proformaSchema = z.object({
   customer_id: optionalId().refine((v) => v !== null, 'Choose the customer'),
   enquiry_id: optionalId(),
+  for_job_id: optionalId(),
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
   proforma_date: z.string().trim().refine((v) => isDay(v), 'Check the date'),
@@ -41,7 +42,7 @@ function validate(body) {
   return { data, rows, errors: all };
 }
 
-const blank = () => ({ customer_id: '', enquiry_id: '', vehicle_id: '', vehicle_description: '', proforma_date: localDay(), notes: '', copied_from: '' });
+const blank = () => ({ customer_id: '', enquiry_id: '', for_job_id: '', vehicle_id: '', vehicle_description: '', proforma_date: localDay(), notes: '', copied_from: '' });
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '', unit_price: '' });
 
 async function loadProforma(req) {
@@ -59,9 +60,10 @@ async function guideFor(user, fixedTotal = null) {
 async function renderForm(res, { status = 200, proforma = null, values, rows, errors = {}, copiedFrom = null }) {
   const customer = values.customer_id ? await customers.getCustomer(Number(values.customer_id)) : null;
   const enquiry = values.enquiry_id ? await enquiries.getEnquiry(Number(values.enquiry_id)) : null;
+  const forJob = values.for_job_id ? await getJob(Number(values.for_job_id)) : null;
   res.status(status).render('proformas/views/form', {
-    title: proforma ? `Edit proforma ${proforma.number}` : 'New proforma',
-    proforma, values, errors, enquiry, copiedFrom,
+    title: proforma ? `Edit proforma ${proforma.number}` : forJob ? `Proforma for ${forJob.number}` : 'New proforma',
+    proforma, values, errors, enquiry, copiedFrom, forJob,
     rows: rows.length ? rows : [blankRow()],
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await enquiries.vehicleOptions(customer.id) : [],
@@ -93,6 +95,17 @@ router.get('/proformas/new', manage, async (req, res) => {
     rows = [{ ...blankRow(), description: enquiry.description }];
   }
   if (req.query.customer_id && (await customers.getCustomer(Number(req.query.customer_id)))) values.customer_id = Number(req.query.customer_id);
+  // ?job=12: "Make proforma" on a running job (sheet row 49). Its customer, vehicle and work, to price.
+  const job = req.query.job ? await getJob(Number(req.query.job)) : null;
+  if (job) {
+    if (job.proforma_id || job.pending_proforma) {
+      const p = job.proforma_id ? { id: job.proforma_id, number: job.proforma_number } : job.pending_proforma;
+      req.session.flash = { type: 'info', text: `${job.number} already has proforma ${p.number}.` };
+      return res.redirect(`/proformas/${p.id}`);
+    }
+    Object.assign(values, { for_job_id: job.id, customer_id: job.customer_id, vehicle_id: job.vehicle_id ?? '', vehicle_description: job.vehicle_id ? '' : job.vehicle_description ?? '' });
+    rows = job.lines.map((l) => ({ quantity: String(Number(l.quantity)), unit: l.unit, description: l.description, unit_price: '' }));
+  }
   const source = req.query.copy ? await proformas.getProforma(Number(req.query.copy)) : null;
   if (source) {
     copiedFrom = { id: source.id, number: source.number, customer_name: source.customer_name };
@@ -183,6 +196,11 @@ router.post('/proformas/:id/send', manage, async (req, res) => {
 router.post('/proformas/:id/accept', manage, async (req, res) => {
   const proforma = await loadProforma(req);
   await proformas.closeProforma(proforma.id, { status: 'accepted' }, req);
+  if (proforma.for_job_id) {
+    req.session.flash = { type: 'success', text: `${proforma.number} accepted. It is now job ${proforma.for_job_number}’s proforma: the work follows its lines, and stores can issue materials.`,
+      actions: [{ label: `Open ${proforma.for_job_number}`, href: `/jobs/${proforma.for_job_id}`, icon: 'wrench', primary: true }] };
+    return res.redirect(`/proformas/${proforma.id}`);
+  }
   req.session.flash = {
     type: 'success', text: `${proforma.number} accepted.${proforma.enquiry_id ? ` Enquiry ${proforma.enquiry_number} closed as won.` : ''}`,
     // One click opens the job when its vehicle is already checked in here; otherwise the proforma page says what's needed.

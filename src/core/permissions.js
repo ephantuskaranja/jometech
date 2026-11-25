@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   ['Workshop', 'jobs.view', 'See jobs and their details'],
   ['Workshop', 'jobs.manage', 'Create jobs, move stages, assign work'],
   ['Workshop', 'jobs.progress', 'Update own tasks and add photos'],
+  ['Workshop', 'jobs.allow_materials', 'Let stores issue materials to a job before its proforma is accepted'],
   ['Workshop', 'qc.manage', 'Carry out quality checks'],
   ['Gate', 'visitors.gate', 'Sign visitors in and clear them out at the gate'],
   ['Gate', 'visitors.receive', 'Confirm visitors were received; sign in walk-ins at reception'],
@@ -54,7 +55,7 @@ export const ROLES = [
   {
     key: 'supervisor', name: 'Supervisor',
     description: 'Jobs, check-in, attendance and quality checks at their sites',
-    permissions: ['checkin.manage', 'checkin.gate', 'goods.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view', 'visitors.book', 'purchasing.request'],
+    permissions: ['checkin.manage', 'checkin.gate', 'goods.gate', 'jobs.view', 'jobs.manage', 'jobs.progress', 'jobs.allow_materials', 'qc.manage', 'attendance.manage', 'reports.view', 'visitors.view', 'visitors.book', 'purchasing.request'],
   },
   {
     key: 'sales', name: 'Sales',

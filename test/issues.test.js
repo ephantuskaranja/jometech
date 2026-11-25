@@ -20,7 +20,8 @@ before(async () => {
   plate = await item('Test Plate 4 mm');
   bolt = await item('Test U-bolt');
   const [customerId] = await db('customers').insert({ number: 'CUS-T835', name: 'Test Haulier', phone: '+254700000835', category: 'individual' });
-  const [jobId] = await db('jobs').insert({ number: 'JOB-2026-8835', site_id: hq.id, customer_id: customerId, status: 'in_progress' });
+  // Allowed by a supervisor: stores wait for an accepted proforma otherwise (sheet row 49, job-proforma.test.js).
+  const [jobId] = await db('jobs').insert({ number: 'JOB-2026-8835', site_id: hq.id, customer_id: customerId, status: 'in_progress', materials_allowed_at: db.fn.now(), materials_allowed_reason: 'Test' });
   job = await db('jobs').where({ id: jobId }).first();
 });
 

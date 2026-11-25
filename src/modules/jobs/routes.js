@@ -215,6 +215,10 @@ router.get('/jobs/:id', view, async (req, res) => {
     canAskMaterials: (req.user.can('purchasing.request') || req.user.can('purchasing.manage')) && ['open', 'in_progress'].includes(job.status),
     materials: await materialsForJob(job.id),
     canIssue: req.user.can('stores.issue') && ['open', 'in_progress'].includes(job.status),
+    // Stores wait for the customer's yes on a proforma, or a supervisor's go-ahead (sheet row 49).
+    materialsOk: jobs.materialsAllowed(job),
+    canAllowMaterials: req.user.can('jobs.allow_materials') && ['open', 'in_progress'].includes(job.status),
+    canMakeProforma: req.user.can('quotations.manage') && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma,
     // What materials cost: for those who run the stores and managers, not the workshop floor.
     canSeeCost: req.user.can('stores.issue') || req.user.can('inventory.manage'),
     canOpenIssues: req.user.can('stores.issue') || req.user.can('inventory.manage'),
@@ -338,6 +342,19 @@ router.post('/jobs/:id/cancel', manage, async (req, res) => {
   }
   await jobs.cancelJob(job.id, reason, req);
   req.session.flash = { type: 'warning', text: `${job.number} cancelled. You can reopen it if plans change.` };
+  res.redirect(`/jobs/${job.id}`);
+});
+
+// Before the proforma is accepted: stores may issue to this job now (supervisors and above), saying why.
+router.post('/jobs/:id/allow-materials', canAny('jobs.allow_materials'), async (req, res) => {
+  const job = await loadJob(req);
+  const reason = String(req.body.reason ?? '').trim();
+  if (reason.length < 3 || reason.length > 255) {
+    req.session.flash = { type: 'warning', text: 'Say why stores may issue before the proforma is accepted (3 to 255 characters).' };
+    return res.redirect(`/jobs/${job.id}`);
+  }
+  await jobs.allowMaterials(job.id, reason, req);
+  req.session.flash = { type: 'success', text: `Stores can now issue materials to ${job.number}.` };
   res.redirect(`/jobs/${job.id}`);
 });
 

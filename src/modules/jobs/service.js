@@ -12,6 +12,8 @@ import { httpError } from '../../core/validate.js';
 //
 // From an accepted proforma the customer, vehicle and lines are copied, without prices,
 // and stay fixed: later changes will be variations. A job with no proforma can be edited.
+// The job can also come first: "Make proforma" prices it, and once accepted that proforma becomes
+// the job's (proformas/service.js). Stores issue materials only after that, unless a supervisor allows it.
 // A job is opened only for a vehicle checked in at that site (sheet row 49), and follows it between sites.
 // Older jobs opened before that rule may still have no vehicle; their check-in links by itself.
 //
@@ -226,6 +228,24 @@ export async function createFromProforma(proformaId, jobTypeId, actor, chosenVeh
     await audit(trx, actor, { entity: 'job', id, action: 'create', summary: `From proforma ${p.number}` });
     await audit(trx, actor, { entity: 'proforma', id: p.id, action: 'job_created', summary: `Job ${number}` });
     return { id, number, site_id: siteId, existed: false };
+  });
+}
+
+/**
+ * Stores issue materials to a job once the customer has accepted its proforma, or when a supervisor
+ * (or above) has allowed it early (sheet row 49). Returns go back whatever the state.
+ */
+export const materialsAllowed = (job) => Boolean(job.proforma_id || job.materials_allowed_at);
+
+/** "Allow materials now": before the proforma is accepted, with the reason (jobs.allow_materials; the route checks). */
+export async function allowMaterials(id, reason, actor) {
+  await db.transaction(async (trx) => {
+    const job = await trx('jobs').where({ id }).forUpdate().first();
+    if (!job) throw httpError(404, 'That job doesn’t exist.');
+    if (!ACTIVE.includes(job.status)) throw httpError(409, `${job.number} is ${STATUSES[job.status].label.toLowerCase()}.`);
+    if (materialsAllowed(job)) return;
+    await trx('jobs').where({ id }).update({ materials_allowed_at: trx.fn.now(), materials_allowed_by: actor.user.id, materials_allowed_reason: reason });
+    await audit(trx, actor, { entity: 'job', id, action: 'materials_allowed', summary: reason });
   });
 }
 
@@ -510,13 +530,17 @@ export async function getJob(id) {
     .leftJoin('proformas as p', 'p.id', 'j.proforma_id')
     .leftJoin('users as sup', 'sup.id', 'j.supervisor_id')
     .leftJoin('users as cr', 'cr.id', 'j.created_by')
+    .leftJoin('users as ma', 'ma.id', 'j.materials_allowed_by')
     .leftJoin('job_types as jt', 'jt.id', 'j.job_type_id')
     .where('j.id', id)
     .first('j.*', 'c.name as customer_name', 'c.number as customer_number', 'c.phone as customer_phone', 's.name as site_name',
       'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 'v.type', 'v.colour',
       'ci.number as checkin_number', 'ci.status as checkin_status', 'ci.odometer_km', 'ci.odometer_not_working',
-      'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name');
+      'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name', 'ma.name as materials_allowed_name');
   if (!job) return null;
+  // A proforma made from the job, still with the customer (draft or sent).
+  job.pending_proforma = job.proforma_id ? null
+    : await db('proformas').where({ for_job_id: id }).whereIn('status', ['draft', 'sent']).orderBy('id', 'desc').first('id', 'number', 'status') ?? null;
   // An open job whose vehicle is in the workshop always shows that check-in, even if the link was
   // missed (the job was opened, reopened or given its vehicle in an order the links didn't follow).
   // The link is put right here too, so lists and the job card agree.

@@ -14,6 +14,7 @@
           <span><i class="bi bi-calendar"></i><%= fmt.date(`${proforma.proforma_date}T12:00:00Z`) %></span>
           <span><i class="bi bi-cash"></i>KES <%= fmt.money(proforma.total) %></span>
           <% if (proforma.enquiry_id) { %><span><i class="bi bi-inbox"></i><a href="/enquiries/<%= proforma.enquiry_id %>"><%= proforma.enquiry_number %></a></span><% } %>
+          <% if (proforma.for_job_id) { %><span><i class="bi bi-wrench"></i>For job <a href="/jobs/<%= proforma.for_job_id %>"><%= proforma.for_job_number %></a></span><% } %>
         </div>
       </div>
       <div class="jt-page-actions">

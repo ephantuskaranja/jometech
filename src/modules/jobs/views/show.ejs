@@ -165,14 +165,40 @@
 
     <%- include('photos') %>
 
-    <% if (materials.lines.length || canIssue) { %>
+    <% const waitingForPrice = active && !materialsOk; %>
+    <% if (materials.lines.length || canIssue || waitingForPrice) { %>
       <section class="card">
         <div class="card-header d-flex align-items-center gap-3">
           <h2 class="h6 mb-0 me-auto">Materials</h2>
           <% if (canSeeCost && materials.lines.length) { %><span class="small jt-num fw-semibold text-nowrap">KES <%= fmt.money(materials.total) %></span><% } %>
-          <% if (canIssue) { %><a class="btn btn-outline-secondary btn-sm text-nowrap" href="/jobs/<%= job.id %>/issue"><i class="bi bi-box-seam"></i>Issue materials</a><% } %>
+          <% if (canIssue && materialsOk) { %><a class="btn btn-outline-secondary btn-sm text-nowrap" href="/jobs/<%= job.id %>/issue"><i class="bi bi-box-seam"></i>Issue materials</a><% } %>
         </div>
-        <% if (!materials.lines.length) { %>
+        <%# Stores wait for the customer's yes on a proforma, or a supervisor's go-ahead (sheet row 49). %>
+        <% if (waitingForPrice) { %>
+          <div class="card-body border-bottom" x-data="{ allow: false }">
+            <p class="small mb-2"><i class="bi bi-hourglass-split text-warning"></i> Stores can’t issue materials yet: the customer hasn’t accepted a proforma for this job.
+              <% if (job.pending_proforma) { %>
+                <% if (canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.pending_proforma.id %>"><%= job.pending_proforma.number %></a><% } else { %><span class="font-monospace"><%= job.pending_proforma.number %></span><% } %>
+                <%= job.pending_proforma.status === 'draft' ? 'is still a draft.' : 'is with the customer.' %>
+              <% } else { %>No proforma has been made for it yet.<% } %>
+            </p>
+            <div class="d-flex flex-wrap gap-2" x-show="!allow">
+              <% if (canMakeProforma) { %><a class="btn btn-primary btn-sm" href="/proformas/new?job=<%= job.id %>"><i class="bi bi-receipt"></i>Make proforma</a><% } %>
+              <% if (canAllowMaterials) { %><button type="button" class="btn btn-outline-secondary btn-sm" @click="allow = true; $nextTick(() => $refs.why.focus())"><i class="bi bi-unlock"></i>Allow materials now</button><% } %>
+            </div>
+            <% if (canAllowMaterials) { %>
+              <form method="post" action="/jobs/<%= job.id %>/allow-materials" class="d-grid gap-2" x-show="allow" x-cloak>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <%- include('partials/field', { name: 'reason', id: 'allow-reason', label: 'Why can stores issue before the proforma is accepted?', placeholder: 'e.g. Fleet customer on account; LPO on the way', required: true, attrs: 'x-ref="why" maxlength="255"' }) %>
+                <div class="d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Allow materials</button><button class="btn btn-link btn-sm" type="button" @click="allow = false">Not now</button></div>
+              </form>
+            <% } %>
+          </div>
+        <% } else if (!job.proforma_id && job.materials_allowed_by) { %>
+          <div class="card-body border-bottom small text-body-secondary">Allowed before a proforma was accepted, by <%= job.materials_allowed_name ?? 'a supervisor' %>: <%= job.materials_allowed_reason %></div>
+        <% } %>
+        <% if (waitingForPrice && !materials.lines.length) { %>
+        <% } else if (!materials.lines.length) { %>
           <div class="card-body small text-body-secondary">Nothing issued to this job yet.</div>
         <% } else { %>
           <div class="table-responsive">
@@ -442,7 +468,12 @@
           </dd></div>
           <div><dt>Proforma</dt><dd>
             <% if (job.proforma_id && canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.proforma_id %>"><%= job.proforma_number %></a>
-            <% } else { %><span class="font-monospace"><%= job.proforma_number ?? '—' %></span><% } %>
+            <% } else if (job.proforma_id) { %><span class="font-monospace"><%= job.proforma_number %></span>
+            <% } else if (job.pending_proforma) { %>
+              <% if (canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.pending_proforma.id %>"><%= job.pending_proforma.number %></a><% } else { %><span class="font-monospace"><%= job.pending_proforma.number %></span><% } %>
+              <span class="d-block small text-body-secondary"><%= job.pending_proforma.status === 'draft' ? 'Draft, not sent yet' : 'Sent, waiting for the customer' %></span>
+            <% } else { %>—<% if (canMakeProforma) { %><a class="d-block small" href="/proformas/new?job=<%= job.id %>"><i class="bi bi-receipt"></i> Make proforma</a><% } %>
+            <% } %>
           </dd></div>
           <div><dt>Supervisor</dt><dd>
             <%= job.supervisor_name ?? '—' %>
