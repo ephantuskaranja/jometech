@@ -20,7 +20,7 @@
           <div class="jt-nav-label"><%= group.label %></div>
           <% group.items.forEach((item) => { %>
             <% if (item.ready) { const active = isActive(item.href, path); %>
-              <a class="jt-nav-link<%= active ? ' active' : '' %>" href="<%= item.href %>"<%- active ? ' aria-current="page"' : '' %>>
+              <a class="jt-nav-link<%= active ? ' active' : '' %>" href="<%= item.href %>"<%- active ? ' aria-current="page"' : '' %><%- item.newTab ? ' target="_blank" rel="noopener"' : '' %>>
                 <i class="bi bi-<%= item.icon %>" aria-hidden="true"></i><span><%= item.label %></span>
               </a>
             <% } else { %>

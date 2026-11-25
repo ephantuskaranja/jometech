@@ -71,7 +71,7 @@ test('menu shows only what the role may use', async () => {
   assert.ok(menu(adminPage).includes('Payroll'));
   assert.ok(menu(adminPage).includes('Users'));
   assert.ok(!menu(adminPage).includes('Backups'), 'backups are the System Administrator’s');
-  assert.deepEqual(menu(techPage), ['Dashboard', 'Jobs']);
+  assert.deepEqual(menu(techPage), ['Dashboard', 'Jobs', 'User guide']);
 });
 
 test('a new account must change its password first', async () => {

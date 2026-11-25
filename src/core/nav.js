@@ -74,6 +74,13 @@ export const nav = [
       { label: 'Backups', href: '/admin/backups', icon: 'database-check', sysadminOnly: true, ready: true },
     ],
   },
+  {
+    label: 'Help',
+    items: [
+      { label: 'User guide', href: '/help/user-guide', icon: 'book', newTab: true, ready: true },
+      { label: 'Test guide', href: '/help/test-guide', icon: 'clipboard2-check', adminOnly: true, newTab: true, ready: true },
+    ],
+  },
 ];
 
 /** The menu with only the items this user may see; empty groups are dropped. */

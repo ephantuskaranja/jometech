@@ -14,6 +14,7 @@ import { sessionMiddleware, csrfProtection, generateCsrfToken } from './core/ses
 import { attachUser, requireLogin } from './core/auth.js';
 import { router as authRoutes } from './modules/auth/routes.js';
 import { router as accountRoutes } from './modules/account/routes.js';
+import { router as helpRoutes } from './modules/help/routes.js';
 import { router as dashboardRoutes } from './modules/dashboard/routes.js';
 import { router as userRoutes } from './modules/users/routes.js';
 import { router as devRoutes } from './modules/dev/routes.js';
@@ -162,6 +163,7 @@ export function createApp() {
   app.use(authRoutes);          // /login, /logout: open to everyone
   app.use(requireLogin);        // everything below needs a logged-in user
   app.use(accountRoutes);
+  app.use(helpRoutes);
   app.use(dashboardRoutes);
   app.use(userRoutes);
   app.use(devRoutes);

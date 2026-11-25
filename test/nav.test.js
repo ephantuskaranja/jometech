@@ -13,7 +13,7 @@ after(cleanup);
 test('each menu page highlights its own menu item', async () => {
   const agent = await loginAs(createApp(), await makeUser(88, ['admin']));
   const user = await loadUser((await db('users').where({ phone: '+254700000088' }).first('id')).id);
-  const hrefs = navFor(user).flatMap((g) => g.items).filter((i) => i.ready).map((i) => i.href);
+  const hrefs = navFor(user).flatMap((g) => g.items).filter((i) => i.ready && !i.newTab).map((i) => i.href); // the guides are PDFs, not pages
   const wrong = [];
   for (const href of hrefs) {
     const res = await agent.get(href);
