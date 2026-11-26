@@ -34,7 +34,7 @@
 
   <main class="sheet job-card<%= cancelled ? ' is-cancelled' : '' %>">
     <header class="letterhead">
-      <img src="/img/brand/icon.svg" alt="" width="52" height="52">
+      <img class="doc-logo" src="/img/brand/logo.svg?v=<%= assetVersion %>" alt="Jome-Tech">
       <div class="company">
         <div class="company-name"><%= company.name %></div>
         <div><%= company.address.join(' · ') %></div>

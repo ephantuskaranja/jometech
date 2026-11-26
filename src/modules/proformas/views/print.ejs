@@ -32,7 +32,7 @@
     <header class="pf-head">
       <div class="pf-company-name"><%= company.name %></div>
       <div class="pf-head-row">
-        <img src="/img/brand/icon.svg" alt="" width="90" height="90">
+        <img class="doc-logo" src="/img/brand/logo.svg?v=<%= assetVersion %>" alt="Jome-Tech">
         <div class="pf-address">
           <% company.address.forEach((line) => { %><div><%= line %></div><% }) %>
           <div>Tel: <%= company.phone %></div>
