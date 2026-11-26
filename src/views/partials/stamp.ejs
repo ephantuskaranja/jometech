@@ -6,7 +6,7 @@
     include('partials/stamp', { date: '26 Nov 2026', signer: { name, url } | null })
 %>
 <div class="jt-stamp">
-  <img class="jt-stamp-ink" src="/img/brand/stamp.png?v=<%= assetVersion %>" alt="Jome-Tech company stamp">
+  <img class="jt-stamp-ink" src="/company-stamp.png?v=<%= assetVersion %>" alt="Jome-Tech company stamp">
   <span class="jt-stamp-date"><%= date %></span>
   <% if (signer?.url) { %><img class="jt-stamp-sig" src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %>
 </div>

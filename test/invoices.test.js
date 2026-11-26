@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
@@ -139,6 +140,19 @@ test('the printed invoice is like the paper one: customer & bank, vehicle number
   assert.match(print, /01100210891001/, 'bank details');
   assert.match(print, /class="jt-stamp"/, 'an issued invoice carries the company stamp (sheet row 52)');
   assert.match(print, /class="jt-stamp-date">[^<]*\d{4}</, 'dated');
+  assert.match(print, /src="\/company-stamp\.png/);
+});
+
+test('the company stamp is served only to someone logged in, never from the public folder', async () => {
+  const stranger = request(app);
+  const res = await stranger.get('/company-stamp.png');
+  assert.equal(res.status, 302, 'logged out: off to the login page');
+  assert.match(res.headers.location, /\/login/);
+  await manager.get('/img/brand/stamp.png').expect(404); // gone from public/
+  await manager.get('/img/Stamp.jpeg').expect(404);
+  const stamp = await manager.get('/company-stamp.png').expect(200);
+  assert.match(stamp.headers['content-type'], /image\/png/);
+  assert.match(stamp.headers['cache-control'], /private/);
 });
 
 test('the PDF’s file name stays short and has only characters a file name can have', () => {
