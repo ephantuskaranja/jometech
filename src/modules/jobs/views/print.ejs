@@ -148,8 +148,14 @@
            const staff = who.startsWith('Checked') ? locals.signs?.supervisor : null; %>
         <div>
           <div class="label"><%= who %></div>
-          <div class="jc-sign-line<%= staff?.url ? ' has-sig' : '' %>"><% if (staff?.url) { %><img src="<%= staff.url %>" alt="Signature of <%= staff.name %>"><% } %></div>
-          <div class="muted small"><% if (staff?.url) { %><%= staff.name %><%= job.completed_at ? ` · ${fmt.date(job.completed_at)}` : '' %><% } else { %>Name, signature and date<% } %></div>
+          <%# Once the work is completed the supervisor's box carries the company stamp, dated and signed. %>
+          <% if (staff) { %>
+            <%- include('partials/stamp', { date: job.completed_at ? fmt.date(job.completed_at) : '', signer: staff }) %>
+            <div class="muted small"><%= staff.name %></div>
+          <% } else { %>
+            <div class="jc-sign-line"></div>
+            <div class="muted small">Name, signature and date</div>
+          <% } %>
         </div>
       <% }) %>
     </div>

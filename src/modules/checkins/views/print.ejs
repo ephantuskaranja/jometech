@@ -86,7 +86,8 @@
       <div class="sig-row">
         <div class="sig-name"><span class="label">Received by:</span> <%= checkin.received_by_name %></div>
         <% const staff = locals.signs?.received; %>
-        <div class="sig-box"><span class="label">Sign</span><span class="sig-line<%= staff?.url ? ' has-sig' : '' %>"><% if (staff?.url) { %><img src="<%= staff.url %>" alt="Signature of <%= staff.name %>"><% } %></span></div>
+        <%# Jome-Tech's side: the company stamp, dated, with their saved signature on it (blank to sign by hand). %>
+        <div class="sig-box"><%- include('partials/stamp', { date: fmt.date(checkin.checked_in_at), signer: staff }) %></div>
       </div>
       <div class="sig-row">
         <div class="sig-name">

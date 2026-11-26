@@ -86,7 +86,10 @@
       <div><%= company.name %></div>
       <%# The saved signature of whoever is responsible (Account → My signature), or a line to sign by hand. %>
       <% const signer = locals.signs?.by; %>
-      <div class="pf-sign-line<%= signer?.url ? ' has-sig' : '' %>"><% if (signer?.url) { %><img src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %></div>
+      <%# Official copies carry the company stamp, signed and dated; drafts keep a plain line. %>
+      <% if (official) { %><%- include('partials/stamp', { date: fmt.date(order.approved_at ?? `${order.order_date}T12:00:00Z`), signer }) %><% } else { %>
+        <div class="pf-sign-line<%= signer?.url ? ' has-sig' : '' %>"><% if (signer?.url) { %><img src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %></div>
+      <% } %>
       <div><%= signer?.url ? signer.name : company.signatory %></div>
     </div>
   </main>

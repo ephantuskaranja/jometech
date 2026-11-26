@@ -94,8 +94,14 @@
     <div class="jc-signoff qc-signoff">
       <div>
         <div class="label">Inspected by</div>
-        <div class="jc-sign-line"><%= finished ? insp.finished_by_name ?? '' : '' %></div>
-        <div class="muted small">Name, signature and date</div>
+        <%# A finished inspection carries the company stamp, dated, with the inspector's saved signature. %>
+        <% if (finished && !locals.blank) { %>
+          <%- include('partials/stamp', { date: insp.finished_at ? fmt.date(insp.finished_at) : '', signer: locals.signs?.inspected ?? null }) %>
+          <div class="muted small"><%= insp.finished_by_name ?? '' %></div>
+        <% } else { %>
+          <div class="jc-sign-line"></div>
+          <div class="muted small">Name, signature and date</div>
+        <% } %>
       </div>
       <div>
         <div class="label">Supervisor</div>

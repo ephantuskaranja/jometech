@@ -1,0 +1,12 @@
+<%#
+  The company stamp on a printed document (sheet row 52): Jome-Tech's own stamp, with the document's date
+  on the Date line and the signer's saved signature (Account → My signature) on the Sign line.
+  No saved signature: the Sign line stays blank to sign by hand. Only official documents get it
+  (drafts, cancelled ones and unapproved orders print without), and only on Jome-Tech's side, never the customer's.
+    include('partials/stamp', { date: '26 Nov 2026', signer: { name, url } | null })
+%>
+<div class="jt-stamp">
+  <img class="jt-stamp-ink" src="/img/brand/stamp.png?v=<%= assetVersion %>" alt="Jome-Tech company stamp">
+  <span class="jt-stamp-date"><%= date %></span>
+  <% if (signer?.url) { %><img class="jt-stamp-sig" src="<%= signer.url %>" alt="Signature of <%= signer.name %>"><% } %>
+</div>

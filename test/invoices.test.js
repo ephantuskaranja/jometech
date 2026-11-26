@@ -137,6 +137,8 @@ test('the printed invoice is like the paper one: customer & bank, vehicle number
   assert.match(print, /Amount payable by Test Co-operative Bank<\/th><th>NIL/);
   assert.match(print, /KRA eTIMS invoice no: <strong>KRA0831X/);
   assert.match(print, /01100210891001/, 'bank details');
+  assert.match(print, /class="jt-stamp"/, 'an issued invoice carries the company stamp (sheet row 52)');
+  assert.match(print, /class="jt-stamp-date">[^<]*\d{4}</, 'dated');
 });
 
 test('the PDF’s file name stays short and has only characters a file name can have', () => {

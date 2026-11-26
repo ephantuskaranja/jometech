@@ -186,6 +186,16 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .pf-sign-line.has-sig img { max-height: 13mm; max-width: 100%; }
 .jc-sign-line.has-sig img { max-height: 10mm; max-width: 100%; }
 
+/* The company stamp (partials/stamp.ejs): the real stamp, tilted like a hand press, with the date and the
+   signature laid over its dotted lines. Positions are fractions of the stamp image (800 x 500). */
+.jt-stamp { position: relative; width: 54mm; aspect-ratio: 800 / 500; transform: rotate(-4deg); margin: 2mm 0; break-inside: avoid;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.jt-stamp-ink { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .9; }
+.jt-stamp-date { position: absolute; left: 38%; bottom: 62.5%; font: 600 9pt Figtree, Arial, sans-serif; color: #10206e; white-space: nowrap; }
+.jt-stamp-sig { position: absolute; left: 37%; bottom: 29%; height: 11mm; max-width: 26mm; object-fit: contain; object-position: left bottom; mix-blend-mode: multiply; }
+.jc-signoff .jt-stamp { width: 46mm; }
+.sig-box .jt-stamp { width: 46mm; margin: 0; }
+
 /* Empty lines kept for handwriting: off unless "Blank lines to write in by hand" is ticked (print-note.js). */
 body:not(.keep-blank) .jt-pad-row { display: none; }
 body:not(.keep-blank) .jt-pad-section { display: none; }

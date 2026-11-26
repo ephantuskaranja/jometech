@@ -65,6 +65,7 @@ test('a proforma needs a customer and at least one priced line; numbers continue
   assert.match(print, /<li>Toolbox<\/li>/, '"- " lines print as bullets');
   assert.match(print, /01100210891001/, 'bank details');
   assert.match(print, /is-draft/);
+  assert.doesNotMatch(print, /class="jt-stamp"/, 'a draft prints without the company stamp');
 });
 
 test('a draft can be changed; once sent it is locked', async () => {

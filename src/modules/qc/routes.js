@@ -9,6 +9,7 @@ import { httpError } from '../../core/validate.js';
 import * as qc from './service.js';
 import { getJob } from '../jobs/service.js';
 import { forCheck as signoffForCheck } from './signoff.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 
 // Quality checks: the list (Workshop → Quality checks), an inspection on a job,
 // printed reports (filled in, or blank for paper), and System → Quality checklist.
@@ -153,7 +154,9 @@ router.get('/qc/:id/photos/:photoId/thumb.webp', view, (req, res) => sendPhoto(r
 router.get('/qc/:id/print', view, async (req, res) => {
   const insp = await loadInspection(req);
   res.render('qc/views/print', { layout: false, title: `${insp.number} quality inspection`, insp, sections: insp.sections, company: config.company, printedAt: new Date(), vehicle: vehicleOf(insp), results: qc.RESULTS,
-    signoff: await signoffForCheck(insp.id) });
+    signoff: await signoffForCheck(insp.id),
+    // Whoever finished the inspection signs on the company stamp (Account → My signature).
+    signs: await staffSignatures({ inspected: ['passed', 'failed'].includes(insp.status) ? insp.finished_by : null }) });
 });
 
 // A blank form for paper, from today's checklist; ?job=ID fills in the job's details.
