@@ -35,11 +35,15 @@ export async function importPunches({ punches, fileName }, actor) {
     const [id] = await trx('attendance_imports').insert({
       file_name: fileName.slice(0, 255), rows: punches.length, first_day: days[0] ?? null, last_day: days.at(-1) ?? null, created_by: actor.user.id,
     });
-    // The machines, by name; a new one waits for its site to be set.
+    // The machines, by name. A new one goes to the site of the same name ("JOMETECH 1" ↔ site "Jometech 1"),
+    // else it waits for its site to be set.
     const devices = new Map();
+    const siteList = await trx('sites').where({ is_active: true }).select('id', 'name', 'code');
     for (const p of punches.filter((x) => x.device)) {
       if (devices.has(p.device)) continue;
-      await trx('clock_devices').insert({ name: p.device, serial: p.serial }).onConflict('name').ignore();
+      const site = siteList.find((x) => [x.name, x.code].some((n) => machineKey(n) === machineKey(p.device)));
+      await trx('clock_devices').insert({ name: p.device, serial: p.serial, site_id: site?.id ?? null }).onConflict('name').ignore();
+      if (site) await trx('clock_devices').where({ name: p.device }).whereNull('site_id').update({ site_id: site.id }); // a site renamed to match since
       devices.set(p.device, (await trx('clock_devices').where({ name: p.device }).first('id')).id);
     }
     for (let i = 0; i < punches.length; i += CHUNK) {
@@ -48,10 +52,43 @@ export async function importPunches({ punches, fileName }, actor) {
       }))).onConflict().ignore();
     }
     const [{ added }] = await trx('attendance_punches').where({ import_id: id }).count({ added: '*' });
-    await trx('attendance_imports').where({ id }).update({ added: Number(added) });
+    await trx('attendance_imports').where({ id }).update({ added: Number(added), device_ids: [...devices.values()].join(',').slice(0, 255) || null });
     await audit(trx, actor, { entity: 'attendance_import', id, action: 'create', summary: `${fileName}: ${added} new punches of ${punches.length}` });
     return { id, rows: punches.length, added: Number(added), firstDay: days[0] ?? null, lastDay: days.at(-1) ?? null };
   });
+}
+
+/** "JOMETECH 1", "Jometech-1" and "jometech1" are the same name. */
+export const machineKey = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * What the days of an import still need before they can be marked, and where they are (sheet row 56):
+ * machines with no site, clock IDs nobody is linked to, and per site and day how many people punched.
+ * The file's machines over the file's days, not only the punches it added: the same file imported twice adds
+ * nothing but still leads on.
+ */
+export async function importStatus(importId) {
+  const imp = await db('attendance_imports').where({ id: importId }).first();
+  if (!imp?.first_day) return null;
+  const deviceIds = String(imp.device_ids ?? '').split(',').map(Number).filter(Boolean);
+  // Older imports didn't keep their machines: those of the punches they added.
+  const inFile = (q) => (deviceIds.length ? q.whereIn('p.device_id', deviceIds) : q.where('p.import_id', importId));
+  const punches = () => inFile(db('attendance_punches as p').whereBetween('p.day', [imp.first_day, imp.last_day]));
+  const machines = await punches().join('clock_devices as d', 'd.id', 'p.device_id').leftJoin('sites as s', 's.id', 'd.site_id')
+    .groupBy('d.id').orderBy('d.name')
+    .select('d.id', 'd.name', 'd.site_id', db.raw('MAX(s.name) as site_name'), db.raw('COUNT(*) as punches'));
+  const unknown = await punches().leftJoin('employee_clock_ids as c', 'c.clock_id', 'p.clock_id')
+    .whereNull('c.clock_id').countDistinct({ n: 'p.clock_id' }).first();
+  const days = await punches().join('clock_devices as d', 'd.id', 'p.device_id').join('employee_clock_ids as c', 'c.clock_id', 'p.clock_id')
+    .whereNotNull('d.site_id')
+    .groupBy('d.site_id', 'p.day').orderBy('p.day').select('d.site_id', 'p.day', db.raw('COUNT(DISTINCT c.employee_id) as people'));
+  return {
+    import: imp,
+    machines: machines.map((m) => ({ ...m, punches: Number(m.punches) })),
+    unsetMachines: machines.filter((m) => !m.site_id),
+    unknown: Number(unknown?.n ?? 0),
+    days: days.map((d) => ({ site_id: d.site_id, day: d.day, people: Number(d.people) })),
+  };
 }
 
 export function recentImports() {
@@ -65,10 +102,12 @@ export function devices() {
       db('attendance_punches as p').whereRaw('p.device_id = d.id').max('p.day').as('last_day'));
 }
 
-export async function setDeviceSite(deviceId, siteId, actor) {
+/** Supervisors set a new machine's site; once set, only a manager or admin (canChange) can move it. */
+export async function setDeviceSite(deviceId, siteId, actor, { canChange = true } = {}) {
   await db.transaction(async (trx) => {
     const d = await trx('clock_devices').where({ id: deviceId }).forUpdate().first();
     if (!d) throw httpError(404, 'That machine doesn’t exist.');
+    if (d.site_id && !canChange) throw httpError(403, 'This machine’s site is already set. A manager can change it.');
     if (siteId && !(await trx('sites').where({ id: siteId }).first('id'))) throw httpError(422, 'Choose a site.');
     await trx('clock_devices').where({ id: deviceId }).update({ site_id: siteId });
     const site = siteId ? await trx('sites').where({ id: siteId }).first('name') : null;

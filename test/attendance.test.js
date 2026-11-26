@@ -86,9 +86,11 @@ test('the export is imported; the same file twice adds nothing; unknown clock ID
     ['TEST GEORGE', 'ANDAYE', '77962', '07:39', 'TEST-B'], ['TEST GEORGE', 'ANDAYE', '77962', '07:41', 'TEST-B'],
   ]);
   let res = await upload(supervisor, file);
-  assert.deepEqual(res.body, { go: '/attendance/import' });
+  assert.deepEqual(res.body, { go: '/attendance/import#machines' }, 'new machines: say where they are first (sheet row 56)');
   let page = (await supervisor.get('/attendance/import')).text;
   assert.match(page, /8 new punches imported/);
+  assert.match(page, /Next: say where each machine is/);
+  assert.match(page, /Step 1: say where each machine is/);
   assert.match(page, /TEST-HQ/);
   assert.match(page, /Test Kelvin Mbuthia/);
   assert.match(page, /Same name as clock ID 77967/, 'two IDs, one name');
@@ -98,13 +100,16 @@ test('the export is imported; the same file twice adds nothing; unknown clock ID
   res = await upload(supervisor, Buffer.from('hello'), 'notes.csv');
   assert.match((await supervisor.get('/attendance/import')).text, /No ID, Date and Time columns were found/);
 
-  // Machines get a site: managers set it, supervisors can't.
+  // Machines get a site: a supervisor sets a new one (sheet row 56); changing it is for managers.
   const devices = await db('clock_devices').whereIn('name', ['TEST-HQ', 'TEST-B']).select('id', 'name');
   const id = (name) => devices.find((d) => d.name === name).id;
-  assert.equal((await post(supervisor, `/attendance/machines/${id('TEST-HQ')}`, { site_id: home.id })).status, 403);
-  await post(manager, `/attendance/machines/${id('TEST-HQ')}`, { site_id: home.id });
+  assert.equal((await post(supervisor, `/attendance/machines/${id('TEST-HQ')}`, { site_id: home.id })).status, 302);
+  assert.equal((await db('clock_devices').where({ id: id('TEST-HQ') }).first()).site_id, home.id);
+  assert.equal((await post(supervisor, `/attendance/machines/${id('TEST-HQ')}`, { site_id: siteB.id })).status, 403, 'already set: a manager changes it');
   await post(manager, `/attendance/machines/${id('TEST-B')}`, { site_id: siteB.id });
   assert.equal((await db('clock_devices').where({ id: id('TEST-HQ') }).first()).site_id, home.id);
+  page = (await supervisor.get('/attendance/import')).text;
+  assert.match(page, /Step 2: link the clock IDs/, 'next: the unknown clock IDs');
 });
 
 test('unknown clock IDs become employees in one go: one person per name, at the machine’s site', async () => {
@@ -167,4 +172,15 @@ test('a day with no punches imported suggests nothing; the last day marked can f
   assert.match(page, /No punches imported for this day/);
   assert.match(page, /Fill the empty ones from it/);
   assert.match((await supervisor.get(`/attendance?day=2099-01-01&site=${home.id}`)).text, /\(today\)/, 'no future days');
+});
+
+test('after an import with everything set, the day opens; a machine named like a site is matched by itself (sheet row 56)', async () => {
+  // A machine called like the site ("TEST-ATTENDANCE-SITE" ↔ "Test Attendance Site") needs no setting.
+  const file = await exportFile([['Test Welder', 'Otieno', '77901', '07:12', 'TEST-ATTENDANCE-SITE'], ['Test Welder', 'Otieno', '77901', '17:02', 'TEST-ATTENDANCE-SITE']]);
+  const res = await upload(supervisor, file, 'Transaction site.xlsx');
+  assert.equal((await db('clock_devices').where({ name: 'TEST-ATTENDANCE-SITE' }).first()).site_id, home.id);
+  assert.deepEqual(res.body, { go: `/attendance?site=${home.id}&day=${day}` }, 'straight to the day to mark');
+  const page = (await supervisor.get(res.body.go)).text;
+  assert.match(page, /Everyone without a punch is marked Absent/);
+  assert.match((await supervisor.get('/attendance/import')).text, /Go to Test Attendance Site/);
 });

@@ -8,6 +8,33 @@
   sub: 'Every punch is kept as it came. Importing the same file twice adds nothing.',
 }) %>
 
+<%# What the last import still needs, step by step, then the day to mark (sheet row 56). %>
+<% if (status) { const when = status.import.first_day === status.import.last_day ? longDay(status.import.first_day) : `${longDay(status.import.first_day)} to ${longDay(status.import.last_day)}`; %>
+  <section class="card mb-4 jt-next-import">
+    <div class="card-body d-grid gap-2">
+      <div class="small text-body-secondary">Last import: <%= status.import.file_name %> · <%= when %></div>
+      <% if (next.step === 'machines') { %>
+        <div class="jt-warn-box"><i class="bi bi-hdd-network"></i><span><strong>Step 1: say where each machine is.</strong>
+          <%= status.unsetMachines.map((m) => m.name).join(' and ') %> <%= status.unsetMachines.length === 1 ? 'has' : 'have' %> no site yet, so <%= status.unsetMachines.length === 1 ? 'its' : 'their' %> punches don’t count for any site. Choose the site under <a href="#machines">Machines</a>.</span></div>
+      <% } else if (next.step === 'unknown') { %>
+        <div class="jt-warn-box"><i class="bi bi-person-exclamation"></i><span><strong>Step 2: link the clock IDs.</strong>
+          <%= status.unknown %> <%= status.unknown === 1 ? 'person on the machine isn’t' : 'people on the machines aren’t' %> linked to an employee yet. Link them <a href="#unknown">below</a>, then mark the day.</span></div>
+      <% } else if (next.step === 'day') { %>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="me-auto"><i class="bi bi-check2-circle text-success"></i> Ready to mark. Everyone without a punch is marked Absent; check and save each day.</span>
+          <a class="btn btn-primary" href="<%= next.go %>"><i class="bi bi-calendar-check"></i>Go to <%= siteNames.get(next.site_id) %>, <%= longDay(next.day) %></a>
+        </div>
+      <% } %>
+      <% const others = status.days.filter((d) => siteNames.has(d.site_id) && !(d.site_id === next.site_id && d.day === next.day)); %>
+      <% if (next.step === 'day' && others.length) { %>
+        <div class="d-flex flex-wrap gap-2 small"><span class="text-body-secondary">Also in this file:</span>
+          <% others.forEach((d) => { %><a class="badge rounded-pill text-bg-light border text-decoration-none" href="/attendance?site=<%= d.site_id %>&day=<%= d.day %>"><%= siteNames.get(d.site_id) %>, <%= longDay(d.day) %> · <%= d.people %></a><% }) %>
+        </div>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+
 <div class="row g-4">
   <div class="col-lg-7 d-grid gap-4 align-content-start">
     <section class="card">
@@ -17,6 +44,10 @@
           <label class="form-label" for="punch-file">Excel or CSV file<span class="jt-req" aria-hidden="true">*</span></label>
           <input class="form-control" type="file" id="punch-file" name="file" accept=".xlsx,.csv,text/csv" required>
           <div class="form-text">In the ZKTeco software: the <strong>Transaction</strong> report, exported as Excel or CSV, with the ID, Date, Time and Device Name columns.</div>
+          <ul class="form-text ps-3 mb-0">
+            <li>One file can hold every site’s punches: each machine’s punches count for the site it’s set to.</li>
+            <li>Each punch counts on the date in the file, not the day you import it. A file of several days fills each of them.</li>
+          </ul>
         </div>
         <div class="jt-error-text" x-show="error" x-text="error" x-cloak></div>
         <div><button class="btn btn-primary" type="submit" :disabled="busy"><i class="bi bi-upload"></i><span x-text="busy ? 'Importing…' : 'Import'">Import</span></button></div>
@@ -82,7 +113,7 @@
                 <strong><%= d.name %></strong><span class="small text-body-secondary font-monospace"><%= d.serial ?? '' %></span>
                 <span class="ms-auto small text-body-secondary"><%= d.last_day ? `Last punch ${fmt.date(`${d.last_day}T12:00:00Z`)}` : '' %></span>
               </div>
-              <% if (canSetMachines) { %>
+              <% if (canMoveMachines || !d.site_id) { %>
                 <form method="post" action="/attendance/machines/<%= d.id %>" class="d-flex gap-2 align-items-center">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <select class="form-select form-select-sm" name="site_id" aria-label="Where <%= d.name %> is">
@@ -94,7 +125,7 @@
               <% } else { %>
                 <div class="small">At <%= d.site_name ?? 'no site yet' %></div>
               <% } %>
-              <% if (!d.site_id) { %><div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> Set its site: until then its punches don’t show on a site’s day<%= canSetMachines ? '' : ' (a manager can set it)' %>.</div><% } %>
+              <% if (!d.site_id) { %><div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> Set its site: until then its punches don’t show on a site’s day. A site with the machine’s name (e.g. “<%= d.name %>”) is matched by itself on the next import.</div><% } %>
             </li>
           <% }) %>
         </ul>

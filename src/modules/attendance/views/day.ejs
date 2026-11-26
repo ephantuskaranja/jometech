@@ -52,6 +52,9 @@
   </div>
 <% } else if (!grid.covered) { %>
   <div class="jt-info-box mb-4"><i class="bi bi-info-circle"></i><span>No punches imported for this day at <%= site.name %> yet. <a href="/attendance/import">Import the machine’s export</a>, or mark everyone by hand<%= last ? ', or start from the last day marked' : '' %>.</span></div>
+<% } else if (!grid.confirmation && grid.rows.some((r) => !r.record && !r.elsewhere)) { %>
+  <%# Sheet row 56: suggestions from the punches are filled in; nothing counts until it's saved. %>
+  <div class="jt-info-box mb-4"><i class="bi bi-info-circle"></i><span>Filled in from the punches: anyone without a punch is marked <strong>Absent</strong>. Check, change what’s wrong (sick, leave), then <strong>Save</strong>.</span></div>
 <% } %>
 
 <form method="post" action="/attendance" x-data="{ copy: <%= JSON.stringify(copy) %>, copyLast() { this.$root.querySelectorAll('select[data-employee]').forEach((el) => { if (!el.value && this.copy[el.dataset.employee]) el.value = this.copy[el.dataset.employee]; }); } }">
