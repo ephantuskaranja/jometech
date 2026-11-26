@@ -39,7 +39,7 @@ const noteSchema = z.object({
 
 const plusDays = (days) => new Date(Date.parse(`${localDay()}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 const blank = () => ({
-  customer_id: '', caller_name: '', caller_phone: '', vehicle_id: '', vehicle_description: '', kind: '', work_type: '', other_work_type: '', save_work_type: '1', description: '',
+  caller_mode: '', customer_id: '', caller_name: '', caller_phone: '', vehicle_id: '', vehicle_description: '', kind: '', work_type: '', other_work_type: '', save_work_type: '1', description: '',
   budget: '', source: 'call', follow_up_on: plusDays(2),
 });
 
@@ -55,6 +55,9 @@ function validate(body) {
   const all = { ...errors };
   // From what was typed, so it shows together with the form's other problems.
   if (!String(body.customer_id ?? '').trim() && !String(body.caller_phone ?? '').trim()) all.caller_phone ??= 'Enter their phone number, so they can be called back';
+  // "Existing customer" (the form's first choice, sheet row 54) needs one picked; "New caller" is a prospect.
+  if (body.caller_mode === 'existing' && !String(body.customer_id ?? '').trim()) all.customer_id = 'Choose the customer, or tap “New caller”';
+  if (data && body.caller_mode === 'new') data.customer_id = null;
   if (data && !data.customer_id) data.vehicle_id = null;
   // The body type is needed for work; a general enquiry may leave it out.
   if (body.kind !== 'general' && !String(body.work_type ?? '').trim()) all.work_type = 'Choose the body type';
@@ -72,9 +75,12 @@ async function renderForm(res, { status = 200, enquiry = null, values, errors = 
   const workTypes = await enquiries.workTypes();
   // A kind of work that isn't a quick pick shows as "Other" with its name typed in.
   if (values.work_type && !workTypes.includes(values.work_type)) Object.assign(values, { other_work_type: values.work_type, work_type: 'Other' });
+  // Which side of "Who called" opens: as sent back, else a saved prospect or a typed-in caller is "new".
+  const callerMode = ['existing', 'new'].includes(values.caller_mode) ? values.caller_mode
+    : !values.customer_id && (enquiry || values.caller_name) ? 'new' : 'existing';
   res.status(status).render('enquiries/views/form', {
     title: enquiry ? `Edit ${enquiry.number}` : 'New enquiry',
-    enquiry, values, errors,
+    enquiry, values, errors, callerMode,
     customerOption: customer ? [{ value: customer.id, label: `${customer.name} (${customer.number})` }] : [],
     vehicleOptions: customer ? await enquiries.vehicleOptions(customer.id) : [],
     workTypes,
@@ -99,7 +105,7 @@ router.get('/enquiries/new', manage, async (req, res) => {
   const values = blank();
   // From a customer's page: ?customer_id=12 fills in who is calling.
   const customer = req.query.customer_id ? await customers.getCustomer(Number(req.query.customer_id)) : null;
-  if (customer) Object.assign(values, { customer_id: customer.id, caller_name: customer.name });
+  if (customer) Object.assign(values, { customer_id: customer.id, caller_name: customer.name, caller_phone: customer.phone ? fmt.phone(customer.phone) : '' });
   await renderForm(res, { values });
 });
 
@@ -196,6 +202,13 @@ router.post('/enquiries/:id/make-customer', manage, async (req, res) => {
 });
 
 // The form's vehicle dropdown, once a customer is chosen.
+// Picking an existing customer fills in who called: their name and phone, and lists their vehicles.
+router.get('/api/enquiries/caller', manage, async (req, res) => {
+  const customer = await customers.getCustomer(Number(req.query.customer_id) || 0);
+  if (!customer) throw httpError(404, 'That customer doesn’t exist.');
+  res.json({ name: customer.name, phone: customer.phone ? fmt.phone(customer.phone) : '', vehicles: await enquiries.vehicleOptions(customer.id) });
+});
+
 router.get('/api/enquiries/vehicles', manage, async (req, res) => {
   const id = Number(req.query.customer_id);
   res.json(id ? await enquiries.vehicleOptions(id) : []);

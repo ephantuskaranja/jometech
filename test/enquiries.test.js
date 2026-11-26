@@ -143,3 +143,32 @@ test('the enquiry type is asked every time; a general enquiry needs no body type
   await post('/enquiries', { caller_name: 'Achieng Otieno', caller_phone: '0700 000 704', kind: 'fabrication', work_type: 'Tipper', description: 'Wants a tipper after all' });
   assert.match((await sales.get(`/enquiries/${await newest('Achieng Otieno')}`)).text, /<h1 class="h3">Fabrication · Tipper /);
 });
+
+test('the form starts with an existing customer; picking one fills in their name and phone (sheet row 54)', async () => {
+  const page = (await sales.get('/enquiries/new')).text;
+  assert.match(page, /id="caller-existing" value="existing"[^>]*checked/, 'Existing customer is the first choice');
+  assert.ok(page.indexOf('name="customer_id"') < page.indexOf('name="caller_name"'), 'the customer picker comes before the name');
+
+  const caller = (await sales.get(`/api/enquiries/caller?customer_id=${customer.id}`).expect(200)).body;
+  assert.equal(caller.name, 'Wekesa Hauliers');
+  assert.equal(caller.phone, '0700 000 701');
+  assert.equal(caller.vehicles[0].value, vehicle.id);
+  await supervisor.get(`/api/enquiries/caller?customer_id=${customer.id}`).expect(403);
+
+  // "Existing customer" with nobody picked: say so.
+  let res = await post('/enquiries', { caller_mode: 'existing', caller_name: 'Someone', caller_phone: '0700000799', kind: 'general', work_type: '', description: 'Asked for prices' });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Choose the customer, or tap “New caller”/);
+
+  // From a customer's page the phone is filled in too.
+  assert.match((await sales.get(`/enquiries/new?customer_id=${customer.id}`)).text, /value="0700 000 701"[^>]*name="caller_phone"/);
+
+  // "New caller" never links a customer, even one left in the picker.
+  res = await post('/enquiries', { caller_mode: 'new', customer_id: customer.id, vehicle_id: vehicle.id, caller_name: 'Juma New', caller_phone: '0700000798', kind: 'general', work_type: '', description: 'Asked for prices' });
+  assert.equal(res.status, 302, res.text);
+  const e = await db('enquiries').where({ id: await newest('Juma New') }).first();
+  assert.equal(e.customer_id, null);
+  assert.equal(e.vehicle_id, null);
+  // Editing it opens on "New caller".
+  assert.match((await sales.get(`/enquiries/${e.id}/edit`)).text, /id="caller-new" value="new"[^>]*checked/);
+});

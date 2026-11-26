@@ -6,26 +6,37 @@
 }) %>
 
 <form method="post" action="<%= enquiry ? `/enquiries/${enquiry.id}` : '/enquiries' %>" novalidate class="col-xl-9"
-      x-data="enquiryForm(<%= JSON.stringify({ hasCustomer: Boolean(values.customer_id), vehicles: vehicleOptions, workType: values.work_type ?? '', kind: values.kind ?? '' }) %>)">
+      x-data="enquiryForm(<%= JSON.stringify({ mode: callerMode, hasCustomer: Boolean(values.customer_id), vehicles: vehicleOptions, workType: values.work_type ?? '', kind: values.kind ?? '' }) %>)">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
   <section class="card mb-4">
     <div class="card-header"><h2 class="h6 mb-0">Who called</h2></div>
     <div class="card-body d-grid gap-3">
+      <%# An existing customer first (sheet row 54): picking one fills in their name and phone. "New caller" types them in. %>
+      <input type="hidden" name="caller_mode" :value="mode" value="<%= callerMode %>">
+      <div class="btn-group align-self-start" role="group" aria-label="Who called">
+        <input type="radio" class="btn-check" id="caller-existing" value="existing" x-model="mode" @change="modeChanged()" <%= callerMode === 'existing' ? 'checked' : '' %>>
+        <label class="btn btn-outline-primary" for="caller-existing"><i class="bi bi-person-check"></i> Existing customer</label>
+        <input type="radio" class="btn-check" id="caller-new" value="new" x-model="mode" @change="modeChanged()" <%= callerMode === 'new' ? 'checked' : '' %>>
+        <label class="btn btn-outline-primary" for="caller-new"><i class="bi bi-person-plus"></i> New caller</label>
+      </div>
+      <div x-show="mode === 'existing'"<%- callerMode === 'existing' ? '' : ' x-cloak' %>>
+        <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', required: true,
+              options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
+              hint: 'Their name and phone fill in below. Change them if someone else called for the customer.',
+              attrs: 'x-ref="customer" @change="customerChanged($el.value)"' }) %>
+      </div>
       <div class="jt-fields">
-        <%- include('partials/field', { name: 'caller_name', label: 'Name', value: values.caller_name, error: errors.caller_name, required: true, autocomplete: 'off' }) %>
+        <%- include('partials/field', { name: 'caller_name', label: 'Name', value: values.caller_name, error: errors.caller_name, required: true, autocomplete: 'off',
+              attrs: 'x-ref="name"' }) %>
         <%- include('partials/field', { name: 'caller_phone', label: 'Phone', type: 'tel', value: values.caller_phone, error: errors.caller_phone,
-              placeholder: '0712 345 678', attrs: '@blur="checkPhone($el.value)"', hint: 'Needed for someone who isn’t a customer yet' }) %>
+              placeholder: '0712 345 678', attrs: 'x-ref="phone" @blur="checkPhone($el.value)"', hint: 'Needed for a new caller' }) %>
       </div>
       <div class="jt-info-box" x-show="match" x-cloak>
         <i class="bi bi-person-check"></i>
         <span>This number belongs to <strong x-text="match?.name"></strong> (<span x-text="match?.number"></span>).
           <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="useMatch()">Link this enquiry to them</button></span>
       </div>
-      <%- include('partials/field', { name: 'customer_id', label: 'Existing customer', type: 'select', url: '/api/customers',
-            options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
-            hint: 'Leave empty for a new caller: they stay a prospect until you add them as a customer.',
-            attrs: 'x-ref="customer" @change="customerChanged($el.value)"' }) %>
     </div>
   </section>
 

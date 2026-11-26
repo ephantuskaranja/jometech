@@ -553,13 +553,32 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // Enquiry form (enquiries/views/form.ejs): the customer's vehicles, and "this phone is a customer".
-  Alpine.data('enquiryForm', ({ hasCustomer = false, vehicles = [], workType = '', kind = '' } = {}) => ({
-    hasCustomer, vehicles, workType, kind, match: null,
+  // Enquiry form (enquiries/views/form.ejs). "Who called": an existing customer first (sheet row 54),
+  // whose name and phone fill in (and stay editable), or a new caller typed in.
+  Alpine.data('enquiryForm', ({ mode = 'existing', hasCustomer = false, vehicles = [], workType = '', kind = '' } = {}) => ({
+    mode, hasCustomer, vehicles, workType, kind, match: null,
+    filled: { name: '', phone: '' }, // what was last filled in for a customer, so it can be replaced but typing never is
+    init() {
+      if (this.hasCustomer) this.filled = { name: this.$refs.name.value, phone: this.$refs.phone.value };
+    },
+    fill(key, value) {
+      const el = this.$refs[key];
+      if (el.value.trim() && el.value !== this.filled[key]) return; // typed by hand: keep it
+      el.value = value;
+      this.filled[key] = value;
+    },
+    modeChanged() {
+      this.match = null;
+      if (this.mode === 'new') this.$refs.customer.tomselect?.clear(); // fires change → customerChanged('')
+      else this.$nextTick(() => this.$refs.customer.tomselect?.focus());
+    },
     async customerChanged(id) {
       this.hasCustomer = Boolean(id);
       this.match = null;
-      this.vehicles = id ? await getJson(`/api/enquiries/vehicles?customer_id=${id}`).catch(() => []) : [];
+      if (!id) { this.vehicles = []; this.fill('name', ''); this.fill('phone', ''); return; }
+      const caller = await getJson(`/api/enquiries/caller?customer_id=${id}`).catch(() => null);
+      this.vehicles = caller?.vehicles ?? [];
+      if (caller) { this.fill('name', caller.name); this.fill('phone', caller.phone); }
     },
     async checkPhone(phone) {
       if (this.hasCustomer || phone.replace(/\D/g, '').length < 9) { this.match = null; return; }
@@ -568,6 +587,7 @@ document.addEventListener('alpine:init', () => {
     },
     useMatch() {
       const ts = this.$refs.customer.tomselect;
+      this.mode = 'existing';
       ts.addOption({ value: this.match.id, label: `${this.match.name} (${this.match.number})` });
       ts.setValue(this.match.id); // fires change → customerChanged
     },
