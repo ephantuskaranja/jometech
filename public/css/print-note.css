@@ -1,6 +1,9 @@
 /* Printed documents (checkins/views/print.ejs, proformas/views/print.ejs): an A4 sheet, laid out like the paper form.
    Always light, whatever the app theme: it is meant for paper. */
-@page { size: A4; margin: 12mm; }
+/* Top and bottom margins under 8 mm leave Chrome and Edge no room for their own header and footer
+   (page title, date, web address, page numbers: sheet row 55). Tested: 7 mm drops them, 10 mm doesn't.
+   The sheet's own padding (print, below) keeps page one's spacing as before. */
+@page { size: A4; margin: 7mm 12mm; }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: #e9ecf2; color: #111827; font: 10.5pt/1.4 Figtree, Arial, sans-serif; color-scheme: light; }
@@ -135,7 +138,7 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
   .draft-note { display: none; }
   body { background: #fff; }
   .toolbar { display: none; }
-  .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  .sheet { width: auto; min-height: 0; margin: 0; padding: 5mm 0; box-shadow: none; }
   tr, .sig-row { break-inside: avoid; }
 }
 
