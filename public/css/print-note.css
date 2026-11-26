@@ -13,10 +13,10 @@ body { margin: 0; background: #e9ecf2; color: #111827; font: 10.5pt/1.4 Figtree,
 
 .letterhead { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 2px solid #1d3fbf; }
 .letterhead img { flex: none; }
-/* The company logo (public/img/brand/logo.svg: the picture from their logo, traced so it prints sharp; the name stays as text). */
+/* The company logo (public/img/brand/logo.svg: their logo with its lettering, traced so it prints sharp). */
 .doc-logo { width: auto; }
-.letterhead .doc-logo { height: 15mm; }
-.pf-head-row .doc-logo { height: 22mm; }
+.letterhead .doc-logo { height: 19mm; }
+.pf-head-row .doc-logo { height: 26mm; }
 .company { margin-left: auto; text-align: right; font-size: 9.5pt; color: #344054; }
 .company-name { font: 700 18pt/1.1 Archivo, Arial, sans-serif; color: #1d3fbf; margin-bottom: 4px; }
 
