@@ -26,6 +26,7 @@ export const NUMBER_FORMATS = {
   enquiry:   { prefix: 'ENQ', yearly: true },
   proforma:  { prefix: 'PF', yearly: false, plain: true, first: () => config.proformaFirstNumber }, // 490, 491 … continuing the paper ones; revisions (490-R1) aren't from here
   job:       { prefix: 'JOB', yearly: true },
+  stock_build: { prefix: 'SB', yearly: true },  // a job built for stock, before there is a customer (sheet row 58)
   item:      { prefix: 'ITM', yearly: false },
   supplier:  { prefix: 'SUP', yearly: false },
   employee:  { prefix: 'EMP', yearly: false },

@@ -13,7 +13,7 @@
 <%- include('partials/page-header', {
   crumb: [{ label: 'Jobs', href: '/jobs' }, job ? job.number : 'New'],
   heading: job ? `Edit ${job.number}` : 'New job',
-  sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : 'For a vehicle checked in here: choose the customer, their vehicle and the work.'),
+  sub: fixed ? `From proforma ${job.proforma_number}: the customer and work stay as agreed.` : (job ? 'Change it until it is completed.' : stock ? 'A stock build: what is being built, and the work. It gets an SB number.' : 'For a vehicle checked in here: choose the customer, their vehicle and the work.'),
 }) %>
 
 <%# What stops the job being opened (another job running, the vehicle at another site), with what to do. Outside the form: its buttons are forms too. %>
@@ -40,6 +40,26 @@
         <%# Sheet row 58: a body built for stock, before anyone buys it. Its chassis is checked in with "No customer yet". %>
         <% if (!job && locals.stockId && String(values.customer_id) !== String(stockId)) { %><a class="small" href="/jobs/new?customer_id=<%= stockId %>"><i class="bi bi-box"></i> No customer yet? Open it as a stock build</a><% } %>
       <% } %>
+      <% if (stock && !job) { %>
+        <%# Stock build: a trailer (registered from the start), a body only, or a body on a chassis checked in with "No customer yet". %>
+        <div x-data="{ kind: <%= JSON.stringify(values.build_kind || 'trailer') %> }" class="d-grid gap-3">
+          <%- include('partials/choices', { name: 'build_kind', label: 'What is it?', required: true, columns: 3, model: 'kind', value: values.build_kind || 'trailer', options: [
+                { value: 'trailer', label: 'A trailer', hint: 'Registered from the start: a temporary tag until its chassis number is stamped' },
+                { value: 'body', label: 'A body only', hint: 'No vehicle until it is fitted to a buyer’s truck' },
+                { value: 'chassis', label: 'On a chassis here', hint: 'A chassis checked in with “No customer yet”' }] }) %>
+          <div class="jt-field" x-show="kind === 'chassis'" x-cloak>
+            <label class="form-label" for="f-vehicle_id">Chassis checked in here</label>
+            <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id" :disabled="kind !== 'chassis'">
+              <option value="">Choose the chassis</option>
+              <% vehicleOptions.forEach((v) => { %><option value="<%= v.value %>"<%= v.disabled ? ' disabled' : '' %><%= String(v.value) === String(values.vehicle_id ?? '') ? ' selected' : '' %>><%= v.label %></option><% }) %>
+            </select>
+            <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
+            <% if (!vehicleOptions.some((v) => !v.disabled)) { %><div class="form-text">No chassis is checked in here with “No customer yet”. Check it in first (New vehicle, “No customer yet: stock build”).</div><% } %>
+          </div>
+          <%- include('partials/field', { name: 'vehicle_description', label: 'What is being built', value: values.vehicle_description, error: errors.vehicle_description, required: true,
+                placeholder: 'e.g. 40ft flatbed trailer, 3 axle; 20ft cargo body', hint: 'Shown on the job, the job card and Reports → Stock value.' }) %>
+        </div>
+      <% } else { %>
       <div class="jt-fields">
         <div x-show="hasCustomer" x-cloak>
           <div class="jt-field">
@@ -53,13 +73,11 @@
             <div class="form-text" x-show="!vehicles.some((v) => !v.disabled)">None of their vehicles is checked in here. The gate logs it in, then it is checked in<% if (canCheckIn) { %> under <a href="/check-in">Check-in</a><% } %>; then open its job.</div><% } %>
           </div>
         </div>
-        <% if (stock && !job) { %>
-          <%- include('partials/field', { name: 'vehicle_description', label: 'What is being built', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. 40ft flatbed trailer, 20ft cargo body',
-                hint: 'Needed when there is no chassis. Shown on the job, the job card and Reports → Stock value.' }) %>
-        <% } else if (legacy) { %>
+        <% if (legacy) { %>
           <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
         <% } %>
       </div>
+      <% } %>
     </div>
   </section>
 

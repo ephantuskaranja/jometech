@@ -172,11 +172,17 @@ export async function vehicleChoices(customerId, siteId, keepId = null) {
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
     // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
-    // A body or trailer built from scratch has no vehicle: what is being built is described instead.
+    // What it is (build_kind): a trailer, registered from the start (a temporary tag until its chassis number is
+    // stamped, checked in here as built here) so it is released and cleared like any vehicle once sold; a body
+    // only, with no vehicle until a buyer's truck is chosen; or a body on a chassis already checked in.
     const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
+    const kind = stock ? (input.build_kind ?? (input.vehicle_id ? 'chassis' : 'body')) : null;
+    if (kind === 'chassis' && !input.vehicle_id) throw err(422, 'Choose the chassis checked in here', 'vehicle_id');
+    if (kind === 'trailer' || kind === 'body') input = { ...input, vehicle_id: null };
     if (!input.vehicle_id && !stock) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
-    if (!input.vehicle_id && !input.vehicle_description) throw err(422, 'Say what is being built, e.g. 40ft flatbed trailer', 'vehicle_description');
-    if (input.vehicle_id) {
+    if (!input.vehicle_id && !input.vehicle_description) throw err(422, `Say what is being built, e.g. ${kind === 'body' ? '20ft cargo body' : '40ft flatbed trailer'}`, 'vehicle_description');
+    if (kind === 'trailer') input = { ...input, vehicle_id: await registerTrailer(trx, input, actor) };
+    else if (input.vehicle_id) {
       const owner = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
       if (owner?.customer_id !== input.customer_id) throw err(422, 'Choose one of this customer’s vehicles', 'vehicle_id');
       // One running job per vehicle, opened at the site the vehicle is checked in at.
@@ -186,7 +192,7 @@ export async function createJob(input, actor) {
     const siteId = checkin?.site_id ?? actor.site.id;
     await checkLinks(trx, input, { siteId });
     const typeId = await resolveType(trx, input.job_type_id);
-    const number = await nextNumber(trx, 'job');
+    const number = await nextNumber(trx, stock ? 'stock_build' : 'job'); // stock builds: SB-2026-0001
     const [id] = await trx('jobs').insert({
       number, site_id: siteId, job_type_id: typeId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
       checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
@@ -198,6 +204,24 @@ export async function createJob(input, actor) {
     await audit(trx, actor, { entity: 'job', id, action: 'create', summary: stock ? 'Stock build: no customer yet; stores can issue materials' : 'No proforma' });
     return { id, number };
   });
+}
+
+/**
+ * A stock trailer becomes a vehicle as its build starts: a temporary tag (JTT-…) until the chassis number is
+ * stamped (added on the vehicle later), owned by stock, and checked in here as built here (no gate arrival,
+ * no driver). Sold, it goes to its buyer and leaves through the normal release and gate. Returns its id.
+ */
+async function registerTrailer(trx, input, actor) {
+  const tag = await nextNumber(trx, 'temp_tag');
+  const [vehicleId] = await trx('vehicles').insert({ temp_tag: tag, customer_id: input.customer_id, type: 'trailer', model: input.vehicle_description.slice(0, 60), created_by: actor.user.id });
+  await audit(trx, actor, { entity: 'vehicle', id: vehicleId, action: 'create', summary: `Stock trailer ${tag}: ${input.vehicle_description}` });
+  const number = await nextNumber(trx, 'checkin');
+  const [checkinId] = await trx('checkins').insert({
+    number, site_id: actor.site.id, vehicle_id: vehicleId, purpose: 'fabrication', customer_id: input.customer_id,
+    received_by: actor.user.id, no_arrival_reason: 'Built here: stock build', remarks: input.vehicle_description,
+  });
+  await audit(trx, actor, { entity: 'checkin', id: checkinId, action: 'create', summary: `${tag} built here as a stock build (${number})` });
+  return vehicleId;
 }
 
 /**
@@ -247,18 +271,28 @@ export async function createFromProforma(proformaId, jobTypeId, actor, chosenVeh
  * vehicle's check-in in the workshop. From then on it is priced (Make or Match proforma), invoiced and
  * released like any job. The job stays marked as a stock build.
  */
-export async function assignCustomer(jobId, customerId, actor) {
+export async function assignCustomer(jobId, customerId, actor, mountId = null) {
   return db.transaction(async (trx) => {
     const job = await trx('jobs as j').join('customers as c', 'c.id', 'j.customer_id').where('j.id', jobId).forUpdate()
-      .first('j.id', 'j.number', 'j.status', 'j.vehicle_id', 'j.stock_build', 'c.is_stock');
+      .first('j.id', 'j.number', 'j.status', 'j.site_id', 'j.vehicle_id', 'j.stock_build', 'c.is_stock');
     if (!job) throw httpError(404, 'That job doesn’t exist.');
     if (!job.is_stock) throw httpError(409, `${job.number} already has a customer.`);
     if (job.status === 'cancelled') throw httpError(409, `${job.number} is cancelled. Reopen it first.`);
     const buyer = await trx('customers').where({ id: customerId, is_stock: false }).first('id', 'number', 'name');
     if (!buyer) throw err(422, 'Choose the customer who is buying it', 'customer_id');
 
-    await trx('jobs').where({ id: job.id }).update({ customer_id: buyer.id });
-    await audit(trx, actor, { entity: 'job', id: job.id, action: 'customer_assigned', summary: `Stock build sold to ${buyer.name} (${buyer.number})` });
+    // A body sold to be fitted to the buyer's truck: the job goes with that truck (checked in here), and leaves
+    // the yard with it through the normal release. A body collected loose: no truck, and none is needed.
+    let mount = null;
+    if (mountId && !job.vehicle_id) {
+      const v = await trx('vehicles').where({ id: mountId }).first('id', 'customer_id', 'reg_no', 'chassis_no', 'temp_tag');
+      if (!v || v.customer_id !== buyer.id) throw err(422, `Choose one of ${buyer.name}’s vehicles`, 'mount_vehicle_id');
+      await refuseIfBlocked(trx, v.id, { siteId: job.site_id, exceptJobId: job.id });
+      const checkin = await openCheckin(trx, v.id);
+      mount = { ...v, checkin };
+    }
+    await trx('jobs').where({ id: job.id }).update({ customer_id: buyer.id, ...(mount ? { vehicle_id: mount.id, checkin_id: mount.checkin?.id ?? null } : {}) });
+    await audit(trx, actor, { entity: 'job', id: job.id, action: 'customer_assigned', summary: `Stock build sold to ${buyer.name} (${buyer.number})${mount ? `, fitted to ${vehicleLabel(mount)}` : ''}` });
     if (job.vehicle_id) {
       await trx('vehicles').where({ id: job.vehicle_id }).update({ customer_id: buyer.id });
       await audit(trx, actor, { entity: 'vehicle', id: job.vehicle_id, action: 'customer_assigned', summary: `Now ${buyer.name}’s (bought as stock build ${job.number})` });

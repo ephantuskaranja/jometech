@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { db } from '../src/core/db.js';
 import { localDay } from '../src/core/dates.js';
-import { makeUser, loginAs, csrfFrom, cleanup } from './helpers.js';
+import { makeUser, loginAs, csrfFrom, cleanup, checkedInVehicle } from './helpers.js';
 
 const app = createApp();
 let supervisor, store, admin, stock;
@@ -142,7 +142,8 @@ test('a stock build made from scratch needs no vehicle: just what is being built
   // The form, opened as a stock build, asks what is being built; the chassis is optional.
   const form = (await supervisor.get(`/jobs/new?customer_id=${stock.id}`)).text;
   assert.match(form, /What is being built/);
-  assert.match(form, /None: built from scratch/);
+  assert.match(form, /A trailer/);
+  assert.match(form, /A body only/);
 
   let res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build trailer'] });
   assert.equal(res.status, 422, 'says what is being built');
@@ -167,4 +168,54 @@ test('a stock build made from scratch needs no vehicle: just what is being built
 
   await db('audit_log').where({ entity: 'job', entity_id: id }).delete();
   await db('jobs').where({ id }).delete();
+});
+
+test('stock builds are numbered SB-…; a stock trailer is registered and checked in as its build starts', async () => {
+  const res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'trailer', vehicle_description: '40ft skeletal trailer, 3 axle',
+    line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft skeletal trailer'] });
+  assert.equal(res.status, 302, res.text.slice(0, 400));
+  const job = await db('jobs').where({ id: Number(res.headers.location.split('/')[2]) }).first();
+  assert.match(job.number, /^SB-\d{4}-\d{4}$/, 'its own number series');
+  const trailer = await db('vehicles').where({ id: job.vehicle_id }).first();
+  assert.equal(trailer.type, 'trailer');
+  assert.equal(trailer.customer_id, stock.id);
+  assert.match(trailer.temp_tag, /^JTT-/, 'a temporary tag until its chassis number is stamped');
+  const checkin = await db('checkins').where({ id: job.checkin_id }).first();
+  checkinIds.push(checkin.id);
+  assert.equal(checkin.status, 'in_workshop');
+  assert.equal(checkin.no_arrival_reason, 'Built here: stock build');
+
+  // Sold: the trailer and its check-in go to the buyer; it leaves like any vehicle.
+  const [buyerId] = await db('customers').insert({ number: 'CUS-T616', name: 'Otieno Logistics', phone: '+254700000616', category: 'company' });
+  await post(supervisor, `/jobs/${job.id}/assign-customer`, { customer_id: buyerId });
+  assert.equal((await db('vehicles').where({ id: trailer.id }).first()).customer_id, buyerId);
+  assert.equal((await db('checkins').where({ id: checkin.id }).first()).customer_id, buyerId);
+  assert.equal((await db('jobs').where({ id: job.id }).first()).number, job.number, 'the SB number stays');
+});
+
+test('a stock body sold to be fitted to the buyer’s checked-in truck goes with that truck', async () => {
+  let res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'body', vehicle_description: '20ft cargo body',
+    line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 20ft cargo body'] });
+  assert.equal(res.status, 302, res.text.slice(0, 400));
+  const jobId = Number(res.headers.location.split('/')[2]);
+  assert.equal((await db('jobs').where({ id: jobId }).first()).vehicle_id, null, 'a body alone has no vehicle');
+  assert.match((await supervisor.get(`/jobs/${jobId}`)).text, /Fitted to their truck/);
+
+  const [buyerId] = await db('customers').insert({ number: 'CUS-T617', name: 'Njoroge Freight', phone: '+254700000617', category: 'company' });
+  const truck = await checkedInVehicle(buyerId, 'KJR 617A');
+  const [otherId] = await db('customers').insert({ number: 'CUS-T618', name: 'Someone Else', phone: '+254700000618', category: 'company' });
+  const theirs = await checkedInVehicle(otherId, 'KJR 618A');
+  // Not someone else's truck.
+  await post(supervisor, `/jobs/${jobId}/assign-customer`, { customer_id: buyerId, mount_vehicle_id: theirs });
+  assert.equal((await db('jobs').where({ id: jobId }).first()).customer_id, stock.id);
+
+  res = await post(supervisor, `/jobs/${jobId}/assign-customer`, { customer_id: buyerId, mount_vehicle_id: truck });
+  assert.equal(res.status, 302);
+  const sold = await db('jobs').where({ id: jobId }).first();
+  assert.equal(sold.customer_id, buyerId);
+  assert.equal(sold.vehicle_id, truck);
+  assert.ok(sold.checkin_id, 'with the truck’s check-in, so it leaves through the normal release');
+  assert.match((await supervisor.get(`/jobs/${jobId}`)).text, /fitted to KJR 617A/);
+  await db('audit_log').where({ entity: 'job', entity_id: jobId }).delete();
+  await db('jobs').where({ id: jobId }).delete();
 });

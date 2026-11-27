@@ -38,6 +38,8 @@ const jobSchema = z.object({
   customer_id: optionalId().refine((v) => v !== null, 'Choose the customer'),
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
+  // A stock build: a trailer (registered from the start), a body only, or a body on a checked-in chassis.
+  build_kind: z.enum(['trailer', 'body', 'chassis']).optional().catch(undefined),
   supervisor_id: optionalId(),
   responsible_name: optionalText(100),
   due_on: z.string().trim().optional().refine((v) => !v || isDay(v), 'Check the date').transform((v) => v || null),
@@ -65,7 +67,7 @@ function readLines(body) {
   return { rows, lines, error };
 }
 
-const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', supervisor_id: '', responsible_name: '', due_on: '', instructions: '' });
+const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', build_kind: 'trailer', supervisor_id: '', responsible_name: '', due_on: '', instructions: '' });
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '' });
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
@@ -369,7 +371,7 @@ router.post('/jobs/:id/allow-materials', canAny('jobs.allow_materials'), async (
 router.post('/jobs/:id/assign-customer', canAny('quotations.manage', 'jobs.manage'), async (req, res) => {
   const job = await loadJob(req);
   try {
-    const buyer = await jobs.assignCustomer(job.id, Number(req.body.customer_id), req);
+    const buyer = await jobs.assignCustomer(job.id, Number(req.body.customer_id), req, Number(req.body.mount_vehicle_id) || null);
     req.session.flash = { type: 'success', text: `${job.number} is now ${buyer.name}’s. Next: make or match their proforma.` };
   } catch (err) {
     if (!err.expose) throw err;

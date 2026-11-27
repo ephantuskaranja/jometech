@@ -448,12 +448,24 @@
             <% if (job.customer_is_stock) { %><%- include('partials/pill', { text: 'Stock build', tone: 'info' }) %> <span class="d-block small text-body-secondary">No customer yet: built for stock, to sell to whoever comes.</span>
               <% if (canAssignCustomer) { %>
                 <%# Sold: the buyer becomes the customer of the job, the vehicle and its check-in (sheet row 58). %>
-                <div x-data="{ open: false }" class="mt-2">
+                <div x-data="{ open: false, trucks: [], async trucksFor(id) { this.trucks = id ? await fetch('/api/jobs/vehicles?customer_id=' + encodeURIComponent(id), { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : [])).catch(() => []) : []; } }" class="mt-2">
                   <button type="button" class="btn btn-outline-primary btn-sm" x-show="!open" @click="open = true"><i class="bi bi-person-check"></i>Assign customer</button>
                   <form method="post" action="/jobs/<%= job.id %>/assign-customer" class="d-grid gap-2" x-show="open" x-cloak>
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <%- include('partials/field', { name: 'customer_id', id: 'assign-customer', label: 'Who is buying it?', type: 'select', url: '/api/customers', required: true,
-                          blank: 'Type a name, phone or CUS number', hint: 'Not found? Type the name and choose “Add new customer”. The vehicle becomes theirs too.', attrs: 'data-tom-create="customer"' }) %>
+                          blank: 'Type a name, phone or CUS number', hint: job.vehicle_id ? 'Not found? Type the name and choose “Add new customer”. The vehicle becomes theirs too.' : 'Not found? Type the name and choose “Add new customer”.',
+                          attrs: job.vehicle_id ? 'data-tom-create="customer"' : 'data-tom-create="customer" @change="trucksFor($el.value)"' }) %>
+                    <% if (!job.vehicle_id) { %>
+                      <%# A body: fitted to one of the buyer's trucks checked in here, or collected loose. %>
+                      <div class="jt-field">
+                        <label class="form-label" for="mount-vehicle">Fitted to their truck (optional)</label>
+                        <select class="form-select" id="mount-vehicle" name="mount_vehicle_id">
+                          <option value="">None: they collect it loose</option>
+                          <template x-for="t in trucks" :key="t.value"><option :value="t.value" x-text="t.label" :disabled="t.disabled"></option></template>
+                        </select>
+                        <div class="form-text">Their truck must be checked in here. The job then goes with it, and the body leaves on it through the normal release.</div>
+                      </div>
+                    <% } %>
                     <div class="d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Assign</button><button class="btn btn-link btn-sm" type="button" @click="open = false">Not now</button></div>
                   </form>
                 </div>
