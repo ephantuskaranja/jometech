@@ -93,3 +93,47 @@ test('a chassis checked in with “No customer yet” belongs to stock; its job 
   assert.equal(rel.status, 302);
   assert.match((await supervisor.get(`/check-in/${checkinId}`)).text, /stock build with no customer yet/);
 });
+
+test('the Stock value report lists stock builds waiting for a buyer; selling one assigns the customer everywhere', async () => {
+  const checkinId = checkinIds[0];
+  const job = await db('jobs').where({ checkin_id: checkinId }).first();
+  const report = (await admin.get('/reports/stock-value')).text;
+  assert.match(report, /Stock builds awaiting a customer/);
+  assert.match(report, new RegExp(`href="/jobs/${job.id}"`));
+  assert.match(report, /Being built/);
+
+  // Offered on the job to supervisors (and sales); stores can't.
+  assert.match((await supervisor.get(`/jobs/${job.id}`)).text, /Assign customer/);
+  assert.doesNotMatch((await store.get(`/jobs/${job.id}`)).text, /Assign customer/);
+  assert.equal((await post(store, `/jobs/${job.id}/assign-customer`, { customer_id: stock.id })).status, 403);
+
+  // Not to the stock owner itself, and not to nobody.
+  await post(supervisor, `/jobs/${job.id}/assign-customer`, { customer_id: stock.id });
+  await post(supervisor, `/jobs/${job.id}/assign-customer`, { customer_id: '' });
+  assert.equal((await db('jobs').where({ id: job.id }).first()).customer_id, stock.id);
+
+  const [buyerId] = await db('customers').insert({ number: 'CUS-T614', name: 'Mwangi Haulage', phone: '+254700000614', category: 'company' });
+  const res = await post(supervisor, `/jobs/${job.id}/assign-customer`, { customer_id: buyerId });
+  assert.equal(res.status, 302);
+  const sold = await db('jobs').where({ id: job.id }).first();
+  assert.equal(sold.customer_id, buyerId);
+  assert.equal(sold.stock_build, 1, 'still known as built for stock');
+  assert.equal((await db('vehicles').where({ id: sold.vehicle_id }).first()).customer_id, buyerId);
+  assert.equal((await db('checkins').where({ id: checkinId }).first()).customer_id, buyerId);
+
+  const page = (await supervisor.get(`/jobs/${job.id}`)).text;
+  assert.match(page, /Mwangi Haulage/);
+  assert.match(page, /Bought as a stock build/);
+  assert.match(page, /Stock build sold to Mwangi Haulage/, 'in the history');
+  assert.doesNotMatch(page, /Assign customer/);
+  // Sold once: assigning again is refused.
+  await post(supervisor, `/jobs/${job.id}/assign-customer`, { customer_id: buyerId });
+  assert.match((await supervisor.get(`/jobs/${job.id}`)).text, /already has a customer/);
+
+  // Now it is priced, invoiced and released like any job; it leaves the report.
+  assert.ok((await admin.get(`/jobs/${job.id}`)).text.includes(`/proformas/new?job=${job.id}"`), 'Make proforma for the buyer');
+  assert.equal((await admin.get(`/jobs/${job.id}/invoice`)).status, 200);
+  assert.doesNotMatch((await supervisor.get(`/check-in/${checkinId}`)).text, /stock build with no customer yet/);
+  assert.doesNotMatch((await admin.get('/reports/stock-value')).text, new RegExp(`href="/jobs/${job.id}"`));
+  assert.doesNotMatch((await supervisor.get('/jobs?show=stock')).text, new RegExp(sold.number));
+});

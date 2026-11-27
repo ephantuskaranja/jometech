@@ -444,7 +444,20 @@
       <div class="card-body">
         <dl class="jt-kv">
           <div><dt>Customer</dt><dd>
-            <% if (job.customer_is_stock) { %><%- include('partials/pill', { text: 'Stock build', tone: 'info' }) %> <span class="d-block small text-body-secondary">No customer yet: built for stock, to sell to whoever comes.</span><% } else if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %>
+            <% if (job.customer_is_stock) { %><%- include('partials/pill', { text: 'Stock build', tone: 'info' }) %> <span class="d-block small text-body-secondary">No customer yet: built for stock, to sell to whoever comes.</span>
+              <% if (canAssignCustomer) { %>
+                <%# Sold: the buyer becomes the customer of the job, the vehicle and its check-in (sheet row 58). %>
+                <div x-data="{ open: false }" class="mt-2">
+                  <button type="button" class="btn btn-outline-primary btn-sm" x-show="!open" @click="open = true"><i class="bi bi-person-check"></i>Assign customer</button>
+                  <form method="post" action="/jobs/<%= job.id %>/assign-customer" class="d-grid gap-2" x-show="open" x-cloak>
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <%- include('partials/field', { name: 'customer_id', id: 'assign-customer', label: 'Who is buying it?', type: 'select', url: '/api/customers', required: true,
+                          blank: 'Type a name, phone or CUS number', hint: 'Not found? Type the name and choose “Add new customer”. The vehicle becomes theirs too.', attrs: 'data-tom-create="customer"' }) %>
+                    <div class="d-flex gap-2"><button class="btn btn-primary btn-sm" type="submit">Assign</button><button class="btn btn-link btn-sm" type="button" @click="open = false">Not now</button></div>
+                  </form>
+                </div>
+              <% } %>
+            <% } else { %><% if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %><% if (job.stock_build) { %><span class="d-block small text-body-secondary">Bought as a stock build</span><% } %><% } %>
             <span class="d-block small font-monospace"><%= fmt.phone(job.customer_phone) %></span>
           </dd></div>
           <div><dt>Job type</dt><dd><%= job.job_type_name ?? '—' %></dd></div>
@@ -502,3 +515,4 @@
     </section>
   </div>
 </div>
+<% if (canAssignCustomer) { %><%- include('customers/views/quick-add', { categories }) %><% } %>

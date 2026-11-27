@@ -220,6 +220,9 @@ router.get('/jobs/:id', view, async (req, res) => {
     materialsOk: jobs.materialsAllowed(job),
     canAllowMaterials: req.user.can('jobs.allow_materials') && ['open', 'in_progress'].includes(job.status),
     canMakeProforma: req.user.can('quotations.manage') && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma && !job.customer_is_stock,
+    // A stock build with no customer yet: sales, supervisors and up assign the buyer (sheet row 58).
+    canAssignCustomer: Boolean(job.customer_is_stock) && job.status !== 'cancelled' && (req.user.can('quotations.manage') || req.user.can('jobs.manage')),
+    categories: customers.CATEGORIES, // "Add new customer" window
     // Or match one the customer already accepted (sheet row 58): sales, supervisors and up.
     matchable: (req.user.can('quotations.manage') || req.user.can('jobs.manage')) && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma && !job.customer_is_stock
       ? await jobs.matchableProformas(job) : [],
@@ -359,6 +362,19 @@ router.post('/jobs/:id/allow-materials', canAny('jobs.allow_materials'), async (
   }
   await jobs.allowMaterials(job.id, reason, req);
   req.session.flash = { type: 'success', text: `Stores can now issue materials to ${job.number}.` };
+  res.redirect(`/jobs/${job.id}`);
+});
+
+// A stock build is sold: its buyer becomes the customer (sheet row 58).
+router.post('/jobs/:id/assign-customer', canAny('quotations.manage', 'jobs.manage'), async (req, res) => {
+  const job = await loadJob(req);
+  try {
+    const buyer = await jobs.assignCustomer(job.id, Number(req.body.customer_id), req);
+    req.session.flash = { type: 'success', text: `${job.number} is now ${buyer.name}’s. Next: make or match their proforma.` };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
   res.redirect(`/jobs/${job.id}`);
 });
 

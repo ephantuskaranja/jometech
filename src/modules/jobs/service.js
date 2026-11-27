@@ -238,6 +238,34 @@ export async function createFromProforma(proformaId, jobTypeId, actor, chosenVeh
  * Stores issue materials to a job once the customer has accepted its proforma, or when a supervisor
  * (or above) has allowed it early (sheet row 49). Returns go back whatever the state.
  */
+/**
+ * A stock build is sold (sheet row 58): the buyer becomes the customer of the job, its vehicle and the
+ * vehicle's check-in in the workshop. From then on it is priced (Make or Match proforma), invoiced and
+ * released like any job. The job stays marked as a stock build.
+ */
+export async function assignCustomer(jobId, customerId, actor) {
+  return db.transaction(async (trx) => {
+    const job = await trx('jobs as j').join('customers as c', 'c.id', 'j.customer_id').where('j.id', jobId).forUpdate()
+      .first('j.id', 'j.number', 'j.status', 'j.vehicle_id', 'j.stock_build', 'c.is_stock');
+    if (!job) throw httpError(404, 'That job doesn’t exist.');
+    if (!job.is_stock) throw httpError(409, `${job.number} already has a customer.`);
+    if (job.status === 'cancelled') throw httpError(409, `${job.number} is cancelled. Reopen it first.`);
+    const buyer = await trx('customers').where({ id: customerId, is_stock: false }).first('id', 'number', 'name');
+    if (!buyer) throw err(422, 'Choose the customer who is buying it', 'customer_id');
+
+    await trx('jobs').where({ id: job.id }).update({ customer_id: buyer.id });
+    await audit(trx, actor, { entity: 'job', id: job.id, action: 'customer_assigned', summary: `Stock build sold to ${buyer.name} (${buyer.number})` });
+    if (job.vehicle_id) {
+      await trx('vehicles').where({ id: job.vehicle_id }).update({ customer_id: buyer.id });
+      await audit(trx, actor, { entity: 'vehicle', id: job.vehicle_id, action: 'customer_assigned', summary: `Now ${buyer.name}’s (bought as stock build ${job.number})` });
+      const open = await trx('checkins').where({ vehicle_id: job.vehicle_id }).whereIn('status', ['in_workshop', 'released']).pluck('id');
+      if (open.length) await trx('checkins').whereIn('id', open).update({ customer_id: buyer.id });
+      for (const id of open) await audit(trx, actor, { entity: 'checkin', id, action: 'customer_assigned', summary: `Owner now ${buyer.name} (stock build ${job.number} sold)` });
+    }
+    return buyer;
+  });
+}
+
 /** Why stores may issue to a stock build without a proforma (shown where the go-ahead is shown). */
 export const STOCK_REASON = 'Stock build: no customer yet';
 

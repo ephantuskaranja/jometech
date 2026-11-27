@@ -2,6 +2,7 @@ import { db } from '../../core/db.js';
 import { fmt } from '../../core/format.js';
 import { localDay } from '../../core/dates.js';
 import { METHODS } from '../invoices/service.js';
+import { vehicleLabel } from '../../core/vehicle-format.js';
 
 // Reports → Sales, Stock value, Purchases and Labour. Each returns the same shape, shown by one page
 // (views/table-report.ejs) and written by one Excel writer (routes):
@@ -57,6 +58,31 @@ export async function sales({ month, siteIds }) {
 
 // ---------- stock value: what is on the racks now ----------
 
+/**
+ * Stock builds still waiting for a buyer (sheet row 58): bodies built for stock, with what has gone into
+ * them from the stores so far (net of returns). Ready = the job is complete.
+ */
+export async function stockBuilds(siteIds, today = localDay()) {
+  const materials = db('material_issue_lines as l').join('material_issues as m', 'm.id', 'l.issue_id')
+    .whereRaw('m.job_id = j.id').select(db.raw('COALESCE(SUM(l.value - l.returned_value), 0)'));
+  const rows = await db('jobs as j').join('customers as c', 'c.id', 'j.customer_id').join('sites as s', 's.id', 'j.site_id')
+    .leftJoin('vehicles as v', 'v.id', 'j.vehicle_id')
+    .where({ 'j.stock_build': true, 'c.is_stock': true }).whereNot('j.status', 'cancelled').whereIn('j.site_id', siteIds)
+    .orderBy('j.created_at').orderBy('j.id')
+    .select('j.id', 'j.number', 'j.status', 'j.created_at', 'j.completed_at', 's.name as site_name', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model',
+      materials.as('materials'),
+      db('job_lines').where('job_id', db.ref('j.id')).orderBy('sort_order').limit(1).select('description').as('work'));
+  return rows.map((j) => ({
+    job: { text: j.number, href: `/jobs/${j.id}` },
+    vehicle: [j.reg_no || j.chassis_no || j.temp_tag ? vehicleLabel(j) : null, [j.make, j.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '—',
+    work: j.work ?? '', site: j.site_name,
+    state: j.status === 'completed' ? 'Ready' : 'Being built',
+    started: localDay(j.created_at),
+    days: Math.max(0, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${localDay(j.created_at)}T12:00:00Z`)) / 86400000)),
+    materials: round(Number(j.materials ?? 0)),
+  }));
+}
+
 export async function stock({ siteIds }) {
   const rows = (await db('stock_balances as b').join('items as i', 'i.id', 'b.item_id').join('sites as s', 's.id', 'b.site_id')
     .leftJoin('item_categories as c', 'c.id', 'i.category_id')
@@ -81,20 +107,26 @@ export async function stock({ siteIds }) {
     byCategory.set(k, c);
   }
   const lowItems = new Set(rows.filter((r) => r.low).map((r) => r.item.text));
+  const builds = await stockBuilds(siteIds);
+  const ready = builds.filter((b) => b.state === 'Ready').length;
   return {
     kpis: [
       { label: 'Stock value', value: `KES ${fmt.money(sum(rows, 'value'))}`, foot: 'at average cost, excluding VAT' },
       { label: 'Items in stock', value: new Set(rows.map((r) => r.item.text)).size, foot: `${rows.length} line${rows.length === 1 ? '' : 's'} by site and size` },
       { label: 'Low stock', value: lowItems.size, foot: 'at or below the reorder level', tone: lowItems.size ? 'warn' : null },
+      { label: 'Stock builds', value: builds.length, foot: builds.length ? `${ready} ready, ${builds.length - ready} being built; materials KES ${fmt.money(sum(builds, 'materials'))}` : 'none waiting for a buyer' },
     ],
     tables: [
+      { title: 'Stock builds awaiting a customer', columns: [{ key: 'job', label: 'Job', type: 'link' }, { key: 'vehicle', label: 'Vehicle' }, { key: 'work', label: 'Work' }, { key: 'site', label: 'Site' },
+        { key: 'state', label: 'State' }, { key: 'started', label: 'Started', type: 'date' }, { key: 'days', label: 'Days', type: 'qty' }, { key: 'materials', label: 'Materials so far', type: 'money' }],
+        rows: builds, total: builds.length ? { job: 'Total', materials: sum(builds, 'materials') } : null },
       { title: 'By category', columns: [{ key: 'category', label: 'Category' }, { key: 'site', label: 'Site' }, { key: 'lines', label: 'Lines', type: 'qty' }, { key: 'value', label: 'Value', type: 'money' }],
         rows: [...byCategory.values()], total: { category: 'Total', lines: rows.length, value: sum(rows, 'value') } },
       { title: 'Items', columns: [{ key: 'item', label: 'Item', type: 'link' }, { key: 'site', label: 'Site' }, { key: 'size', label: 'Sheets' }, { key: 'qty', label: 'Quantity', type: 'qty' }, { key: 'unit', label: 'Unit' },
         { key: 'cost', label: 'Average cost', type: 'money' }, { key: 'value', label: 'Value', type: 'money' }, { key: 'low', label: '' }],
         rows, total: { item: 'Total', value: sum(rows, 'value') } },
     ],
-    note: `As of ${fmt.dateTime(new Date())}. Value = quantity × the item’s average cost (one average across all sites, transport included, VAT excluded). Plates are counted in sq ft.`,
+    note: `As of ${fmt.dateTime(new Date())}. Value = quantity × the item’s average cost (one average across all sites, transport included, VAT excluded). Plates are counted in sq ft. Stock builds: bodies built for stock with no buyer yet; their materials are no longer in the stock value above.`,
   };
 }
 
