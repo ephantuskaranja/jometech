@@ -66,6 +66,7 @@ export async function updateCustomer(id, input, actor) {
   await db.transaction(async (trx) => {
     const before = await trx('customers').where({ id }).first();
     if (!before) throw httpError(404, 'That customer no longer exists.');
+    if (before.is_stock) throw httpError(409, 'This is the built-in owner of stock builds, not a real customer: it can’t be changed.');
     await assertKraPinFree(trx, input.kra_pin, id);
     const changes = pick(input);
     await trx('customers').where({ id }).update(changes);
@@ -77,12 +78,21 @@ export async function getCustomer(id) {
   return db('customers').where({ id }).first();
 }
 
+/**
+ * The built-in owner of stock builds (sheet row 58): vehicles and jobs with no customer yet. Named for
+ * what it shows ("Stock build: awaiting customer"); left out of customer lists, pickers and search.
+ */
+export function stockCustomer(q = db) {
+  return q('customers').where({ is_stock: true }).first('id', 'number', 'name');
+}
+
 export async function listCustomers({ q = '', category = '' } = {}) {
   const query = db('customers')
     .leftJoin('vehicles', 'vehicles.customer_id', 'customers.id')
     .groupBy('customers.id')
     .select('customers.id', 'customers.number', 'customers.name', 'customers.category', 'customers.phone', 'customers.town', 'customers.created_at')
     .count('vehicles.id as vehicle_count')
+    .where('customers.is_stock', false)
     .orderBy('customers.name')
     .limit(200);
   if (category) query.where('customers.category', category);
@@ -114,6 +124,7 @@ export async function lookupCustomers(q) {
   if (term.length < 2) return [];
   const phone = normalizePhone(term);
   const rows = await db('customers')
+    .where('is_stock', false)
     .where((w) => {
       w.where('name', 'like', `%${term}%`).orWhere('number', 'like', `%${term}%`);
       if (phone) w.orWhere('phone', phone);
@@ -130,6 +141,7 @@ export async function lookupCustomers(q) {
 export async function lookupBanks(q) {
   const term = q.trim();
   const rows = await db('customers')
+    .where('is_stock', false)
     .where((w) => w.where('category', 'bank').orWhereIn('id', db('invoices').whereNotNull('financier_id').distinct('financier_id')))
     .modify((query) => term && query.where((w) => w.where('name', 'like', `%${term}%`).orWhere('number', 'like', `%${term}%`)))
     .orderBy('name').limit(100).select('id', 'name', 'number');
@@ -200,6 +212,7 @@ export async function globalSearch(q, { limit = 8 } = {}) {
     .select('vehicles.id', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'customers.name as customer_name') : [];
 
   const customers = await db('customers')
+    .where('is_stock', false)
     .where((w) => {
       w.where('name', 'like', `%${term}%`).orWhere('number', term.toUpperCase()).orWhere('kra_pin', term.toUpperCase());
       if (phone) w.orWhere('phone', phone);

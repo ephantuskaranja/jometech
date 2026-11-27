@@ -76,6 +76,10 @@ export async function withdrawRelease(checkinId, actor) {
  */
 export async function blockedBecause(c, trx = db) {
   if (c.status !== 'in_workshop') return `${c.number} is no longer in the workshop.`;
+  // A stock build is released to its buyer, once there is one (sheet row 58).
+  const owner = await trx('checkins as k').join('vehicles as v', 'v.id', 'k.vehicle_id').join('customers as cu', 'cu.id', 'v.customer_id')
+    .where('k.id', c.id).first('cu.is_stock');
+  if (owner?.is_stock) return `${c.number} is a stock build with no customer yet. Assign the customer on its job before releasing it.`;
   if (await trx('vehicle_movements').where({ checkin_id: c.id, status: 'in_transit' }).first('id')) {
     return `${vehicleLabel(c)} is on its way to another site. That site receives it first.`;
   }

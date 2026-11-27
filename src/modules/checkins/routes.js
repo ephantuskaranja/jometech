@@ -54,7 +54,7 @@ const newVehicleSchema = z.object({
 const blank = {
   vehicle_mode: 'existing', purpose: '', vehicle_id: '', contact_id: '', brought_by_phone: '', odometer_km: '', odometer_not_working: '', fuel_quarters: '', remarks: '',
   arrival_id: '', no_arrival_reason: '',
-  reg_no: '', chassis_no: '', issue_tag: '', customer_id: '', type: 'truck', make: '', model: '',
+  reg_no: '', chassis_no: '', issue_tag: '', customer_id: '', stock_build: '', type: 'truck', make: '', model: '',
 };
 
 /**
@@ -156,7 +156,9 @@ router.post('/check-in', manage, async (req, res) => {
   let newVehicle = null;
 
   if (result.data?.vehicle_mode === 'new' || values.vehicle_mode === 'new') {
-    const v = check(newVehicleSchema, req.body);
+    // A stock build (sheet row 58): no customer yet, so the built-in stock owner holds it until one is assigned.
+    const stock = ['1', 'on'].includes(req.body.stock_build) ? await customers.stockCustomer() : null;
+    const v = check(newVehicleSchema, stock ? { ...req.body, customer_id: stock.id } : req.body);
     Object.assign(errors, v.errors);
     // From the raw input, so it shows even when other fields are wrong too.
     const typed = (k) => String(req.body[k] ?? '').trim();

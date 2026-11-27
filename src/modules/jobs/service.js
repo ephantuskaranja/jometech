@@ -28,7 +28,7 @@ export const STATUSES = {
 };
 
 /** List tabs. "active" = open or in progress. */
-export const TABS = ['active', 'completed', 'all'];
+export const TABS = ['active', 'completed', 'stock', 'all'];
 
 const ACTIVE = ['open', 'in_progress'];
 
@@ -181,14 +181,17 @@ export async function createJob(input, actor) {
     await checkLinks(trx, input, { siteId });
     const typeId = await resolveType(trx, input.job_type_id);
     const number = await nextNumber(trx, 'job');
+    // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
+    const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
     const [id] = await trx('jobs').insert({
       number, site_id: siteId, job_type_id: typeId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
       checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
       due_on: input.due_on, instructions: input.instructions, created_by: actor.user.id,
+      ...(stock ? { stock_build: true, materials_allowed_at: trx.fn.now(), materials_allowed_by: actor.user.id, materials_allowed_reason: STOCK_REASON } : {}),
     });
     await writeLines(trx, id, input.lines);
     await copySteps(trx, id, typeId);
-    await audit(trx, actor, { entity: 'job', id, action: 'create', summary: 'No proforma' });
+    await audit(trx, actor, { entity: 'job', id, action: 'create', summary: stock ? 'Stock build: no customer yet; stores can issue materials' : 'No proforma' });
     return { id, number };
   });
 }
@@ -235,6 +238,9 @@ export async function createFromProforma(proformaId, jobTypeId, actor, chosenVeh
  * Stores issue materials to a job once the customer has accepted its proforma, or when a supervisor
  * (or above) has allowed it early (sheet row 49). Returns go back whatever the state.
  */
+/** Why stores may issue to a stock build without a proforma (shown where the go-ahead is shown). */
+export const STOCK_REASON = 'Stock build: no customer yet';
+
 export const materialsAllowed = (job) => Boolean(job.proforma_id || job.materials_allowed_at);
 
 /** "Allow materials now": before the proforma is accepted, with the reason (jobs.allow_materials; the route checks). */
@@ -580,7 +586,7 @@ export async function getJob(id) {
     .first('j.*', 'c.name as customer_name', 'c.number as customer_number', 'c.phone as customer_phone', 's.name as site_name',
       'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model', 'v.type', 'v.colour',
       'ci.number as checkin_number', 'ci.status as checkin_status', 'ci.odometer_km', 'ci.odometer_not_working',
-      'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name', 'ma.name as materials_allowed_name');
+      'c.is_stock as customer_is_stock', 'p.number as proforma_number', 'jt.name as job_type_name', 'sup.name as supervisor_name', 'cr.name as created_name', 'ma.name as materials_allowed_name');
   if (!job) return null;
   // A proforma made from the job, still with the customer (draft or sent).
   job.pending_proforma = job.proforma_id ? null
@@ -619,6 +625,8 @@ export async function getJob(id) {
 
 function tabFilter(q, tab) {
   if (tab === 'active') q.whereIn('j.status', ACTIVE);
+  // Stock builds still waiting for a buyer (sheet row 58).
+  else if (tab === 'stock') q.where('j.stock_build', true).whereNot('j.status', 'cancelled').whereIn('j.customer_id', db('customers').where('is_stock', true).select('id'));
   else if (tab !== 'all') q.where('j.status', tab);
 }
 

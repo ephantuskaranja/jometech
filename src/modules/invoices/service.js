@@ -89,6 +89,9 @@ export async function createInvoice(jobId, input, actor) {
     const job = await trx('jobs').where({ id: jobId }).forUpdate().first();
     if (!job) throw httpError(404, 'That job doesn’t exist.');
     if (job.status === 'cancelled') throw httpError(409, `${job.number} was cancelled, so it can’t be invoiced.`);
+    if ((await trx('customers').where({ id: job.customer_id }).first('is_stock'))?.is_stock) {
+      throw httpError(409, `${job.number} is a stock build with no customer yet. Assign the customer on the job, then invoice them.`);
+    }
     const existing = await currentInvoice(jobId, trx);
     if (existing) throw httpError(409, `${job.number} already has an invoice${existing.number ? ` (${existing.number})` : ' (a draft)'}.`);
     await checkFinancier(trx, input.financier_id, job.customer_id);

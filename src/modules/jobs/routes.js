@@ -138,6 +138,7 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
     vehicleOptions: customer ? await jobs.vehicleChoices(customer.id, job?.site_id ?? req.site.id, job?.vehicle_id ?? null) : [],
     canCheckIn: req.user.can('checkin.manage'),
     categories: customers.CATEGORIES, // "Add new customer" window
+    stockId: (await customers.stockCustomer())?.id ?? null,
   });
 }
 
@@ -218,9 +219,9 @@ router.get('/jobs/:id', view, async (req, res) => {
     // Stores wait for the customer's yes on a proforma, or a supervisor's go-ahead (sheet row 49).
     materialsOk: jobs.materialsAllowed(job),
     canAllowMaterials: req.user.can('jobs.allow_materials') && ['open', 'in_progress'].includes(job.status),
-    canMakeProforma: req.user.can('quotations.manage') && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma,
+    canMakeProforma: req.user.can('quotations.manage') && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma && !job.customer_is_stock,
     // Or match one the customer already accepted (sheet row 58): sales, supervisors and up.
-    matchable: (req.user.can('quotations.manage') || req.user.can('jobs.manage')) && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma
+    matchable: (req.user.can('quotations.manage') || req.user.can('jobs.manage')) && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma && !job.customer_is_stock
       ? await jobs.matchableProformas(job) : [],
     // What materials cost: for those who run the stores and managers, not the workshop floor.
     canSeeCost: req.user.can('stores.issue') || req.user.can('inventory.manage'),

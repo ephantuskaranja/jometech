@@ -31,6 +31,8 @@
               options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
               hint: 'Not found? Type the name and choose “Add new customer”.',
               attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
+        <%# Sheet row 58: a body built for stock, before anyone buys it. Its chassis is checked in with "No customer yet". %>
+        <% if (!job && locals.stockId && String(values.customer_id) !== String(stockId)) { %><a class="small" href="/jobs/new?customer_id=<%= stockId %>"><i class="bi bi-box"></i> No customer yet? Open it as a stock build</a><% } %>
       <% } %>
       <div class="jt-fields">
         <div x-show="hasCustomer" x-cloak>

@@ -196,7 +196,7 @@
             <% } %>
           </div>
         <% } else if (!job.proforma_id && job.materials_allowed_by) { %>
-          <div class="card-body border-bottom small text-body-secondary">Allowed before a proforma was accepted, by <%= job.materials_allowed_name ?? 'a supervisor' %>: <%= job.materials_allowed_reason %></div>
+          <div class="card-body border-bottom small text-body-secondary"><%= job.stock_build && job.customer_is_stock ? 'Stock build: stores issue materials to it without a proforma.' : `Allowed before a proforma was accepted, by ${job.materials_allowed_name ?? 'a supervisor'}: ${job.materials_allowed_reason}` %></div>
         <% } %>
         <% if (waitingForPrice && !materials.lines.length) { %>
         <% } else if (!materials.lines.length) { %>
@@ -444,7 +444,7 @@
       <div class="card-body">
         <dl class="jt-kv">
           <div><dt>Customer</dt><dd>
-            <% if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %>
+            <% if (job.customer_is_stock) { %><%- include('partials/pill', { text: 'Stock build', tone: 'info' }) %> <span class="d-block small text-body-secondary">No customer yet: built for stock, to sell to whoever comes.</span><% } else if (canSeeCustomers) { %><a href="/customers/<%= job.customer_id %>"><%= job.customer_name %></a><% } else { %><%= job.customer_name %><% } %>
             <span class="d-block small font-monospace"><%= fmt.phone(job.customer_phone) %></span>
           </dd></div>
           <div><dt>Job type</dt><dd><%= job.job_type_name ?? '—' %></dd></div>

@@ -100,6 +100,10 @@ router.get('/jobs/:id/invoice', manage, async (req, res) => {
   const existing = await invoices.currentInvoice(job.id);
   if (existing) return res.redirect(`/invoices/${existing.id}`);
   if (job.status === 'cancelled') throw httpError(409, `${job.number} was cancelled, so it can’t be invoiced.`);
+  if (job.customer_is_stock) {
+    req.session.flash = { type: 'warning', text: `${job.number} is a stock build with no customer yet. Assign the customer on the job, then invoice them.` };
+    return res.redirect(`/jobs/${job.id}`);
+  }
   await renderForm(res, { job, values: { financier_id: '', notes: '' }, rows: asRows(await invoices.startFor(job)) });
 });
 
