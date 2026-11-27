@@ -1,0 +1,84 @@
+<%#
+  The vehicle gate pass for a move between sites (MOV), laid out like the Customer Gate Pass
+  (visitors/views/pass-print.ejs): the top half of an A4 page. It carries the Truck and Chassis lines
+  of the client's paper form. Gate times not yet done stay blank, to write in at the gate.
+  The company stamp carries the signature of whoever sent the vehicle. None on a cancelled move.
+%>
+<%
+  const time = (t) => (t ? fmt.time(t) : '');
+  const cancelled = move.status === 'cancelled';
+  const describe = [move.make, move.model, move.colour].filter(Boolean).join(' ');
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/css/print-note.css?v=<%= assetVersion %>">
+  <script defer src="/js/print-note.js?v=<%= assetVersion %>"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/check-in/<%= move.checkin_id %>">&larr; Back to the check-in</a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+
+  <main class="sheet gp-sheet<%= cancelled ? ' is-cancelled' : '' %>">
+    <div class="gp-company"><%= company.name %></div>
+    <div class="gp-head">
+      <img class="doc-logo gp-logo" src="/img/brand/logo.svg?v=<%= assetVersion %>" alt="Jome-Tech">
+      <div class="gp-title">
+        <h1>Vehicle Gate Pass</h1>
+        <div class="gp-no">No. <span class="mono"><%= move.number %></span></div>
+      </div>
+      <div class="gp-stamp"><% if (!cancelled) { %><%- include('partials/stamp', { date: fmt.date(move.sent_at), signer: signs.approved }) %><% } %></div>
+    </div>
+
+    <table class="grid gp-grid">
+      <tr>
+        <td colspan="2"><span class="label">Truck reg no:</span> <span class="mono"><%= vehicle %></span></td>
+        <td colspan="2"><span class="label">Chassis no:</span> <span class="mono"><%= move.chassis_no ?? '' %></span></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Vehicle:</span> <%= describe %></td>
+        <td colspan="2"><span class="label">Customer:</span> <%= move.customer_name %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Driver:</span> <%= move.driver_name %></td>
+        <td colspan="2"><span class="label">Phone number:</span> <%= move.driver_phone ? fmt.phone(move.driver_phone) : '' %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Number of people:</span> <%= move.people %> <span class="muted">(driver included)</span></td>
+        <td colspan="2"><span class="label">Odometer out:</span> <%= move.odometer_out != null ? `${fmt.qty(move.odometer_out)} km` : '' %></td>
+      </tr>
+      <tr>
+        <td colspan="4"><span class="label">Reason:</span> <%= move.notes ?? 'Work continues at the other site' %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">From:</span> <%= move.from_site_name %></td>
+        <td colspan="2"><span class="label">To:</span> <%= move.to_site_name %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Approved by:</span> <%= move.sent_by_name ?? '' %></td>
+        <td colspan="2"><span class="label">Date:</span> <%= fmt.date(move.sent_at) %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Time out (<%= move.from_site_name %>):</span> <%= time(move.gate_out_at) %><%= move.gate_out_by_name ? ` · ${move.gate_out_by_name}` : '' %></td>
+        <td colspan="2"><span class="label">Time in (<%= move.to_site_name %>):</span> <%= time(move.gate_in_at) %><%= move.gate_in_by_name ? ` · ${move.gate_in_by_name}` : '' %></td>
+      </tr>
+    </table>
+
+    <p class="gp-note">This pass authorizes the movement of the above vehicle and persons between company yards. The receiving gate logs the vehicle in with this number.</p>
+
+    <footer class="muted small">
+      <span><%= cancelled ? 'Cancelled: the vehicle did not leave' : `Sent ${fmt.dateTime(move.sent_at)}` %></span>
+      <span>Printed <%= fmt.dateTime(printedAt) %></span>
+    </footer>
+  </main>
+</body>
+</html>

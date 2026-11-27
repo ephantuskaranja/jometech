@@ -49,7 +49,8 @@
           </div>
           <dl class="jt-kv mb-0">
             <div><dt>Driver</dt><dd><strong><%= m.driver_name %></strong><% if (m.driver_phone) { %><span class="d-block small"><%= fmt.phone(m.driver_phone) %></span><% } %></dd></div>
-            <div><dt>Movement</dt><dd class="font-monospace"><%= m.number %></dd></div>
+            <div><dt>People</dt><dd><%= m.people %><span class="d-block small text-body-secondary">driver included</span></dd></div>
+            <div><dt>Movement</dt><dd><span class="font-monospace"><%= m.number %></span><a class="d-block small" href="/movements/<%= m.id %>/print"><i class="bi bi-printer"></i> Gate pass</a></dd></div>
             <div><dt>Sent</dt><dd><%= fmt.dateTime(m.sent_at) %></dd></div>
             <% if (m.notes) { %><div><dt>Notes</dt><dd><%= m.notes %></dd></div><% } %>
           </dl>
@@ -73,7 +74,8 @@
           </div>
           <dl class="jt-kv mb-0">
             <div><dt>Driver</dt><dd><strong><%= m.driver_name %></strong><% if (m.driver_phone) { %><span class="d-block small"><%= fmt.phone(m.driver_phone) %></span><% } %></dd></div>
-            <div><dt>Movement</dt><dd class="font-monospace"><%= m.number %></dd></div>
+            <div><dt>People</dt><dd><%= m.people %><span class="d-block small text-body-secondary">driver included</span></dd></div>
+            <div><dt>Movement</dt><dd><span class="font-monospace"><%= m.number %></span><a class="d-block small" href="/movements/<%= m.id %>/print"><i class="bi bi-printer"></i> Gate pass</a></dd></div>
             <div><dt>Left <%= m.from_site_name %></dt><dd><%= fmt.dateTime(m.gate_out_at) %></dd></div>
           </dl>
           <form method="post" action="/movements/<%= m.id %>/gate-in" class="d-grid gap-2">

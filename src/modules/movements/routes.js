@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { canAny } from '../../core/auth.js';
 import { check, httpError, optionalPhone, optionalReading, optionalText } from '../../core/validate.js';
 import { vehicleLabel } from '../../core/vehicle-format.js';
+import { config } from '../../config.js';
+import { staffSignatures } from '../../core/staff-signatures.js';
 import { getCheckin } from '../checkins/service.js';
 import * as movements from './service.js';
 
@@ -13,6 +15,7 @@ import * as movements from './service.js';
 export const router = Router();
 const manage = canAny('checkin.manage');
 const gate = canAny('checkin.gate');
+const manageOrGate = canAny('checkin.manage', 'checkin.gate');
 const text = (v, max) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max) || null;
 
 /** Staff act only for the sites they work at (admins and managers: all sites). */
@@ -22,6 +25,9 @@ const sendSchema = z.object({
   to_site_id: z.coerce.number({ message: 'Choose the site it is going to' }).int().positive('Choose the site it is going to'),
   driver_name: z.string().trim().min(2, 'Who is driving it?').max(100, 'Use 100 characters or fewer'),
   driver_phone: optionalPhone(),
+  // Everyone in the vehicle, driver included (the paper gate pass's "number of people"). Blank: the driver alone.
+  people: z.union([z.literal(''), z.coerce.number().int().min(1, 'At least 1: the driver').max(50, 'Check the number')]).optional()
+    .transform((v) => (v ? v : 1)),
   odometer_out: optionalReading(),
   notes: optionalText(500),
 });
@@ -72,6 +78,19 @@ router.post('/movements/:id/cancel', manage, async (req, res) => {
   await movements.cancelMovement(move.id, req);
   req.session.flash = { type: 'warning', text: `Move ${move.number} cancelled. The vehicle stays where it was.` };
   res.redirect(`/check-in/${move.checkin_id}`);
+});
+
+// The printed vehicle gate pass: either site's staff or gate, while it moves or afterwards.
+router.get('/movements/:id/print', manageOrGate, async (req, res) => {
+  const move = await movements.forPass(Number(req.params.id));
+  if (!move || !(worksAt(req, move.from_site_id) || worksAt(req, move.to_site_id))) throw httpError(404, 'That movement isn’t to or from your site.');
+  res.render('movements/views/pass-print', {
+    layout: false,
+    title: `${move.number} vehicle gate pass`,
+    move, company: config.company, printedAt: new Date(),
+    vehicle: vehicleLabel(move),
+    signs: await staffSignatures({ approved: move.sent_by }),
+  });
 });
 
 // ---------- the gates ----------

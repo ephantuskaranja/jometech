@@ -48,12 +48,13 @@ test('sending needs a driver, and a different site', async () => {
 
 test('HQ sends a vehicle; it shows as on the way, and Site B sees it arriving', async () => {
   const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
-  const res = await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno', driver_phone: '0700 000 402', odometer_out: '120,500' });
+  const res = await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno', driver_phone: '0700 000 402', people: '3', odometer_out: '120,500' });
   assert.equal(res.status, 302);
   const move = await openMove(id);
   assert.match(move.number, /^MOV-\d{4}-\d{4}$/);
   assert.equal(move.odometer_out, 120500);
   assert.equal(move.driver_phone, '+254700000402');
+  assert.equal(move.people, 3);
 
   assert.match((await hq.get('/check-in')).text, /On the way to Site B/);
   assert.match((await hq.get(`/check-in/${id}`)).text, /sent it to another site/);
@@ -66,6 +67,27 @@ test('HQ sends a vehicle; it shows as on the way, and Site B sees it arriving', 
   assert.equal((await post(hq, `/check-in/${id}/release`)).status, 409);
   await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno' });
   assert.equal((await db('vehicle_movements').where({ checkin_id: id })).length, 1);
+});
+
+test('the move prints as a vehicle gate pass, at either site; the gate sees how many people', async () => {
+  const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
+  const move = await openMove(id);
+  assert.match((await hq.get(`/check-in/${id}`)).text, new RegExp(`/movements/${move.id}/print`));
+  const res = await hq.get(`/movements/${move.id}/print`).expect(200);
+  assert.match(res.text, /Vehicle Gate Pass/);
+  assert.match(res.text, new RegExp(move.number));
+  assert.match(res.text, /KZX 401A/);
+  assert.match(res.text, /Number of people:<\/span> 3/);
+  assert.match(res.text, /Driver:<\/span> Juma Otieno/);
+  assert.match(res.text, /company-stamp\.png/);
+  await siteB.get(`/movements/${move.id}/print`).expect(200);
+  // Someone at neither site can't
+  const other = await db('sites').whereNotIn('id', [hqSite.id, bSite.id]).first('id');
+  if (other) {
+    const elsewhere = await loginAs(app, await makeUser(75, ['supervisor'], { siteIds: [other.id] }));
+    await elsewhere.get(`/movements/${move.id}/print`).expect(404);
+  }
+  assert.match((await hq.get('/gate/vehicles')).text, /People<\/dt><dd>3/);
 });
 
 test('it passes both gates before Site B can receive it', async () => {
@@ -123,9 +145,13 @@ test('a move that never left can be cancelled by the sending site only', async (
   const id = await checkInAtHq('KZX 402A');
   await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno' });
   const move = await openMove(id);
+  assert.equal(move.people, 1, 'blank: the driver alone');
   assert.equal((await post(siteB, `/movements/${move.id}/cancel`)).status, 403);
   assert.equal((await post(hq, `/movements/${move.id}/cancel`)).status, 302);
   assert.equal((await db('vehicle_movements').where({ id: move.id }).first()).status, 'cancelled');
   assert.equal((await db('checkins').where({ id }).first()).site_id, hqSite.id, 'it stays at HQ');
   assert.equal((await post(siteB, `/movements/${move.id}/receive`)).status, 409);
+  const print = await hq.get(`/movements/${move.id}/print`).expect(200);
+  assert.match(print.text, /is-cancelled/);
+  assert.doesNotMatch(print.text, /company-stamp\.png/);
 });

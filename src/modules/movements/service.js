@@ -67,7 +67,7 @@ export function otherSites(siteId) {
 
 /**
  * The vehicle leaves its site for another one.
- * @param {{ to_site_id: number, driver_name: string, driver_phone: string|null, odometer_out: number|null, notes: string|null }} input
+ * @param {{ to_site_id: number, driver_name: string, driver_phone: string|null, people: number, odometer_out: number|null, notes: string|null }} input
  */
 export async function sendVehicle(checkinId, input, actor) {
   return db.transaction(async (trx) => {
@@ -82,10 +82,10 @@ export async function sendVehicle(checkinId, input, actor) {
     const number = await nextNumber(trx, 'movement');
     const [id] = await trx('vehicle_movements').insert({
       number, checkin_id: checkin.id, vehicle_id: checkin.vehicle_id, from_site_id: checkin.site_id, to_site_id: to.id,
-      driver_name: input.driver_name, driver_phone: input.driver_phone, odometer_out: input.odometer_out, notes: input.notes,
+      driver_name: input.driver_name, driver_phone: input.driver_phone, people: input.people, odometer_out: input.odometer_out, notes: input.notes,
       sent_by: actor.user.id,
     });
-    await audit(trx, actor, { entity: 'checkin', id: checkin.id, action: 'sent', summary: `Sent to ${to.name} with ${input.driver_name} (${number})` });
+    await audit(trx, actor, { entity: 'checkin', id: checkin.id, action: 'sent', summary: `Sent to ${to.name} with ${input.driver_name}${input.people > 1 ? `, ${input.people} people in all` : ''} (${number})` });
     return { id, number, to };
   });
 }
@@ -125,6 +125,20 @@ export function getMovement(id) {
   return db('vehicle_movements').where({ id }).first();
 }
 
+/** One move with everything its printed gate pass shows: sites, vehicle, customer, and who did each step. */
+export async function forPass(id) {
+  const m = await withSites(db('vehicle_movements as m')).join('vehicles', 'vehicles.id', 'm.vehicle_id')
+    .join('customers as c', 'c.id', 'vehicles.customer_id')
+    .leftJoin('users as sender', 'sender.id', 'm.sent_by')
+    .leftJoin('users as gout', 'gout.id', 'm.gate_out_by')
+    .leftJoin('users as gin', 'gin.id', 'm.gate_in_by')
+    .where('m.id', id)
+    .first('m.*', 'from_site.name as from_site_name', 'to_site.name as to_site_name',
+      'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model', 'vehicles.colour',
+      'c.name as customer_name', 'sender.name as sent_by_name', 'gout.name as gate_out_by_name', 'gin.name as gate_in_by_name');
+  return m ? { ...m, stage: stage(m) } : m;
+}
+
 const listColumns = ['m.id', 'm.number', 'm.status', 'm.checkin_id', 'm.driver_name', 'm.sent_at', 'm.received_at', 'm.from_site_id', 'm.to_site_id', 'm.gate_out_at', 'm.gate_in_at',
   'from_site.name as from_site_name', 'to_site.name as to_site_name', 'vehicles.reg_no', 'vehicles.chassis_no', 'vehicles.temp_tag', 'vehicles.make', 'vehicles.model'];
 
@@ -147,7 +161,7 @@ export async function atGate(siteId) {
     .where((w) => w.where((a) => a.where('m.from_site_id', siteId).whereNull('m.gate_out_at'))
       .orWhere((b) => b.where('m.to_site_id', siteId).whereNotNull('m.gate_out_at').whereNull('m.gate_in_at')))
     .orderBy('m.sent_at')
-    .select(...listColumns, 'm.driver_phone', 'm.gate_out_at', 'm.gate_in_at', 'm.notes', 'vehicles.colour', 'c.name as customer_name');
+    .select(...listColumns, 'm.driver_phone', 'm.people', 'm.gate_out_at', 'm.gate_in_at', 'm.notes', 'vehicles.colour', 'c.name as customer_name');
   return { leaving: rows.filter((m) => m.from_site_id === siteId && !m.gate_out_at), arriving: rows.filter((m) => m.to_site_id === siteId && m.gate_out_at) };
 }
 
