@@ -172,13 +172,13 @@ export async function vehicleChoices(customerId, siteId, keepId = null) {
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
     // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
-    // What it is (build_kind): a trailer, registered from the start (a temporary tag until its chassis number is
-    // stamped, checked in here as built here) so it is released and cleared like any vehicle once sold; a body
-    // only, with no vehicle until a buyer's truck is chosen; or a body on a chassis already checked in.
+    // What it is (build_kind), Jome-Tech building the chassis itself: a trailer or tanker, registered from the
+    // start (a trailer or semi-trailer with a temporary tag until its chassis number is stamped, checked in here
+    // as built here) so it is released and cleared like any vehicle once sold; or a body only, with no vehicle
+    // until a buyer's truck is chosen. A stock build is never opened on a vehicle that came in.
     const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
-    const kind = stock ? (input.build_kind ?? (input.vehicle_id ? 'chassis' : 'body')) : null;
-    if (kind === 'chassis' && !input.vehicle_id) throw err(422, 'Choose the chassis checked in here', 'vehicle_id');
-    if (kind === 'trailer' || kind === 'body') input = { ...input, vehicle_id: null };
+    const kind = stock ? (input.build_kind ?? 'body') : null;
+    if (stock) input = { ...input, vehicle_id: null };
     if (!input.vehicle_id && !stock) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
     if (!input.vehicle_id && !input.vehicle_description) throw err(422, `Say what is being built, e.g. ${kind === 'body' ? '20ft cargo body' : '40ft flatbed trailer'}`, 'vehicle_description');
     if (kind === 'trailer') input = { ...input, vehicle_id: await registerTrailer(trx, input, actor) };
@@ -213,8 +213,8 @@ export async function createJob(input, actor) {
  */
 async function registerTrailer(trx, input, actor) {
   const tag = await nextNumber(trx, 'temp_tag');
-  const [vehicleId] = await trx('vehicles').insert({ temp_tag: tag, customer_id: input.customer_id, type: 'trailer', model: input.vehicle_description.slice(0, 60), created_by: actor.user.id });
-  await audit(trx, actor, { entity: 'vehicle', id: vehicleId, action: 'create', summary: `Stock trailer ${tag}: ${input.vehicle_description}` });
+  const [vehicleId] = await trx('vehicles').insert({ temp_tag: tag, customer_id: input.customer_id, type: input.trailer_type ?? 'trailer', model: input.vehicle_description.slice(0, 60), created_by: actor.user.id });
+  await audit(trx, actor, { entity: 'vehicle', id: vehicleId, action: 'create', summary: `Stock ${input.trailer_type === 'semi_trailer' ? 'semi-trailer' : 'trailer'} ${tag}: ${input.vehicle_description}` });
   const number = await nextNumber(trx, 'checkin');
   const [checkinId] = await trx('checkins').insert({
     number, site_id: actor.site.id, vehicle_id: vehicleId, purpose: 'fabrication', customer_id: input.customer_id,

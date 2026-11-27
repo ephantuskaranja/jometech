@@ -37,27 +37,22 @@
               options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
               hint: 'Not found? Type the name and choose “Add new customer”.',
               attrs: 'data-tom-create="customer" @change="customerChanged($el.value)"' }) %>
-        <%# Sheet row 58: a body built for stock, before anyone buys it. Its chassis is checked in with "No customer yet". %>
+        <%# Sheet row 58: a trailer, tanker or body built for stock, before anyone buys it. %>
         <% if (!job && locals.stockId && String(values.customer_id) !== String(stockId)) { %><a class="small" href="/jobs/new?customer_id=<%= stockId %>"><i class="bi bi-box"></i> No customer yet? Open it as a stock build</a><% } %>
       <% } %>
       <% if (stock && !job) { %>
-        <%# Stock build: a trailer (registered from the start), a body only, or a body on a chassis checked in with "No customer yet". %>
+        <%# Stock build: Jome-Tech builds the chassis itself. A trailer or tanker is registered as its build starts; a body only has no vehicle. %>
         <div x-data="{ kind: <%= JSON.stringify(values.build_kind || 'trailer') %> }" class="d-grid gap-3">
-          <%- include('partials/choices', { name: 'build_kind', label: 'What is it?', required: true, columns: 3, model: 'kind', value: values.build_kind || 'trailer', options: [
-                { value: 'trailer', label: 'A trailer', hint: 'Registered from the start: a temporary tag until its chassis number is stamped' },
-                { value: 'body', label: 'A body only', hint: 'No vehicle until it is fitted to a buyer’s truck' },
-                { value: 'chassis', label: 'On a chassis here', hint: 'A chassis checked in with “No customer yet”' }] }) %>
-          <div class="jt-field" x-show="kind === 'chassis'" x-cloak>
-            <label class="form-label" for="f-vehicle_id">Chassis checked in here</label>
-            <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id" :disabled="kind !== 'chassis'">
-              <option value="">Choose the chassis</option>
-              <% vehicleOptions.forEach((v) => { %><option value="<%= v.value %>"<%= v.disabled ? ' disabled' : '' %><%= String(v.value) === String(values.vehicle_id ?? '') ? ' selected' : '' %>><%= v.label %></option><% }) %>
-            </select>
-            <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
-            <% if (!vehicleOptions.some((v) => !v.disabled)) { %><div class="form-text">No chassis is checked in here with “No customer yet”. Check it in first (New vehicle, “No customer yet: stock build”).</div><% } %>
+          <%- include('partials/choices', { name: 'build_kind', label: 'What is it?', required: true, columns: 2, model: 'kind', value: values.build_kind || 'trailer', options: [
+                { value: 'trailer', label: 'A trailer or tanker', hint: 'Chassis built here. Registered from the start: a temporary tag until its chassis number is stamped' },
+                { value: 'body', label: 'A body only', hint: 'To fit on a buyer’s truck. No vehicle until it is sold' }] }) %>
+          <div x-show="kind === 'trailer'" x-cloak>
+            <%- include('partials/choices', { name: 'trailer_type', label: 'Registered as', columns: 2, value: values.trailer_type || 'trailer', options: [
+                  { value: 'trailer', label: 'Trailer', hint: 'Full trailer, on its own axles front and back' },
+                  { value: 'semi_trailer', label: 'Semi-trailer', hint: 'Rests on the prime mover’s fifth wheel (most tankers)' }] }) %>
           </div>
           <%- include('partials/field', { name: 'vehicle_description', label: 'What is being built', value: values.vehicle_description, error: errors.vehicle_description, required: true,
-                placeholder: 'e.g. 40ft flatbed trailer, 3 axle; 20ft cargo body', hint: 'Shown on the job, the job card and Reports → Stock value.' }) %>
+                placeholder: 'e.g. 40ft fuel tanker, 3 axle; skeletal trailer; 20ft cargo body', hint: 'Shown on the job, the job card and Reports → Stock value.' }) %>
         </div>
       <% } else { %>
       <div class="jt-fields">
@@ -69,7 +64,7 @@
               <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :disabled="v.disabled" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
             </select>
             <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
-            <% if (stock) { %><div class="form-text">Only if it is built on a chassis checked in with “No customer yet”. A body or trailer built from scratch needs none.</div><% } else { %>
+            <% if (stock) { %><div class="form-text">A stock trailer’s own record; a body only has none until it is fitted to a buyer’s truck.</div><% } else { %>
             <div class="form-text" x-show="!vehicles.some((v) => !v.disabled)">None of their vehicles is checked in here. The gate logs it in, then it is checked in<% if (canCheckIn) { %> under <a href="/check-in">Check-in</a><% } %>; then open its job.</div><% } %>
           </div>
         </div>

@@ -48,24 +48,22 @@ test('the built-in stock owner exists and stays out of customer lists, pickers a
   assert.equal((await db('customers').where({ id: stock.id }).first()).name, 'Stock build: awaiting customer');
 });
 
-test('a chassis checked in with “No customer yet” belongs to stock; its job is a stock build stores can issue to', async () => {
-  const res = await post(supervisor, '/check-in', {
-    vehicle_mode: 'new', issue_tag: '1', type: 'truck', make: 'Isuzu', model: 'FVZ', stock_build: '1', customer_id: '',
-    purpose: 'fabrication', no_arrival_reason: 'Test: bought chassis, delivered by the dealer',
-  });
-  assert.equal(res.status, 302, res.text.slice(0, 500));
-  const checkinId = Number(/\/check-in\/(\d+)/.exec(res.headers.location)[1]);
-  checkinIds.push(checkinId);
-  const checkin = await db('checkins').where({ id: checkinId }).first();
-  const vehicle = await db('vehicles').where({ id: checkin.vehicle_id }).first();
-  assert.equal(vehicle.customer_id, stock.id);
-  assert.match(vehicle.temp_tag, /^JTT-/);
+test('a stock tanker is registered as its build starts; its job is a stock build stores can issue to', async () => {
+  // Check-in no longer offers “No customer yet”: Jome-Tech builds its chassis here, it doesn't buy them.
+  assert.doesNotMatch((await supervisor.get('/check-in/new')).text, /No customer yet/);
 
   // The new-job form offers to open a stock build.
   assert.ok((await supervisor.get('/jobs/new')).text.includes(`/jobs/new?customer_id=${stock.id}"`));
-  const job = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: vehicle.id, line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 24ft high-side body'] });
+  const job = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'trailer', trailer_type: 'semi_trailer', vehicle_description: '40ft fuel tanker, 3 axle',
+    line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft fuel tanker'] });
   assert.equal(job.status, 302, job.text.slice(0, 500));
   const jobId = Number(job.headers.location.split('/')[2]);
+  const checkinId = (await db('jobs').where({ id: jobId }).first()).checkin_id;
+  checkinIds.push(checkinId);
+  const vehicle = await db('vehicles').where({ id: (await db('checkins').where({ id: checkinId }).first()).vehicle_id }).first();
+  assert.equal(vehicle.customer_id, stock.id);
+  assert.equal(vehicle.type, 'semi_trailer');
+  assert.match(vehicle.temp_tag, /^JTT-/);
   const row = await db('jobs').where({ id: jobId }).first();
   assert.equal(row.stock_build, 1);
   assert.ok(row.materials_allowed_at, 'stores can issue without a proforma');
@@ -142,7 +140,9 @@ test('a stock build made from scratch needs no vehicle: just what is being built
   // The form, opened as a stock build, asks what is being built; the chassis is optional.
   const form = (await supervisor.get(`/jobs/new?customer_id=${stock.id}`)).text;
   assert.match(form, /What is being built/);
-  assert.match(form, /A trailer/);
+  assert.match(form, /A trailer or tanker/);
+  assert.match(form, /Semi-trailer/);
+  assert.doesNotMatch(form, /On a chassis here/);
   assert.match(form, /A body only/);
 
   let res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build trailer'] });
