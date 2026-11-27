@@ -2,6 +2,7 @@ import path from 'node:path';
 import express from 'express';
 import expressLayouts from 'express-ejs-layouts';
 import helmet from 'helmet';
+import compression from 'compression';
 import { pinoHttp } from 'pino-http';
 import { config } from './config.js';
 import { logger } from './core/logger.js';
@@ -89,6 +90,10 @@ export function createApp() {
       },
     },
   }));
+
+  // ---- Compression: pages, CSS, JS and JSON go out gzipped, 4–5× smaller (staff on phone data) ----
+  // Images, PDFs and Excel files are already compressed and are left alone; tiny responses too.
+  app.use(compression());
 
   // ---- Defaults every view can rely on, even on an error page shown early ----
   app.use((req, res, next) => {

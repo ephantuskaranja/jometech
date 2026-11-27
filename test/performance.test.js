@@ -53,3 +53,13 @@ test('CSS and JS links carry a version, and versioned files are cached for a yea
   assert.match((await agent.get(css)).headers['cache-control'], /max-age=31536000, immutable/);
   assert.equal((await agent.get('/css/app.css')).headers['cache-control'], 'no-cache', 'unversioned: checked each time');
 });
+
+test('pages, CSS and JS go out compressed; images are left as they are', async () => {
+  const gz = (url) => agent.get(url).set('Accept-Encoding', 'gzip');
+  const page = await gz('/jobs').expect(200);
+  assert.equal(page.headers['content-encoding'], 'gzip', 'a page');
+  assert.match(page.text, /<html/, 'and it still reads as the page');
+  assert.equal((await gz('/css/app.css').expect(200)).headers['content-encoding'], 'gzip', 'CSS');
+  assert.equal((await gz('/vendor/bootstrap/css/bootstrap.min.css').expect(200)).headers['content-encoding'], 'gzip', 'a library');
+  assert.equal((await gz('/img/brand/apple-touch-icon.png').expect(200)).headers['content-encoding'], undefined, 'a PNG is already compressed');
+});
