@@ -7,6 +7,8 @@
   const typeLocked = Boolean(job?.steps?.some((s) => s.status !== 'pending'));
   // A job opened before a checked-in vehicle was needed (sheet row 49) may still have only a description.
   const legacy = Boolean(job) && !job.vehicle_id;
+  // A stock build (sheet row 58): no customer yet, and often no vehicle either (a body or trailer built from scratch).
+  const stock = Boolean(locals.stockId) && String(values.customer_id) === String(stockId);
 %>
 <%- include('partials/page-header', {
   crumb: [{ label: 'Jobs', href: '/jobs' }, job ? job.number : 'New'],
@@ -26,6 +28,10 @@
     <div class="card-body d-grid gap-3">
       <% if (fixed) { %>
         <dl class="jt-kv mb-0"><div><dt>Customer</dt><dd><%= job.customer_name %></dd></div></dl>
+      <% } else if (stock && !job) { %>
+        <input type="hidden" name="customer_id" value="<%= stockId %>">
+        <div class="jt-info-box"><i class="bi bi-box"></i><span><strong>Stock build: no customer yet.</strong> Built for stock, to sell to whoever comes. Stores can issue materials straight away; assign the customer on the job when one buys it.
+          <a class="d-block small mt-1" href="/jobs/new">A customer’s job instead</a></span></div>
       <% } else { %>
         <%- include('partials/field', { name: 'customer_id', label: 'Customer', type: 'select', url: '/api/customers', required: true,
               options: customerOption, value: values.customer_id, error: errors.customer_id, blank: 'Type a name, phone or CUS number',
@@ -37,16 +43,20 @@
       <div class="jt-fields">
         <div x-show="hasCustomer" x-cloak>
           <div class="jt-field">
-            <label class="form-label" for="f-vehicle_id">Their vehicle, checked in here</label>
+            <label class="form-label" for="f-vehicle_id"><%= stock ? 'Chassis checked in here (optional)' : 'Their vehicle, checked in here' %></label>
             <select class="form-select<%= errors.vehicle_id ? ' is-invalid' : '' %>" id="f-vehicle_id" name="vehicle_id">
-              <option value=""><%= legacy ? 'Not here yet' : 'Choose the vehicle' %></option>
+              <option value=""><%= stock ? 'None: built from scratch' : legacy ? 'Not here yet' : 'Choose the vehicle' %></option>
               <template x-for="v in vehicles" :key="v.value"><option :value="v.value" x-text="v.label" :disabled="v.disabled" :selected="String(v.value) === <%= JSON.stringify(String(values.vehicle_id ?? '')) %>"></option></template>
             </select>
             <% if (errors.vehicle_id) { %><div class="invalid-feedback d-block"><%= errors.vehicle_id %></div><% } %>
-            <div class="form-text" x-show="!vehicles.some((v) => !v.disabled)">None of their vehicles is checked in here. The gate logs it in, then it is checked in<% if (canCheckIn) { %> under <a href="/check-in">Check-in</a><% } %>; then open its job.</div>
+            <% if (stock) { %><div class="form-text">Only if it is built on a chassis checked in with “No customer yet”. A body or trailer built from scratch needs none.</div><% } else { %>
+            <div class="form-text" x-show="!vehicles.some((v) => !v.disabled)">None of their vehicles is checked in here. The gate logs it in, then it is checked in<% if (canCheckIn) { %> under <a href="/check-in">Check-in</a><% } %>; then open its job.</div><% } %>
           </div>
         </div>
-        <% if (legacy) { %>
+        <% if (stock && !job) { %>
+          <%- include('partials/field', { name: 'vehicle_description', label: 'What is being built', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. 40ft flatbed trailer, 20ft cargo body',
+                hint: 'Needed when there is no chassis. Shown on the job, the job card and Reports → Stock value.' }) %>
+        <% } else if (legacy) { %>
           <%- include('partials/field', { name: 'vehicle_description', label: 'Vehicle (if not registered)', value: values.vehicle_description, error: errors.vehicle_description, placeholder: 'e.g. Sinotruck Howo H3 6 wheeler' }) %>
         <% } %>
       </div>

@@ -137,3 +137,34 @@ test('the Stock value report lists stock builds waiting for a buyer; selling one
   assert.doesNotMatch((await admin.get('/reports/stock-value')).text, new RegExp(`href="/jobs/${job.id}"`));
   assert.doesNotMatch((await supervisor.get('/jobs?show=stock')).text, new RegExp(sold.number));
 });
+
+test('a stock build made from scratch needs no vehicle: just what is being built', async () => {
+  // The form, opened as a stock build, asks what is being built; the chassis is optional.
+  const form = (await supervisor.get(`/jobs/new?customer_id=${stock.id}`)).text;
+  assert.match(form, /What is being built/);
+  assert.match(form, /None: built from scratch/);
+
+  let res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build trailer'] });
+  assert.equal(res.status, 422, 'says what is being built');
+  assert.match(res.text, /Say what is being built/);
+
+  res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '40ft flatbed trailer', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft flatbed trailer'] });
+  assert.equal(res.status, 302, res.text.slice(0, 400));
+  const id = Number(res.headers.location.split('/')[2]);
+  const job = await db('jobs').where({ id }).first();
+  assert.equal(job.vehicle_id, null);
+  assert.equal(job.vehicle_description, '40ft flatbed trailer');
+  assert.equal(job.stock_build, 1);
+  assert.ok(job.materials_allowed_at);
+  assert.match((await supervisor.get(`/jobs/${id}`)).text, /Built from scratch, no chassis/);
+  assert.match((await admin.get('/reports/stock-value')).text, /40ft flatbed trailer/);
+
+  // A customer's job still needs a checked-in vehicle.
+  const [ownerId] = await db('customers').insert({ number: 'CUS-T615', name: 'Kariuki Movers', phone: '+254700000615', category: 'company' });
+  res = await post(supervisor, '/jobs', { customer_id: ownerId, vehicle_id: '', vehicle_description: 'Something', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Work'] });
+  assert.equal(res.status, 422);
+  assert.match(res.text, /Choose the vehicle/);
+
+  await db('audit_log').where({ entity: 'job', entity_id: id }).delete();
+  await db('jobs').where({ id }).delete();
+});

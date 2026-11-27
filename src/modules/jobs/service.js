@@ -171,18 +171,22 @@ export async function vehicleChoices(customerId, siteId, keepId = null) {
 /** A job with no proforma, for a vehicle checked in here. @returns {Promise<{ id: number, number: string }>} */
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
-    if (!input.vehicle_id) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
-    const owner = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
-    if (owner?.customer_id !== input.customer_id) throw err(422, 'Choose one of this customer’s vehicles', 'vehicle_id');
-    // One running job per vehicle, opened at the site the vehicle is checked in at.
-    await refuseIfBlocked(trx, input.vehicle_id, { siteId: actor.site.id });
+    // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
+    // A body or trailer built from scratch has no vehicle: what is being built is described instead.
+    const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
+    if (!input.vehicle_id && !stock) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
+    if (!input.vehicle_id && !input.vehicle_description) throw err(422, 'Say what is being built, e.g. 40ft flatbed trailer', 'vehicle_description');
+    if (input.vehicle_id) {
+      const owner = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
+      if (owner?.customer_id !== input.customer_id) throw err(422, 'Choose one of this customer’s vehicles', 'vehicle_id');
+      // One running job per vehicle, opened at the site the vehicle is checked in at.
+      await refuseIfBlocked(trx, input.vehicle_id, { siteId: actor.site.id });
+    }
     const checkin = await openCheckin(trx, input.vehicle_id);
     const siteId = checkin?.site_id ?? actor.site.id;
     await checkLinks(trx, input, { siteId });
     const typeId = await resolveType(trx, input.job_type_id);
     const number = await nextNumber(trx, 'job');
-    // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
-    const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
     const [id] = await trx('jobs').insert({
       number, site_id: siteId, job_type_id: typeId, customer_id: input.customer_id, vehicle_id: input.vehicle_id, vehicle_description: input.vehicle_description,
       checkin_id: checkin?.id ?? null, supervisor_id: input.supervisor_id, responsible_name: input.responsible_name,
@@ -457,8 +461,9 @@ export async function finishStep(jobId, stepId, status, actor) {
     if (step?.id !== stepId) return null;
     if (step.is_qc) throw httpError(409, `${step.name} is ticked off by a passed quality check. Start the quality check on the job.`);
     if (step.is_signoff) throw httpError(409, `${step.name} is ticked off by the customer’s sign-off. Open Customer sign-off on the job.`);
-    // Only a job with no vehicle at all may skip it; otherwise the vehicle's check-in ticks it off.
-    if (step.is_receive && (status === 'done' || job.vehicle_id || job.vehicle_description)) {
+    // Only a job with no vehicle at all may skip it (a stock build made from scratch counts: its description
+    // says what is being built, not a vehicle coming in); otherwise the vehicle's check-in ticks it off.
+    if (step.is_receive && (status === 'done' || job.vehicle_id || (job.vehicle_description && !job.stock_build))) {
       throw httpError(409, `${step.name} is ticked off when the vehicle is checked in. ${job.vehicle_id ? 'Check the vehicle in.' : 'Choose the vehicle on the job once it is checked in.'}`);
     }
     await trx('job_steps').where({ id: step.id }).update({ status, finished_at: trx.fn.now(3), finished_by: actor.user.id });
@@ -683,9 +688,8 @@ export async function listJobs({ siteId, searchSiteIds = [siteId], tab = 'active
   } else {
     query.where('j.site_id', siteId);
     tabFilter(query, tab);
-    // Active: what is promised soonest comes first; nothing promised goes last.
-    if (tab === 'active') query.orderByRaw('`j`.`due_on` IS NULL, `j`.`due_on`, `j`.`id`');
-    else if (tab === 'completed') query.orderBy('j.completed_at', 'desc');
+    // Newest first (sheet row 57, as the client asked); Completed: the latest finished first.
+    if (tab === 'completed') query.orderBy('j.completed_at', 'desc');
     else query.orderBy('j.id', 'desc');
   }
   return (await query).map((j) => ({ ...j, vehicle_label: j.reg_no || j.chassis_no || j.temp_tag ? vehicleLabel(j) : null }));

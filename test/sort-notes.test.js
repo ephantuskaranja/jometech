@@ -14,7 +14,7 @@ const note = (html) => /class="jt-sort-note[^"]*"><i class="bi bi-sort-down"><\/
 
 test('each list says how it is sorted', async () => {
   const expect = {
-    '/jobs': 'A queue: soonest due date first, jobs with no date last',
+    '/jobs': 'Newest first',
     '/jobs?show=completed': 'Latest completed first',
     '/jobs?show=all': 'Newest first',
     '/enquiries': 'A queue: soonest follow-up date first',

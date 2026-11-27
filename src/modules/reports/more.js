@@ -69,12 +69,12 @@ export async function stockBuilds(siteIds, today = localDay()) {
     .leftJoin('vehicles as v', 'v.id', 'j.vehicle_id')
     .where({ 'j.stock_build': true, 'c.is_stock': true }).whereNot('j.status', 'cancelled').whereIn('j.site_id', siteIds)
     .orderBy('j.created_at').orderBy('j.id')
-    .select('j.id', 'j.number', 'j.status', 'j.created_at', 'j.completed_at', 's.name as site_name', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model',
+    .select('j.id', 'j.number', 'j.status', 'j.created_at', 'j.completed_at', 'j.vehicle_description', 's.name as site_name', 'v.reg_no', 'v.chassis_no', 'v.temp_tag', 'v.make', 'v.model',
       materials.as('materials'),
       db('job_lines').where('job_id', db.ref('j.id')).orderBy('sort_order').limit(1).select('description').as('work'));
   return rows.map((j) => ({
     job: { text: j.number, href: `/jobs/${j.id}` },
-    vehicle: [j.reg_no || j.chassis_no || j.temp_tag ? vehicleLabel(j) : null, [j.make, j.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '—',
+    vehicle: [j.reg_no || j.chassis_no || j.temp_tag ? vehicleLabel(j) : null, [j.make, j.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || j.vehicle_description || '—',
     work: j.work ?? '', site: j.site_name,
     state: j.status === 'completed' ? 'Ready' : 'Being built',
     started: localDay(j.created_at),

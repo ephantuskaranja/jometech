@@ -36,15 +36,16 @@
   // is far down the page, under the steps). Big screens show the card beside the steps instead.
   const openQc = qcChecks.find((q) => q.status === 'in_progress');
   // Vehicle Received waits for the vehicle's check-in (or, with no vehicle at all, may be skipped).
-  const noVehicle = !job.vehicle_id && !job.vehicle_description;
+  const noVehicle = !job.vehicle_id && (!job.vehicle_description || job.stock_build); // a stock build from scratch has none coming
   const waitVehicle = job.status === 'in_progress' && current?.is_receive ? {
     tone: 'warning',
     text: job.vehicle_id ? `Waiting for ${job.vehicle_label} to be checked in. ${current.name} is ticked off by its check-in.`
+      : job.stock_build ? 'A stock build made from scratch: no vehicle comes in. Skip this step.'
       : job.vehicle_description ? `Waiting for the vehicle (${job.vehicle_description}). Once it is checked in, choose it on the job.`
       : 'This job has no vehicle. Skip this step if none is coming.',
     actions: [
       ...(job.vehicle_id && canCheckIn ? [{ label: 'Check the vehicle in', href: `/check-in/new?vehicle_id=${job.vehicle_id}`, icon: 'truck', primary: true }] : []),
-      ...(!job.vehicle_id && job.vehicle_description && canManage ? [{ label: 'Choose the vehicle', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }] : []),
+      ...(!job.vehicle_id && job.vehicle_description && !job.stock_build && canManage ? [{ label: 'Choose the vehicle', href: `/jobs/${job.id}/edit`, icon: 'pencil', primary: true }] : []),
       ...(noVehicle && canManage ? [{ label: 'Skip: no vehicle', post: `/jobs/${job.id}/steps/${current.id}/skip`, icon: 'dash-circle', primary: true }] : []),
     ],
   } : null;
@@ -466,7 +467,7 @@
               <% if (canSeeCustomers) { %><a href="/vehicles/<%= job.vehicle_id %>"><%= job.vehicle_label %></a><% } else { %><%= job.vehicle_label %><% } %>
               <% if (details) { %><span class="d-block small text-body-secondary"><%= details %></span><% } %>
             <% } else if (job.vehicle_description) { %>
-              <%= job.vehicle_description %><span class="d-block small text-body-secondary">Not registered yet</span>
+              <%= job.vehicle_description %><span class="d-block small text-body-secondary"><%= job.stock_build ? 'Built from scratch, no chassis' : 'Not registered yet' %></span>
             <% } else { %>
               <span class="text-body-secondary">Not chosen yet</span>
             <% } %>
