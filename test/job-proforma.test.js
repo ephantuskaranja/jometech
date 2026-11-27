@@ -176,3 +176,63 @@ test('an accepted proforma started as a job (quote first) lets stores issue stra
   assert.ok(job, res.text);
   assert.equal((await tryIssue(job.id)).status, 422, 'past the job check');
 });
+
+/** A proforma sales made on its own (quote first), sent and accepted, with no job yet. */
+async function acceptedProforma(fields = {}) {
+  const res = await post(sales, '/proformas', {
+    customer_id: customer.id, proforma_date: localDay(),
+    line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 20ft cargo body'], line_price: ['380,000'], ...fields,
+  });
+  assert.equal(res.status, 302, res.text);
+  const pid = idOf(res.headers.location);
+  await post(sales, `/proformas/${pid}/send`);
+  assert.equal((await post(sales, `/proformas/${pid}/accept`)).status, 302);
+  return db('proformas').where({ id: pid }).first();
+}
+
+test('sheet row 58: a job opened without a proforma is matched to one the customer already accepted', async () => {
+  const p = await acceptedProforma();
+  const { id, vehicleId } = await runningJob();
+
+  // Offered on the job, to supervisors and sales; not to stores.
+  const page = (await supervisor.get(`/jobs/${id}`)).text;
+  assert.match(page, /Match a proforma \(\d+\)/);
+  assert.match(page, new RegExp(`value="${p.id}"[^>]*>${p.number}`));
+  assert.doesNotMatch(page, new RegExp(`KES 380,000`), 'no prices for the workshop');
+  assert.match((await sales.get(`/jobs/${id}`)).text, /KES 380,000/, 'sales see what it is worth');
+  assert.doesNotMatch((await store.get(`/jobs/${id}`)).text, /Match a proforma/);
+  assert.equal((await post(store, `/jobs/${id}/match-proforma`, { proforma_id: p.id })).status, 403);
+
+  // Another customer's accepted proforma can't be matched.
+  const [otherId] = await db('customers').insert({ number: 'CUS-T913', name: 'Other Fleet', phone: '+254700000913', category: 'individual' });
+  const theirs = await acceptedProforma({ customer_id: otherId });
+  await post(supervisor, `/jobs/${id}/match-proforma`, { proforma_id: theirs.id });
+  assert.equal((await db('jobs').where({ id }).first()).proforma_id, null);
+  assert.match((await supervisor.get(`/jobs/${id}`)).text, /is for another customer/);
+
+  const res = await post(supervisor, `/jobs/${id}/match-proforma`, { proforma_id: p.id });
+  assert.equal(res.status, 302);
+  const job = await db('jobs').where({ id }).first();
+  assert.equal(job.proforma_id, p.id);
+  assert.deepEqual(await db('job_lines').where({ job_id: id }).orderBy('sort_order').pluck('description'), ['Build 20ft cargo body']);
+  assert.match((await supervisor.get(`/jobs/${id}`)).text, /Matched to proforma/, 'in the history');
+  assert.doesNotMatch((await supervisor.get('/jobs')).text, new RegExp(`/proformas/${p.id}"`), 'no longer waiting for a job');
+
+  // Stores can issue now (past the job check, failing only on the made-up stock line).
+  const issue = await tryIssue(id);
+  assert.equal(issue.status, 422);
+  assert.match(issue.text, /isn’t in stock at this site/);
+
+  // Used once: another job can't take it, and this job can't take a second.
+  const second = await runningJob();
+  assert.doesNotMatch((await supervisor.get(`/jobs/${second.id}`)).text, new RegExp(`value="${p.id}"`));
+  await post(supervisor, `/jobs/${second.id}/match-proforma`, { proforma_id: p.id });
+  assert.equal((await db('jobs').where({ id: second.id }).first()).proforma_id, null);
+  const another = await acceptedProforma();
+  await post(supervisor, `/jobs/${id}/match-proforma`, { proforma_id: another.id });
+  assert.equal((await db('jobs').where({ id }).first()).proforma_id, p.id);
+
+  // A proforma for one vehicle isn't offered for another vehicle's job.
+  const forVehicle = await acceptedProforma({ vehicle_id: vehicleId });
+  assert.doesNotMatch((await supervisor.get(`/jobs/${second.id}`)).text, new RegExp(`value="${forVehicle.id}"`));
+});

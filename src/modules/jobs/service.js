@@ -238,6 +238,50 @@ export async function createFromProforma(proformaId, jobTypeId, actor, chosenVeh
 export const materialsAllowed = (job) => Boolean(job.proforma_id || job.materials_allowed_at);
 
 /** "Allow materials now": before the proforma is accepted, with the reason (jobs.allow_materials; the route checks). */
+/**
+ * Accepted proformas that could be this job's (sheet row 58): the same customer's, not on any job yet,
+ * and for this vehicle or for no vehicle in particular. Newest first.
+ */
+export function matchableProformas(job) {
+  return db('proformas as p')
+    .leftJoin('jobs as j', 'j.proforma_id', 'p.id')
+    .leftJoin('vehicles as v', 'v.id', 'p.vehicle_id')
+    .where({ 'p.status': 'accepted', 'p.customer_id': job.customer_id }).whereNull('j.id')
+    .where((w) => { w.whereNull('p.vehicle_id'); if (job.vehicle_id) w.orWhere('p.vehicle_id', job.vehicle_id); })
+    .where((w) => w.whereNull('p.for_job_id').orWhere('p.for_job_id', job.id))
+    .orderBy('p.closed_at', 'desc').orderBy('p.id', 'desc').limit(50)
+    .select('p.id', 'p.number', 'p.proforma_date', 'p.closed_at', 'p.total', 'p.vehicle_description', 'v.reg_no', 'v.chassis_no', 'v.temp_tag',
+      db('proforma_lines').where('proforma_id', db.ref('p.id')).orderBy('sort_order').limit(1).select('description').as('first_line'));
+}
+
+/**
+ * A job opened without a proforma takes one the customer already accepted: as if the job had been
+ * made from it. The job's work becomes the proforma's lines, and stores can issue materials.
+ */
+export async function matchProforma(jobId, proformaId, actor) {
+  return db.transaction(async (trx) => {
+    const job = await trx('jobs').where({ id: jobId }).forUpdate().first('id', 'number', 'status', 'customer_id', 'vehicle_id', 'proforma_id');
+    if (!job) throw httpError(404, 'That job doesn’t exist.');
+    if (job.status === 'cancelled') throw httpError(409, `${job.number} is cancelled. Reopen it first.`);
+    if (job.proforma_id) throw httpError(409, `${job.number} already has a proforma. Extra work goes on it as a variation.`);
+    const pending = await trx('proformas').where({ for_job_id: job.id }).whereIn('status', ['draft', 'sent']).first('number');
+    if (pending) throw httpError(409, `Proforma ${pending.number} is being prepared for ${job.number}. Decline it first, or wait for the customer’s answer.`);
+    const p = await trx('proformas').where({ id: proformaId }).forUpdate().first('id', 'number', 'status', 'customer_id', 'vehicle_id', 'for_job_id');
+    if (!p || p.status !== 'accepted') throw httpError(409, 'Choose a proforma the customer has accepted.');
+    if (p.customer_id !== job.customer_id) throw httpError(409, `${p.number} is for another customer.`);
+    if (p.vehicle_id && p.vehicle_id !== job.vehicle_id) throw httpError(409, `${p.number} is for another vehicle.`);
+    if (p.for_job_id && p.for_job_id !== job.id) throw httpError(409, `${p.number} was made for another job.`);
+    const used = await trx('jobs').where({ proforma_id: p.id }).first('number');
+    if (used) throw httpError(409, `${p.number} is already on job ${used.number}.`);
+
+    await trx('jobs').where({ id: job.id }).update({ proforma_id: p.id });
+    await writeLines(trx, job.id, await trx('proforma_lines').where({ proforma_id: p.id }).orderBy('sort_order'));
+    await audit(trx, actor, { entity: 'job', id: job.id, action: 'proforma_matched', summary: `Matched to proforma ${p.number}: the work is now as agreed on it, and stores can issue materials` });
+    await audit(trx, actor, { entity: 'proforma', id: p.id, action: 'job_attached', summary: `Job ${job.number}` });
+    return p;
+  });
+}
+
 export async function allowMaterials(id, reason, actor) {
   await db.transaction(async (trx) => {
     const job = await trx('jobs').where({ id }).forUpdate().first();

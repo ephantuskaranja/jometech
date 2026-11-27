@@ -183,6 +183,7 @@
               <% } else { %>No proforma has been made for it yet.<% } %>
             </p>
             <div class="d-flex flex-wrap gap-2" x-show="!allow">
+              <%- include('match-proforma', { job, matchable, canSeeProforma }) %>
               <% if (canMakeProforma) { %><a class="btn btn-primary btn-sm" href="/proformas/new?job=<%= job.id %>"><i class="bi bi-receipt"></i>Make proforma</a><% } %>
               <% if (canAllowMaterials) { %><button type="button" class="btn btn-outline-secondary btn-sm" @click="allow = true; $nextTick(() => $refs.why.focus())"><i class="bi bi-unlock"></i>Allow materials now</button><% } %>
             </div>
@@ -473,6 +474,7 @@
               <% if (canSeeProforma) { %><a class="font-monospace" href="/proformas/<%= job.pending_proforma.id %>"><%= job.pending_proforma.number %></a><% } else { %><span class="font-monospace"><%= job.pending_proforma.number %></span><% } %>
               <span class="d-block small text-body-secondary"><%= job.pending_proforma.status === 'draft' ? 'Draft, not sent yet' : 'Sent, waiting for the customer' %></span>
             <% } else { %>—<% if (canMakeProforma) { %><a class="d-block small" href="/proformas/new?job=<%= job.id %>"><i class="bi bi-receipt"></i> Make proforma</a><% } %>
+              <% if (!waitingForPrice) { %><%- include('match-proforma', { job, matchable, canSeeProforma, small: true }) %><% } %>
             <% } %>
           </dd></div>
           <div><dt>Supervisor</dt><dd>

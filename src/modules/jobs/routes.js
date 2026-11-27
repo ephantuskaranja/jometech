@@ -219,6 +219,9 @@ router.get('/jobs/:id', view, async (req, res) => {
     materialsOk: jobs.materialsAllowed(job),
     canAllowMaterials: req.user.can('jobs.allow_materials') && ['open', 'in_progress'].includes(job.status),
     canMakeProforma: req.user.can('quotations.manage') && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma,
+    // Or match one the customer already accepted (sheet row 58): sales, supervisors and up.
+    matchable: (req.user.can('quotations.manage') || req.user.can('jobs.manage')) && job.status !== 'cancelled' && !job.proforma_id && !job.pending_proforma
+      ? await jobs.matchableProformas(job) : [],
     // What materials cost: for those who run the stores and managers, not the workshop floor.
     canSeeCost: req.user.can('stores.issue') || req.user.can('inventory.manage'),
     canOpenIssues: req.user.can('stores.issue') || req.user.can('inventory.manage'),
@@ -355,6 +358,19 @@ router.post('/jobs/:id/allow-materials', canAny('jobs.allow_materials'), async (
   }
   await jobs.allowMaterials(job.id, reason, req);
   req.session.flash = { type: 'success', text: `Stores can now issue materials to ${job.number}.` };
+  res.redirect(`/jobs/${job.id}`);
+});
+
+// A job opened without a proforma takes one the customer already accepted (sheet row 58).
+router.post('/jobs/:id/match-proforma', canAny('quotations.manage', 'jobs.manage'), async (req, res) => {
+  const job = await loadJob(req);
+  try {
+    const p = await jobs.matchProforma(job.id, Number(req.body.proforma_id), req);
+    req.session.flash = { type: 'success', text: `${job.number} now goes by proforma ${p.number}: its work is as agreed, and stores can issue materials.` };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
   res.redirect(`/jobs/${job.id}`);
 });
 
