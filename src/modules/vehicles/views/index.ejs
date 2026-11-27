@@ -20,6 +20,7 @@
   crumb: ['Sales', 'Vehicles'],
   heading: 'Vehicles',
   sub: 'Every customer’s trucks, trailers and other vehicles. Arriving now? Use Check-in: it adds the vehicle too.',
+  sort: { in: 'Latest checked in first', left: 'Latest to leave first', new: 'Newest first' }[place] ?? 'A to Z by reg',
   actions: [{ label: 'Add vehicle', href: '/vehicles/new', icon: 'plus-lg', primary: true }],
 }) %>
 

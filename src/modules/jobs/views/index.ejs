@@ -14,6 +14,7 @@
   crumb: ['Workshop', 'Jobs'],
   heading: 'Jobs',
   sub: `Work in the workshop at ${site.name}.`,
+  sort: q ? 'Newest first' : { active: 'A queue: soonest due date first, jobs with no date last', completed: 'Latest completed first' }[tab] ?? 'Newest first',
   actions: canManage ? [{ label: 'New job', href: '/jobs/new', icon: 'plus-lg', primary: true }] : [],
 }) %>
 

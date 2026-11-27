@@ -16,6 +16,7 @@
   crumb: ['Workshop', 'Visitors'],
   heading: tab === 'now' ? `Visitors at ${site.name}` : 'Visitor register',
   sub: tab === 'now' ? 'Everyone signed in and not yet cleared out, longest here first. Reception confirms each visitor before the gate clears them out.' : `Who came to ${site.name}: one day at a time, or search all days.`,
+  sort: tab === 'now' ? 'A queue: longest here first' : 'Latest first',
   actions: canSignIn ? [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus', primary: true }] : [],
 }) %>
 

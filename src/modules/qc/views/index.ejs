@@ -3,6 +3,7 @@
   crumb: ['Workshop', 'Quality checks'],
   heading: `Quality checks at ${site.name}`,
   sub: tab === 'waiting' ? 'Jobs at their quality check step. A passed check ticks the step off and moves the job on.' : 'Finished checks, newest first.',
+  sort: tab === 'waiting' ? 'A queue: soonest due first' : 'Latest finished first',
   actions: [{ label: 'Blank form to print', href: '/qc-form/print', icon: 'printer' }],
 }) %>
 

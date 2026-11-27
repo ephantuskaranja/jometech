@@ -15,6 +15,7 @@
   crumb: ['Sales', 'Enquiries'],
   heading: 'Enquiries',
   sub: 'Calls and requests from customers and new callers, until they become a job or are lost.',
+  sort: q ? 'Newest first' : tab === 'follow' ? 'A queue: soonest follow-up date first' : tab === 'closed' ? 'Latest closed first' : 'Newest first',
   actions: [{ label: 'New enquiry', href: '/enquiries/new', icon: 'telephone-plus', primary: true }],
 }) %>
 

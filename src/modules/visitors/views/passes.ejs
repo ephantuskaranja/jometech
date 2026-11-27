@@ -14,6 +14,7 @@
   sub: tab === 'incoming' ? `People sent to ${site.name} from another site. When one arrives, tap Arrived: they are signed in from their pass.`
      : tab === 'sent' ? `People ${site.name} sent to another site: still on their way first, then the last 30 days.`
      : 'Find a pass on any day, to or from this site: type the number on the paper pass, a name, phone or vehicle.',
+  sort: tab === 'sent' ? 'Still open first, then newest' : 'Newest first',
 }) %>
 
 <section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); return !f || el.dataset.find.includes(f); } }">

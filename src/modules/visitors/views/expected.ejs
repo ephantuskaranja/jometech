@@ -10,6 +10,7 @@
   crumb: [canRegister ? { label: 'Visitors', href: '/visitors' } : 'Visitors', 'Expected'],
   heading: `Expected at ${site.name}`,
   sub: tab === 'today' ? 'People booked to come today. When one arrives, the gate signs them in from here: the form comes filled in.' : tab === 'upcoming' ? 'People booked for later days.' : 'Earlier bookings: who came, who didn’t, and cancellations.',
+  sort: { today: 'By expected time', upcoming: 'Soonest day first' }[tab] ?? 'Latest day first',
   actions: canBook ? [{ label: 'Book a visitor', href: '/visitors/expected/new', icon: 'calendar-plus', primary: true }] : [],
 }) %>
 

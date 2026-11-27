@@ -12,6 +12,7 @@
   crumb: ['Workshop', 'Check-in'],
   heading: headings[tab][0],
   sub: headings[tab][1],
+  sort: { in: 'Latest checked in first', out: 'Latest checked out first', moves: 'Newest first' }[tab],
   actions: canCheckIn ? [{ label: 'Check a vehicle in', href: '/check-in/new', icon: 'box-arrow-in-right', primary: true }] : [],
 }) %>
 
