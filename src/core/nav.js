@@ -14,7 +14,6 @@ export const nav = [
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage', ready: true },
       { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
       { label: 'Expected visitors', href: '/visitors/expected', icon: 'calendar-event', permission: ['visitors.book', 'visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
-      { label: 'Gate passes', href: '/visitors/passes', icon: 'arrow-left-right', permission: ['visitors.book', 'visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
       { label: 'Vehicles at the gate', href: '/gate/vehicles', icon: 'box-arrow-right', permission: ['checkin.gate', 'checkin.manage'], ready: true },
       { label: 'Goods at the gate', href: '/gate/goods', icon: 'box-seam', permission: 'goods.gate', ready: true },
     ],

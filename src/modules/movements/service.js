@@ -125,6 +125,14 @@ export function getMovement(id) {
   return db('vehicle_movements').where({ id }).first();
 }
 
+/** A move under way to this site for this vehicle: the gate typing it in as a new arrival when it was sent here. */
+export function incomingForVehicle(siteId, vehicleId) {
+  return withSites(db('vehicle_movements as m'))
+    .where({ 'm.to_site_id': siteId, 'm.vehicle_id': vehicleId, 'm.status': 'in_transit' })
+    .first('m.*', 'from_site.name as from_site_name', 'to_site.name as to_site_name')
+    .then((m) => m ?? null);
+}
+
 /** One move with everything its printed gate pass shows: sites, vehicle, customer, and who did each step. */
 export async function forPass(id) {
   const m = await withSites(db('vehicle_movements as m')).join('vehicles', 'vehicles.id', 'm.vehicle_id')

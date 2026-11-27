@@ -169,6 +169,28 @@ export function list(siteId, tab = 'incoming', q = '') {
   return query.orderBy('p.issued_at', 'desc').limit(200).select(COLUMNS);
 }
 
+/**
+ * An open pass coming to this site for this phone (normalized, +254…): someone the guard is about to
+ * sign in as a walk-in who was in fact sent here. The newest if there are several.
+ */
+export function incomingForPhone(siteId, phone) {
+  if (!phone) return null;
+  return withNames(db('visitor_passes as p')).where({ 'p.to_site_id': siteId, 'p.status': 'open', 'p.phone': phone })
+    .orderBy('p.issued_at', 'desc').first(COLUMNS).then((p) => p ?? null);
+}
+
+/**
+ * What "Arrived" signs them in with, straight from the pass (no form): the same details, the pass
+ * number in "Gate pass no.", and the ID number from the visit they left.
+ */
+export async function signInValues(p) {
+  const left = await db('visitors').where({ id: p.visitor_id }).first('id_no');
+  return {
+    phone: p.phone, name: p.name, company: p.company, host: p.host ?? 'Reception', purpose: p.purpose,
+    vehicle_reg: p.vehicle_reg, people: p.people ?? 1, notes: p.notes, pass_no: p.number, id_no: left?.id_no ?? null,
+  };
+}
+
 /** Tab counts: coming in (not here yet), and sent from here still open. */
 export async function counts(siteId) {
   const [row] = await db('visitor_passes').where({ status: 'open' }).select(

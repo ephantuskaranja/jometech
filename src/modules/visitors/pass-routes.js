@@ -19,6 +19,7 @@ import * as passes from './passes.js';
 export const router = Router();
 const issue = canAny('visitors.book');
 const see = canAny('visitors.book', 'visitors.view', 'visitors.gate', 'visitors.receive');
+const signsIn = canAny('visitors.gate', 'visitors.receive');
 
 const passSchema = z.object({
   to_site_id: z.coerce.number().int().positive('Choose where they are going'),
@@ -153,6 +154,25 @@ router.get('/visitors/passes/:id/print', see, async (req, res) => {
     pass, company: config.company, printedAt: new Date(),
     signs: await staffSignatures({ approved: pass.issued_by }),
   });
+});
+
+// "Arrived": one tap signs them in from the pass, nothing to type (the details came with the pass).
+// Something different (a third person, another vehicle)? "Check details first" opens the filled-in form instead.
+router.post('/visitors/passes/:id/arrive', signsIn, async (req, res) => {
+  needSite(req);
+  const pass = await loadPass(req);
+  const back = req.body.back === 'passes' ? '/visitors/passes' : '/visitors';
+  if (pass.to_site_id !== req.site.id) throw httpError(404, 'That gate pass isn’t for this site.');
+  // As on the sign-in form: a receptionist (even one also on the gate) receives them at once.
+  const atReception = req.user.can('visitors.receive') && (!req.user.can('visitors.gate') || req.user.roles.some((r) => r.key === 'reception'));
+  try {
+    const { number } = await visitors.signIn(req.site.id, await passes.signInValues(pass), req, { atReception, passId: pass.id });
+    req.session.flash = { type: 'success', text: `${pass.name} signed in from gate pass ${pass.number} (${number}).${atReception ? '' : ' Reception confirms when they arrive.'}` };
+  } catch (err) {
+    if (!err.expose) throw err;
+    req.session.flash = { type: 'warning', text: err.message };
+  }
+  res.redirect(back);
 });
 
 router.post('/visitors/passes/:id/cancel', issue, async (req, res) => {

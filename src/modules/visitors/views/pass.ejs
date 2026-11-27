@@ -30,7 +30,9 @@
 
         <% if (pass.status === 'open' && (canSignIn || canCancel)) { %>
           <div class="d-flex gap-2 flex-wrap mt-3 align-items-start" x-data="{ cancelling: false }">
-            <% if (canSignIn) { %><a class="btn btn-primary" href="/visitors/new?pass=<%= pass.id %>" x-show="!cancelling"><i class="bi bi-box-arrow-in-right"></i>Arrived: sign in</a><% } %>
+            <% if (canSignIn) { %><form method="post" action="/visitors/passes/<%= pass.id %>/arrive" x-show="!cancelling"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-right"></i>Arrived: sign in</button></form>
+            <a class="btn btn-link" href="/visitors/new?pass=<%= pass.id %>" x-show="!cancelling">Check details first</a><% } %>
             <% if (canCancel) { %>
               <button class="btn btn-outline-danger" type="button" x-show="!cancelling" @click="cancelling = true; $nextTick(() => $refs.why.focus())"><i class="bi bi-x-circle"></i>Cancel pass</button>
               <form method="post" action="/visitors/passes/<%= pass.id %>/cancel" class="d-grid gap-2 w-100" x-show="cancelling" x-cloak style="max-width: 28rem">

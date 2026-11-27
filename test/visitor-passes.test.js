@@ -145,3 +145,47 @@ test('undoing a clear out puts the pass back to not left', async () => {
   await postExpect(302, gateHQ, `/visitors/${v.id}/undo-clear`);
   assert.equal((await passOf(v.id)).left_at, null);
 });
+
+test('the other site sees who is coming on the Visitors page, and Arrived signs them in with one tap', async () => {
+  const v = await visitorAtHQ('0700 000 604', 'Grace Achieng');
+  await db('visitors').where({ id: v.id }).update({ id_no: '30123456' });
+  await postExpect(302, receptionHQ, `/visitors/${v.id}/send`, { to_site_id: siteB.id, purpose: 'Customer', host: 'Reception', people: '2' });
+  const pass = await passOf(v.id);
+
+  const page = (await gateB.get('/visitors').expect(200)).text;
+  assert.match(page, /Coming from other sites/);
+  assert.match(page, /Grace Achieng/);
+  assert.match(page, new RegExp(`/visitors/passes/${pass.id}/arrive`));
+  // The sign-in form lists them too, so the guard doesn't type them in again.
+  assert.match((await gateB.get('/visitors/new').expect(200)).text, new RegExp(`/visitors/passes/${pass.id}/arrive`));
+  // No separate menu item: gate passes live under Visitors.
+  assert.doesNotMatch(page, /<span>Gate passes<\/span>/);
+
+  await postExpect(404, gateHQ, `/visitors/passes/${pass.id}/arrive`); // not HQ's to sign in
+  assert.equal((await passOf(v.id)).status, 'open');
+  const res = await postExpect(302, gateB, `/visitors/passes/${pass.id}/arrive`);
+  assert.equal(res.headers.location, '/visitors');
+  const arrived = await passOf(v.id);
+  assert.equal(arrived.status, 'arrived');
+  const visitB = await db('visitors').where({ id: arrived.arrived_visitor_id }).first();
+  assert.equal(visitB.site_id, siteB.id);
+  assert.equal(visitB.status, 'arrived', 'the gate signed them in: reception confirms');
+  assert.equal(visitB.pass_no, pass.number);
+  assert.equal(visitB.people, 2);
+  assert.equal(visitB.id_no, '30123456', 'the ID number comes from the visit they left');
+  // A second tap does nothing more.
+  await postExpect(302, gateB, `/visitors/passes/${pass.id}/arrive`);
+  assert.equal(await db('visitors').where({ phone: '+254700000604', site_id: siteB.id }).count({ n: '*' }).first().then((r) => Number(r.n)), 1);
+});
+
+test('typed in as a walk-in with the same phone, they are matched to their pass', async () => {
+  const v = await visitorAtHQ('0700 000 605', 'Daniel Mwangi');
+  await postExpect(302, receptionHQ, `/visitors/${v.id}/send`, { to_site_id: siteB.id, purpose: 'Customer', host: 'Reception' });
+  const pass = await passOf(v.id);
+  await postExpect(302, gateB, '/visitors', { phone: '0700 000 605', name: 'Daniel Mwangi', purpose: 'Customer', host: 'Reception' });
+  const arrived = await passOf(v.id);
+  assert.equal(arrived.status, 'arrived');
+  const visitB = await db('visitors').where({ id: arrived.arrived_visitor_id }).first();
+  assert.equal(visitB.pass_no, pass.number);
+  assert.match((await gateB.get('/visitors').expect(200)).text, new RegExp(`Matched to gate pass ${pass.number}`));
+});

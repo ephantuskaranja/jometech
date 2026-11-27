@@ -5,6 +5,9 @@
   sub: `At ${site.name}. Start with the phone number: someone who has visited before is filled in for you.`,
 }) %>
 
+<%# Sent from another site? Tap Arrived on their pass instead of typing them in. %>
+<%- include('incoming-passes', { incoming: locals.incoming ?? [], stages: passStages, stage: passStage, canSignIn: true }) %>
+
 <form method="post" action="/visitors" novalidate class="card" x-data="visitorForm({ purpose: <%= JSON.stringify(values.purpose ?? '') %> })">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <% if (booking) { %><input type="hidden" name="booking_id" value="<%= booking.id %>"><% } %>

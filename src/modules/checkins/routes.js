@@ -339,6 +339,21 @@ router.post('/gate/arrivals', logsArrivals, async (req, res) => {
   const values = { ...ARRIVAL_BLANK, ...req.body };
   const { data, errors } = check(arrivalSchema, req.body);
   if (errors && Object.keys(errors).length) return renderGate(req, res, { status: 422, values, errors });
+  // Sent here from another site? Then it is that move arriving, not a new customer vehicle:
+  // logged in against the move (as "Logged in at the gate" does), not as a new arrival.
+  const known = await arrivals.findVehicle(data.vehicle_text);
+  const move = known && await movements.incomingForVehicle(req.site.id, known.id);
+  if (move) {
+    if (!move.gate_out_at || move.gate_in_at || !req.user.can('checkin.gate')) {
+      const why = move.gate_in_at ? `${vehicleLabel(known)} was already logged in here (${move.number}). The workshop confirms it was received.`
+        : !move.gate_out_at ? `${vehicleLabel(known)} is being moved here from ${move.from_site_name} (${move.number}), but their gate hasn’t cleared it out yet. Call the ${move.from_site_name} gate to clear it out, then log it in under “To and from other sites”.`
+        : `${vehicleLabel(known)} is coming from ${move.from_site_name} (${move.number}): the gate logs it in under “To and from other sites”.`;
+      return renderGate(req, res, { status: 422, values, errors: { vehicle_text: why } });
+    }
+    await movements.gateIn(move.id, data.note, req);
+    req.session.flash = { type: 'success', text: `${vehicleLabel(known)} is the vehicle sent from ${move.from_site_name} (${move.number}): logged in against that move. A supervisor confirms it was received.` };
+    return res.redirect('/gate/vehicles');
+  }
   try {
     const a = await arrivals.logArrival({ siteId: req.site.id, vehicleText: data.vehicle_text, driverName: data.driver_name, driverPhone: data.driver_phone, purpose: data.purpose, note: data.note }, req);
     req.session.flash = a.existed

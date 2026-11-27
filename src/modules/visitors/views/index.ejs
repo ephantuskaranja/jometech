@@ -20,12 +20,14 @@
 }) %>
 
 
+<%- include('incoming-passes', { incoming, stages: passStages, stage: passStage, canSignIn }) %>
+
 <section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); if (!f || el.dataset.find.includes(f)) return true; const d = f.replace(/\D/g, ''); return d.length >= 3 && d.length === f.replace(/\s/g, '').length && (el.dataset.tail.includes(d) || d.endsWith(el.dataset.tail)); }, get none() { return this.find.trim() !== '' && ![...this.$root.querySelectorAll('[data-find]')].some((el) => this.hit(el)); } }">
   <nav class="nav nav-tabs jt-tabs">
     <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= onSiteCount %></span></a>
     <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
     <a class="nav-link" href="/visitors/expected">Expected today <span class="badge rounded-pill"><%= expectedCount %></span></a>
-    <a class="nav-link" href="/visitors/passes">Coming from other sites <span class="badge rounded-pill"><%= incomingCount %></span></a>
+    <a class="nav-link" href="/visitors/passes">Gate passes <span class="badge rounded-pill"><%= incomingCount %></span></a>
   </nav>
 
   <% if (tab === 'register') { %>

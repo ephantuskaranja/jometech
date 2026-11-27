@@ -155,3 +155,26 @@ test('a move that never left can be cancelled by the sending site only', async (
   assert.match(print.text, /is-cancelled/);
   assert.doesNotMatch(print.text, /company-stamp\.png/);
 });
+
+test('Site B’s gate typing in a vehicle sent from HQ logs it in against the move, not as a new arrival', async () => {
+  const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 402A') }).first('id')).id;
+  await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: 'Juma Otieno' });
+  const move = await openMove(id);
+  const arrivalsBefore = await db('vehicle_arrivals').count({ n: '*' }).first().then((r) => Number(r.n));
+  const typeIn = () => post(siteB, '/gate/arrivals', { vehicle_text: 'kzx402a', driver_name: 'Juma Otieno', purpose: 'repairs' });
+
+  // Not cleared out at HQ yet: the guard is told to call HQ's gate.
+  let res = await typeIn();
+  assert.equal(res.status, 422);
+  assert.match(res.text, /hasn’t cleared it out yet/);
+  // The move comes before the arrival form on the gate page.
+  await post(hq, `/movements/${move.id}/gate-out`);
+  const page = (await siteB.get('/gate/vehicles')).text;
+  assert.ok(page.indexOf('To and from other sites') < page.indexOf('Vehicle arriving'));
+
+  res = await typeIn();
+  assert.equal(res.status, 302);
+  assert.ok((await openMove(id)).gate_in_at, 'logged in against the move');
+  assert.equal(await db('vehicle_arrivals').count({ n: '*' }).first().then((r) => Number(r.n)), arrivalsBefore, 'no new arrival');
+  assert.match((await siteB.get('/gate/vehicles')).text, new RegExp(`logged in against that move`));
+});

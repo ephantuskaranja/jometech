@@ -1,0 +1,37 @@
+<%#
+  People another site sent here with a gate pass, not signed in yet: on the Visitors page and the sign-in form,
+  so the guard signs them in from the pass (one tap) instead of typing them in as walk-ins.
+  Locals: incoming (passes.list 'incoming'), stages, stage, canSignIn, back ('' or 'passes').
+%>
+<% if (incoming.length) { %>
+  <section class="card mb-4 jt-incoming-passes">
+    <div class="card-header d-flex align-items-center gap-2">
+      <h2 class="h6 mb-0 me-auto"><i class="bi bi-arrow-left-right"></i> Coming from other sites <span class="badge rounded-pill text-bg-info"><%= incoming.length %></span></h2>
+      <a class="small" href="/visitors/passes?show=search">Find a pass</a>
+    </div>
+    <ul class="list-group list-group-flush">
+      <% incoming.forEach((p) => { const s = stages[stage(p)]; %>
+        <li class="list-group-item d-flex flex-wrap gap-3 align-items-center">
+          <div class="flex-grow-1" style="min-width: 14rem">
+            <a class="fw-semibold jt-row-link" href="/visitors/passes/<%= p.id %>"><%= p.name %></a>
+            <div class="small text-body-secondary"><%= [`from ${p.from_site_name}`, p.company, p.people > 1 ? `${p.people} people` : null, p.host && p.host !== 'Reception' ? `to see ${p.host}` : null, p.purpose].filter(Boolean).join(' · ') %></div>
+            <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
+              <span class="font-monospace text-body-secondary"><%= p.number %></span>
+              <%- include('partials/pill', { text: s.label, tone: s.tone }) %>
+              <% if (p.vehicle_reg) { %><%- include('partials/plate', { reg: p.vehicle_reg }) %><% } %>
+            </div>
+          </div>
+          <% if (canSignIn) { %>
+            <div class="d-flex flex-column align-items-end gap-1">
+              <form method="post" action="/visitors/passes/<%= p.id %>/arrive">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="<%= typeof back === 'string' ? back : '' %>">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-right"></i>Arrived</button>
+              </form>
+              <a class="small" href="/visitors/new?pass=<%= p.id %>">Check details first</a>
+            </div>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+<% } %>

@@ -11,27 +11,9 @@
   sub: `At ${site.name}. Log every vehicle that comes in; for one leaving, check the vehicle and the person with it against what is shown here.`,
 }) %>
 
-<%# ---------- Arriving: logged in here, checked in by the workshop ---------- %>
-<section class="card mb-4" id="arriving">
-  <div class="card-header"><h2 class="h6 mb-0"><i class="bi bi-box-arrow-in-down"></i> Vehicle arriving</h2></div>
-  <form method="post" action="/gate/arrivals" novalidate class="card-body d-grid gap-3">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <div class="jt-fields">
-      <%- include('partials/field', { name: 'vehicle_text', label: 'Reg, chassis or tag number', value: values.vehicle_text, error: errors.vehicle_text, required: true,
-            placeholder: 'e.g. KDA 123A, or “new Isuzu chassis”', autocomplete: 'off', hint: 'A vehicle we know is found by its number.' }) %>
-      <%- include('partials/field', { name: 'driver_name', label: 'Driver', value: values.driver_name, error: errors.driver_name, required: true, autocomplete: 'off' }) %>
-      <%- include('partials/field', { name: 'driver_phone', label: 'Driver’s phone', type: 'tel', value: values.driver_phone, error: errors.driver_phone, placeholder: '0712 345 678' }) %>
-    </div>
-    <%- include('partials/choices', { name: 'purpose', label: 'Why it came', required: true, options: purposes, value: values.purpose, error: errors.purpose, columns: 4 }) %>
-    <%- include('partials/field', { name: 'note', label: 'Note (optional)', value: values.note, error: errors.note, placeholder: 'e.g. Came with a flat tyre' }) %>
-    <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-box-arrow-in-down"></i>Log it in</button>
-  </form>
-</section>
-
-<%- include('checkins/views/arrivals-waiting', { waiting, back: 'gate' }) %>
-
 <% const vehicleHead = (v) => { const describe = [v.make, v.model, v.colour].filter(Boolean).join(' · '); return { describe }; }; %>
 
+<%# Moves between sites first: a vehicle sent here is logged in against its move, not as a new arrival. %>
 <% if (canRelease) { %>
 <% if (moves.leaving.length || moves.arriving.length) { %>
   <h2 class="h6 text-body-secondary text-uppercase mb-3">To and from other sites</h2>
@@ -88,6 +70,29 @@
     <% }) %>
   </div>
 <% } %>
+<% } %>
+
+<%# ---------- Arriving: logged in here, checked in by the workshop ---------- %>
+<section class="card mb-4" id="arriving">
+  <div class="card-header"><h2 class="h6 mb-0"><i class="bi bi-box-arrow-in-down"></i> Vehicle arriving</h2></div>
+  <form method="post" action="/gate/arrivals" novalidate class="card-body d-grid gap-3">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="jt-fields">
+      <%- include('partials/field', { name: 'vehicle_text', label: 'Reg, chassis or tag number', value: values.vehicle_text, error: errors.vehicle_text, required: true,
+            placeholder: 'e.g. KDA 123A, or “new Isuzu chassis”', autocomplete: 'off', hint: 'A vehicle we know is found by its number.' }) %>
+      <%- include('partials/field', { name: 'driver_name', label: 'Driver', value: values.driver_name, error: errors.driver_name, required: true, autocomplete: 'off' }) %>
+      <%- include('partials/field', { name: 'driver_phone', label: 'Driver’s phone', type: 'tel', value: values.driver_phone, error: errors.driver_phone, placeholder: '0712 345 678' }) %>
+    </div>
+    <%- include('partials/choices', { name: 'purpose', label: 'Why it came', required: true, options: purposes, value: values.purpose, error: errors.purpose, columns: 4 }) %>
+    <%- include('partials/field', { name: 'note', label: 'Note (optional)', value: values.note, error: errors.note, placeholder: 'e.g. Came with a flat tyre' }) %>
+    <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-box-arrow-in-down"></i>Log it in</button>
+  </form>
+</section>
+
+<%- include('checkins/views/arrivals-waiting', { waiting, back: 'gate' }) %>
+
+
+<% if (canRelease) { %>
   <h2 class="h6 text-body-secondary text-uppercase mb-3">Released to customers</h2>
 
 <% if (!list.length) { %>

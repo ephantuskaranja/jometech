@@ -64,6 +64,10 @@ router.get('/visitors', view, async (req, res) => {
     onSiteCount: tab === 'now' && !only ? list.length : (await visitors.onSite(req.site.id)).length,
     expectedCount: (await bookings.counts(req.site.id)).today,
     incomingCount: (await passes.counts(req.site.id)).incoming,
+    // People sent here from another site: listed above the register with a one-tap Arrived, so they
+    // are signed in from their pass rather than typed in again as walk-ins.
+    incoming: tab === 'now' && !only ? await passes.list(req.site.id, 'incoming') : [],
+    passStages: passes.STAGES, passStage: passes.stage,
     going,
     statuses: visitors.STATUSES,
     overdue: visitors.overdue,
@@ -97,12 +101,13 @@ async function passFrom(req, id) {
   return pass;
 }
 
-async function renderForm(req, res, { status = 200, values, errors = {}, phoneOwner = null, booking = null, pass = null }) {
+async function renderForm(req, res, { status = 200, values, errors = {}, phoneOwner = null, booking = null, pass = null, incoming = [] }) {
   const staff = await visitors.staffAt(req.site.id);
   res.status(status).render('visitors/views/form', {
     title: 'Sign a visitor in',
-    values, errors, phoneOwner, booking, pass,
+    values, errors, phoneOwner, booking, pass, incoming,
     purposes: visitors.PURPOSES,
+    passStages: passes.STAGES, passStage: passes.stage,
     ...hostChoices(staff, values.host),
     // Reception signing in a walk-in: they are already at reception.
     receptionOnly: req.user.can('visitors.receive') && !req.user.can('visitors.gate'),
@@ -121,7 +126,8 @@ router.get('/visitors/new', signsIn, async (req, res) => {
   const pass = booking ? null : await passFrom(req, req.query.pass);
   const from = booking ? bookings.formValues(booking) : pass ? { ...passes.formValues(pass), pass_no: pass.number } : {};
   const values = { ...blank, ...from, at_reception: atReception ? '1' : '' };
-  await renderForm(req, res, { values, booking, pass });
+  const incoming = booking || pass ? [] : await passes.list(req.site.id, 'incoming');
+  await renderForm(req, res, { values, booking, pass, incoming });
 });
 
 router.post('/visitors', signsIn, async (req, res) => {
@@ -151,10 +157,15 @@ router.post('/visitors', signsIn, async (req, res) => {
   if (!data.id_no) data.id_no = await visitors.idOnFile(data.phone, data.name);
   const purpose = data.purpose === 'Other' ? data.other_purpose : data.purpose;
   const atReception = req.user.can('visitors.receive') && (req.body.at_reception === '1' || !req.user.can('visitors.gate'));
-  const { number } = await visitors.signIn(req.site.id, { ...data, purpose }, req, { atReception, bookingId: booking?.id, passId: pass?.id });
+  // Typed in as a walk-in, but another site sent them here (same phone, pass still open): use the pass,
+  // so it doesn't stay "on the way" with the person already inside.
+  const usePass = pass ?? (booking ? null : await passes.incomingForPhone(req.site.id, data.phone));
+  if (usePass && !data.pass_no) data.pass_no = usePass.number;
+  const { number } = await visitors.signIn(req.site.id, { ...data, purpose }, req, { atReception, bookingId: booking?.id, passId: usePass?.id });
+  const fromPass = usePass && !pass ? ` Matched to gate pass ${usePass.number} from ${usePass.from_site_name}.` : '';
   req.session.flash = {
     type: 'success',
-    text: atReception ? `${data.name} signed in and received (${number}).` : `${data.name} signed in (${number}). Reception confirms when they arrive.`,
+    text: (atReception ? `${data.name} signed in and received (${number}).` : `${data.name} signed in (${number}). Reception confirms when they arrive.`) + fromPass,
   };
   res.redirect('/visitors');
 });

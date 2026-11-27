@@ -11,7 +11,7 @@
 <%- include('partials/page-header', {
   crumb: [{ label: 'Visitors', href: '/visitors' }, 'Gate passes'],
   heading: 'Customer gate passes',
-  sub: tab === 'incoming' ? `People sent to ${site.name} from another site. When one arrives, sign them in from their pass: the form comes filled in.`
+  sub: tab === 'incoming' ? `People sent to ${site.name} from another site. When one arrives, tap Arrived: they are signed in from their pass.`
      : tab === 'sent' ? `People ${site.name} sent to another site: still on their way first, then the last 30 days.`
      : 'Find a pass on any day, to or from this site: type the number on the paper pass, a name, phone or vehicle.',
 }) %>
@@ -44,7 +44,9 @@
   <% } else { %>
     <% const action = (p) => { const s = stage(p); %>
       <% if (p.status === 'open' && canSignIn && p.to_site_id === site.id) { %>
-        <a class="btn btn-primary btn-sm" href="/visitors/new?pass=<%= p.id %>"><i class="bi bi-box-arrow-in-right"></i>Arrived</a>
+        <form method="post" action="/visitors/passes/<%= p.id %>/arrive" class="d-inline"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="passes">
+          <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-box-arrow-in-right"></i>Arrived</button></form>
+        <a class="d-block small mt-1" href="/visitors/new?pass=<%= p.id %>">Check details first</a>
       <% } %>
     <% } %>
 
