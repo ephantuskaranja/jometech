@@ -25,6 +25,7 @@
     <a class="nav-link<%= tab === 'now' ? ' active' : '' %>" href="/visitors"<%- tab === 'now' ? ' aria-current="page"' : '' %>>On site now <span class="badge rounded-pill"><%= onSiteCount %></span></a>
     <a class="nav-link<%= tab === 'register' ? ' active' : '' %>" href="/visitors?show=register"<%- tab === 'register' ? ' aria-current="page"' : '' %>>Registered</a>
     <a class="nav-link" href="/visitors/expected">Expected today <span class="badge rounded-pill"><%= expectedCount %></span></a>
+    <a class="nav-link" href="/visitors/passes">Coming from other sites <span class="badge rounded-pill"><%= incomingCount %></span></a>
   </nav>
 
   <% if (tab === 'register') { %>
@@ -83,7 +84,7 @@
           <% list.forEach((v) => { const late = overdue(v, today); %>
             <tr class="<%= late ? 'is-overdue' : '' %>" data-find="<%= findText(v) %>" data-tail="<%= tail(v) %>" x-show="hit($el)">
               <td>
-                <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
+                <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %><% const to = going.get(v.id); if (to) { %> <a class="badge text-bg-info text-decoration-none" href="/visitors/passes/<%= to.id %>" title="Gate pass <%= to.number %>"><i class="bi bi-arrow-left-right"></i> To <%= to.to_site_name %></a><% } %>
                 <span class="jt-sub"><%= [fmt.mask(v.phone, 'phone'), v.company].filter(Boolean).join(' · ') %></span>
                 <% if (v.vehicle_reg || v.pass_no || late) { %>
                   <span class="d-flex flex-wrap gap-2 mt-1 align-items-center small">
@@ -114,7 +115,7 @@
       <% list.forEach((v) => { const late = overdue(v, today); const st = statuses[v.status]; %>
         <li class="list-group-item jt-visitor<%= late ? ' is-overdue' : '' %>" data-find="<%= findText(v) %>" data-tail="<%= tail(v) %>" x-show="hit($el)">
           <div class="jt-visitor-main">
-            <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %>
+            <a class="fw-semibold jt-row-link" href="/visitors/<%= v.id %>"><%= v.name %></a><% if (v.people > 1) { %> <span class="text-body-secondary small">+<%= v.people - 1 %></span><% } %><% const to = going.get(v.id); if (to) { %> <a class="badge text-bg-info text-decoration-none" href="/visitors/passes/<%= to.id %>" title="Gate pass <%= to.number %>"><i class="bi bi-arrow-left-right"></i> To <%= to.to_site_name %></a><% } %>
             <div class="small text-body-secondary">
               <%= [fmt.mask(v.phone, 'phone'), v.company, v.purpose, v.host && `seeing ${v.host}`].filter(Boolean).join(' · ') %>
             </div>

@@ -26,6 +26,7 @@ import { router as checkinRoutes } from './modules/checkins/routes.js';
 import { router as movementRoutes } from './modules/movements/routes.js';
 import { router as visitorRoutes } from './modules/visitors/routes.js';
 import { router as bookingRoutes } from './modules/visitors/booking-routes.js';
+import { router as passRoutes } from './modules/visitors/pass-routes.js';
 import { router as enquiryRoutes } from './modules/enquiries/routes.js';
 import { router as proformaRoutes } from './modules/proformas/routes.js';
 import { router as jobRoutes } from './modules/jobs/routes.js';
@@ -175,6 +176,7 @@ export function createApp() {
   app.use(checkinRoutes);
   app.use(movementRoutes);
   app.use(bookingRoutes);      // before visitorRoutes: /visitors/expected isn't a visitor
+  app.use(passRoutes);         // before visitorRoutes: /visitors/passes isn't a visitor
   app.use(visitorRoutes);
   app.use(enquiryRoutes);
   app.use(proformaRoutes);

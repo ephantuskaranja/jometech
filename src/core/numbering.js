@@ -44,6 +44,7 @@ export const NUMBER_FORMATS = {
   delivery:  { prefix: 'DLV', yearly: true },   // a supplier's delivery logged in at the gate
   arrival:   { prefix: 'ARR', yearly: true },   // a customer's vehicle logged in at the gate
   booking:   { prefix: 'BKG', yearly: true },   // a visitor expected at a site
+  visitor_pass: { prefix: 'CGP', yearly: true }, // a customer gate pass: a visitor sent from one site to the other
   qc:        { prefix: 'QC', yearly: true },    // a quality inspection of a job
 };
 

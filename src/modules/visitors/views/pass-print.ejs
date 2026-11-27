@@ -1,0 +1,80 @@
+<%#
+  The paper Customer Gate Pass, filled in from the pass: the top half of an A4 page (cut it, or print two).
+  Same fields as the client's paper form; Truck and Chassis are left to vehicle moves (MOV).
+  Times not yet done stay blank, to write in at the gate. The company stamp carries the approver's signature.
+%>
+<%
+  const blank = '';
+  const time = (t) => (t ? fmt.time(t) : blank);
+  const cancelled = pass.status === 'cancelled';
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title>
+  <link rel="icon" href="/img/brand/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/fonts/archivo/700.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/400.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/vendor/fonts/figtree/600.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/css/print-note.css?v=<%= assetVersion %>">
+  <script defer src="/js/print-note.js?v=<%= assetVersion %>"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/visitors/passes/<%= pass.id %>">&larr; Back to <%= pass.number %></a>
+    <button type="button" data-print>Print or save as PDF</button>
+  </div>
+
+  <main class="sheet gp-sheet<%= cancelled ? ' is-cancelled' : '' %>">
+    <div class="gp-company"><%= company.name %></div>
+    <div class="gp-head">
+      <img class="doc-logo gp-logo" src="/img/brand/logo.svg?v=<%= assetVersion %>" alt="Jome-Tech">
+      <div class="gp-title">
+        <h1>Customer Gate Pass</h1>
+        <div class="gp-no">No. <span class="mono"><%= pass.number %></span></div>
+      </div>
+      <%# Jome-Tech's side: the stamp, dated the day it was approved, with the approver's saved signature. Not on a cancelled pass. %>
+      <div class="gp-stamp"><% if (!cancelled) { %><%- include('partials/stamp', { date: fmt.date(pass.issued_at), signer: signs.approved }) %><% } %></div>
+    </div>
+
+    <table class="grid gp-grid">
+      <tr>
+        <td colspan="2"><span class="label">Customer name:</span> <%= pass.name %></td>
+        <td colspan="2"><span class="label">Phone number:</span> <%= fmt.phone(pass.phone) %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Company:</span> <%= pass.company ?? '' %></td>
+        <td colspan="2"><span class="label">Number of people:</span> <%= pass.people %></td>
+      </tr>
+      <tr>
+        <td colspan="4"><span class="label">Reason:</span> <%= pass.purpose %><%= pass.host && pass.host !== 'Reception' ? ` · to see ${pass.host}` : '' %><%= pass.notes ? ` · ${pass.notes}` : '' %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">From:</span> <%= pass.from_site_name %></td>
+        <td colspan="2"><span class="label">To:</span> <%= pass.to_site_name %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Vehicle reg no:</span> <span class="mono"><%= pass.vehicle_reg ?? 'N/A' %></span></td>
+        <td colspan="2"><span class="label">Date:</span> <%= fmt.date(pass.issued_at) %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Approved by:</span> <%= pass.issued_by_name ?? '' %></td>
+        <td colspan="2"><span class="label">Gate security name:</span> <%= pass.left_by_name ?? blank %></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="label">Time out (<%= pass.from_site_name %>):</span> <%= time(pass.left_at) %></td>
+        <td colspan="2"><span class="label">Time in (<%= pass.to_site_name %>):</span> <%= time(pass.arrived_at) %></td>
+      </tr>
+    </table>
+
+    <p class="gp-note">This pass authorizes the movement of the above persons<%= pass.vehicle_reg ? ' and vehicle' : '' %> between company yards. The receiving gate signs them in with this pass number.</p>
+
+    <footer class="muted small">
+      <span><%= cancelled ? `Cancelled ${fmt.dateTime(pass.cancelled_at)}: ${pass.cancel_reason}` : `Approved ${fmt.dateTime(pass.issued_at)}` %></span>
+      <span>Printed <%= fmt.dateTime(printedAt) %></span>
+    </footer>
+  </main>
+</body>
+</html>

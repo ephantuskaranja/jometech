@@ -8,6 +8,7 @@ import { check, httpError, optionalText, phoneField, optionalIdNo } from '../../
 import { history } from '../../core/audit.js';
 import * as visitors from './service.js';
 import * as bookings from './bookings.js';
+import * as passes from './passes.js';
 
 // Visitor register: Gate signs in and clears out, Reception confirms "received".
 // Everyone works on their current site (Gate and Reception: chosen at login).
@@ -55,12 +56,15 @@ router.get('/visitors', view, async (req, res) => {
   const only = tab === 'now' && ['waiting', 'confirmed'].includes(req.query.only) ? req.query.only : null;
   let list = tab === 'now' ? await visitors.onSite(req.site.id) : await visitors.register(req.site.id, { day, q });
   if (only) list = list.filter((v) => v.status === (only === 'waiting' ? 'arrived' : 'received'));
+  const going = await passes.openFor(list.filter((v) => v.status !== 'cleared').map((v) => v.id));
   res.render('visitors/views/index', {
     title: 'Visitors',
     tab, day, q, today: localDay(), only,
     list,
     onSiteCount: tab === 'now' && !only ? list.length : (await visitors.onSite(req.site.id)).length,
     expectedCount: (await bookings.counts(req.site.id)).today,
+    incomingCount: (await passes.counts(req.site.id)).incoming,
+    going,
     statuses: visitors.STATUSES,
     overdue: visitors.overdue,
     canSignIn: req.user.can('visitors.gate') || req.user.can('visitors.receive'),
@@ -84,11 +88,20 @@ async function bookingFrom(req, id) {
   return booking;
 }
 
-async function renderForm(req, res, { status = 200, values, errors = {}, phoneOwner = null, booking = null }) {
+/** The gate pass being signed in from (?pass= or the form's pass_id): still open, coming to this site. */
+async function passFrom(req, id) {
+  if (!id) return null;
+  const pass = await passes.getPass(Number(id));
+  if (!pass || pass.to_site_id !== req.site.id) throw httpError(404, 'That gate pass isn’t for this site.');
+  if (pass.status !== 'open') throw httpError(409, `Gate pass ${pass.number} is ${pass.status === 'arrived' ? 'already used: they were signed in' : 'cancelled'}.`);
+  return pass;
+}
+
+async function renderForm(req, res, { status = 200, values, errors = {}, phoneOwner = null, booking = null, pass = null }) {
   const staff = await visitors.staffAt(req.site.id);
   res.status(status).render('visitors/views/form', {
     title: 'Sign a visitor in',
-    values, errors, phoneOwner, booking,
+    values, errors, phoneOwner, booking, pass,
     purposes: visitors.PURPOSES,
     ...hostChoices(staff, values.host),
     // Reception signing in a walk-in: they are already at reception.
@@ -104,14 +117,18 @@ router.get('/visitors/new', signsIn, async (req, res) => {
   // the Gate role (one person on both): they sign in and receive in one step. Admins and managers
   // can do both too but start unticked, as before.
   const atReception = !req.user.can('visitors.gate') || req.user.roles.some((r) => r.key === 'reception');
-  const values = { ...blank, ...(booking ? bookings.formValues(booking) : {}), at_reception: atReception ? '1' : '' };
-  await renderForm(req, res, { values, booking });
+  // From a gate pass: the form comes filled in, the pass number in "Gate pass no." so the register finds it.
+  const pass = booking ? null : await passFrom(req, req.query.pass);
+  const from = booking ? bookings.formValues(booking) : pass ? { ...passes.formValues(pass), pass_no: pass.number } : {};
+  const values = { ...blank, ...from, at_reception: atReception ? '1' : '' };
+  await renderForm(req, res, { values, booking, pass });
 });
 
 router.post('/visitors', signsIn, async (req, res) => {
   needSite(req);
   const values = { ...blank, ...req.body };
   const booking = await bookingFrom(req, req.body.booking_id);
+  const pass = booking ? null : await passFrom(req, req.body.pass_id);
   const { data, errors } = check(visitorSchema, req.body);
   const allErrors = { ...errors };
   if (data?.purpose === 'Other' && !data.other_purpose) allErrors.other_purpose = 'Say why they are here';
@@ -128,13 +145,13 @@ router.post('/visitors', signsIn, async (req, res) => {
       allErrors.phone = `This phone was used by ${phoneOwner.name} (last visit ${fmt.date(phoneOwner.arrived_at)}). Is this a different person?`;
     } else phoneOwner = null;
   }
-  if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors, phoneOwner, booking });
+  if (Object.keys(allErrors).length) return await renderForm(req, res, { status: 422, values, errors: allErrors, phoneOwner, booking, pass });
 
   // ID left blank for a returning visitor (same phone, same name): keep the one on file.
   if (!data.id_no) data.id_no = await visitors.idOnFile(data.phone, data.name);
   const purpose = data.purpose === 'Other' ? data.other_purpose : data.purpose;
   const atReception = req.user.can('visitors.receive') && (req.body.at_reception === '1' || !req.user.can('visitors.gate'));
-  const { number } = await visitors.signIn(req.site.id, { ...data, purpose }, req, { atReception, bookingId: booking?.id });
+  const { number } = await visitors.signIn(req.site.id, { ...data, purpose }, req, { atReception, bookingId: booking?.id, passId: pass?.id });
   req.session.flash = {
     type: 'success',
     text: atReception ? `${data.name} signed in and received (${number}).` : `${data.name} signed in (${number}). Reception confirms when they arrive.`,
@@ -147,8 +164,10 @@ router.get('/visitors/:id', view, async (req, res) => {
   res.render('visitors/views/show', {
     title: visitor.name, visitor, statuses: visitors.STATUSES, overdue: visitors.overdue(visitor),
     booking: await bookings.bookingForVisit(visitor.id),
+    passes: await passes.passesOfVisit(visitor.id),
     entries: await history('visitor', visitor.id),
     canClear: req.user.can('visitors.gate'), canReceive: req.user.can('visitors.receive'),
+    canSend: req.user.can('visitors.book'),
   });
 });
 

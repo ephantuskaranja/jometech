@@ -5,6 +5,7 @@ import { dayStart, localDay, nextDay } from '../../core/dates.js';
 import { compact } from '../../core/vehicle-format.js';
 import { httpError } from '../../core/validate.js';
 import { markArrived } from './bookings.js';
+import * as passes from './passes.js';
 
 // Visitor register, per site: the gate signs a visitor in, reception confirms
 // they were received, the gate clears them out.
@@ -29,8 +30,9 @@ const withNames = (q) => q
 /**
  * Signs a visitor in at a site. `atReception`: reception signed in a walk-in,
  * so they are received at the same moment. `bookingId`: they were expected; the booking is marked arrived.
+ * `passId`: they came from the other site with a gate pass; the pass is marked arrived.
  */
-export async function signIn(siteId, input, actor, { atReception = false, bookingId = null } = {}) {
+export async function signIn(siteId, input, actor, { atReception = false, bookingId = null, passId = null } = {}) {
   return db.transaction(async (trx) => {
     const number = await nextNumber(trx, 'visitor');
     const now = new Date();
@@ -42,7 +44,8 @@ export async function signIn(siteId, input, actor, { atReception = false, bookin
       ...(atReception ? { status: 'received', received_at: now, received_by: actor.user.id } : {}),
     });
     const booking = bookingId ? await markArrived(trx, bookingId, siteId, { id, number, name: input.name }, actor) : null;
-    const note = `${atReception ? ' at reception' : ''}${booking ? `, booked (${booking.number})` : ''}`;
+    const pass = passId ? await passes.markArrived(trx, passId, siteId, { id, number, name: input.name }, actor) : null;
+    const note = `${atReception ? ' at reception' : ''}${booking ? `, booked (${booking.number})` : ''}${pass ? `, gate pass ${pass.number}` : ''}`;
     await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_in', summary: `${input.name} signed in (${number})${note}` });
     return { id, number };
   });
@@ -83,7 +86,8 @@ export async function clearOut(id, actor, { override = null } = {}) {
       status: 'cleared', cleared_at: trx.fn.now(), cleared_by: actor.user.id,
       override_reason: overridden ? reason.slice(0, 255) : null,
     });
-    const note = overridden ? ` without reception confirming: ${reason}` : '';
+    const pass = await passes.markLeft(trx, id, actor);
+    const note = `${overridden ? ` without reception confirming: ${reason}` : ''}${pass ? `, gate pass ${pass.number}` : ''}`;
     await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_cleared', summary: `${v.name} cleared out (${v.number})${note}` });
     return v;
   });
@@ -127,6 +131,7 @@ export async function undoClear(id, actor) {
     }
     const back = v.received_at ? 'received' : 'arrived';
     await trx('visitors').where({ id }).update({ status: back, cleared_at: null, cleared_by: null, override_reason: null });
+    await passes.unmarkLeft(trx, id, actor);
     await audit(trx, actor, { entity: 'visitor', id, action: 'visitor_clear_undone', summary: `Clear out undone: ${v.name} is back on site (${v.number})` });
     return v;
   });

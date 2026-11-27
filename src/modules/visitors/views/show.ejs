@@ -23,9 +23,17 @@
           <div><dt>Vehicle</dt><dd><% if (visitor.vehicle_reg) { %><%- include('partials/plate', { reg: visitor.vehicle_reg }) %><% } else { %>—<% } %></dd></div>
           <div><dt>Gate pass</dt><dd><%= visitor.pass_no ?? '—' %></dd></div>
           <div><dt>People</dt><dd><%= visitor.people %></dd></div>
+          <% if (passes.came) { %><div><dt>Came from</dt><dd><%= passes.came.from_site_name %> with gate pass <a class="font-monospace" href="/visitors/passes/<%= passes.came.id %>"><%= passes.came.number %></a><span class="d-block small text-body-secondary">approved by <%= passes.came.issued_by_name ?? '—' %></span></dd></div><% } %>
+          <% if (passes.out && passes.out.status !== 'cancelled') { %><div><dt>Sent to</dt><dd><%= passes.out.to_site_name %> with gate pass <a class="font-monospace" href="/visitors/passes/<%= passes.out.id %>"><%= passes.out.number %></a><span class="d-block small text-body-secondary">approved by <%= passes.out.issued_by_name ?? '—' %><%= passes.out.status === 'arrived' ? `, arrived ${fmt.dateTime(passes.out.arrived_at)}` : '' %></span></dd></div><% } %>
           <% if (booking) { %><div><dt>Booked</dt><dd><a href="/visitors/expected/<%= booking.id %>"><%= booking.number %></a><span class="d-block small text-body-secondary">by <%= booking.booked_by_name ?? '—' %>, for <%= fmt.date(booking.expected_on) %></span></dd></div><% } %>
           <% if (visitor.notes) { %><div><dt>Notes</dt><dd style="white-space: pre-line"><%= visitor.notes %></dd></div><% } %>
         </dl>
+        <% if (canSend && visitor.status !== 'cleared' && !(passes.out && passes.out.status === 'open')) { %>
+          <div class="mt-3"><a class="btn btn-outline-primary" href="/visitors/<%= visitor.id %>/send"><i class="bi bi-arrow-left-right"></i>Send to another site</a>
+            <span class="d-block small text-body-secondary mt-1">Issues a customer gate pass: the other site sees them coming.</span></div>
+        <% } else if (passes.out && passes.out.status === 'open') { %>
+          <div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-outline-secondary" href="/visitors/passes/<%= passes.out.id %>/print"><i class="bi bi-printer"></i>Print gate pass</a></div>
+        <% } %>
       </div>
     </section>
   </div>

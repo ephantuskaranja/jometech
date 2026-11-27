@@ -134,6 +134,19 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
 .jc-sign-line { height: 11mm; border-bottom: 1px solid #111827; }
 .job-card footer { margin-top: 8px; }
 
+/* ---------- Customer gate pass (visitors/views/pass-print.ejs): the top half of an A4 page, like the paper one ---------- */
+.gp-sheet { position: relative; min-height: 0; }
+.gp-sheet.is-cancelled::after { content: "CANCELLED"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 72pt Archivo, Arial, sans-serif; color: rgb(180 35 24 / .14); transform: rotate(-20deg); pointer-events: none; }
+.gp-company { font: 700 20pt/1.1 Archivo, Arial, sans-serif; color: #1d3fbf; text-transform: uppercase; text-align: center; }
+.gp-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: 6px 0 10px; }
+.gp-logo { height: 16mm; }
+.gp-title { text-align: center; }
+.gp-no { margin-top: 4px; font-size: 11pt; }
+.gp-no .mono { font-weight: 700; }
+.gp-stamp { justify-self: end; }
+.gp-grid td { height: 9mm; vertical-align: middle; }
+.gp-note { margin: 8px 0 0; font-style: italic; font-size: 9.5pt; }
+
 @media print {
   .draft-note { display: none; }
   body { background: #fff; }

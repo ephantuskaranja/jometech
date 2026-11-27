@@ -1,0 +1,89 @@
+<%#
+  Customer gate passes at the current site. Coming in: people sent here from another site, not yet signed in
+  (Arrived signs them in from the pass). Sent: from here. Search: any day, both ways, by the number on the
+  paper pass, name, phone, company or vehicle. A table on wide screens, cards on phones.
+%>
+<%
+  const findText = (p) => [p.number, p.name, p.company, p.vehicle_reg, p.host, p.purpose, p.from_site_name, p.to_site_name].filter(Boolean).join(' ').toLowerCase();
+  const route = (p) => `${p.from_site_name} → ${p.to_site_name}`;
+  const when = (p) => (fmt.date(p.issued_at) === fmt.date(new Date()) ? fmt.time(p.issued_at) : fmt.dateTime(p.issued_at));
+%>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Visitors', href: '/visitors' }, 'Gate passes'],
+  heading: 'Customer gate passes',
+  sub: tab === 'incoming' ? `People sent to ${site.name} from another site. When one arrives, sign them in from their pass: the form comes filled in.`
+     : tab === 'sent' ? `People ${site.name} sent to another site: still on their way first, then the last 30 days.`
+     : 'Find a pass on any day, to or from this site: type the number on the paper pass, a name, phone or vehicle.',
+}) %>
+
+<section class="card" x-data="{ find: '', hit(el) { const f = this.find.toLowerCase().trim(); return !f || el.dataset.find.includes(f); } }">
+  <nav class="nav nav-tabs jt-tabs">
+    <a class="nav-link<%= tab === 'incoming' ? ' active' : '' %>" href="/visitors/passes"<%- tab === 'incoming' ? ' aria-current="page"' : '' %>>Coming in <span class="badge rounded-pill"><%= counts.incoming %></span></a>
+    <a class="nav-link<%= tab === 'sent' ? ' active' : '' %>" href="/visitors/passes?show=sent"<%- tab === 'sent' ? ' aria-current="page"' : '' %>>Sent <span class="badge rounded-pill"><%= counts.sent %></span></a>
+    <a class="nav-link<%= tab === 'search' ? ' active' : '' %>" href="/visitors/passes?show=search"<%- tab === 'search' ? ' aria-current="page"' : '' %>>Search</a>
+  </nav>
+
+  <% if (tab === 'search') { %>
+    <form class="jt-toolbar" method="get" action="/visitors/passes">
+      <input class="form-control" type="search" name="q" value="<%= q %>" placeholder="Pass number (e.g. 42), name, phone, company or vehicle" aria-label="Search gate passes" style="max-width: 26rem" autofocus>
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i>Search</button>
+      <% if (q) { %><a class="btn btn-link" href="/visitors/passes?show=search">Clear</a><% } %>
+    </form>
+  <% } else if (list.length > 3) { %>
+    <div class="jt-toolbar">
+      <input class="form-control" type="search" x-model="find" placeholder="Find: pass number, name, company, vehicle" aria-label="Find a gate pass" autocomplete="off" style="max-width: 26rem">
+      <i class="bi bi-lightning-charge text-body-tertiary" aria-hidden="true" title="Finds as you type"></i>
+    </div>
+  <% } %>
+
+  <% if (list.length === 0) { %>
+    <%- include('partials/empty', tab === 'incoming'
+          ? { icon: 'arrow-left-right', heading: 'Nobody on the way here', text: 'When another site sends a visitor here with a gate pass, they show up here.' }
+          : tab === 'sent' ? { icon: 'arrow-left-right', heading: 'No passes sent lately', text: 'Open a visitor who is on site and choose “Send to another site”.' }
+          : { icon: 'search', heading: q ? 'No gate passes found' : 'Search for a gate pass', text: q ? 'Try the last digits of the pass number, or part of the name.' : 'Type the number on the paper pass, a name, phone or vehicle.' }) %>
+  <% } else { %>
+    <% const action = (p) => { const s = stage(p); %>
+      <% if (p.status === 'open' && canSignIn && p.to_site_id === site.id) { %>
+        <a class="btn btn-primary btn-sm" href="/visitors/new?pass=<%= p.id %>"><i class="bi bi-box-arrow-in-right"></i>Arrived</a>
+      <% } %>
+    <% } %>
+
+    <div class="table-responsive d-none d-lg-block">
+      <table class="table jt-table mb-0">
+        <thead><tr><th>Pass</th><th>Visitor</th><th>From → to</th><th>Seeing · why</th><th>Status</th><th class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+          <% list.forEach((p) => { const s = stages[stage(p)]; %>
+            <tr data-find="<%= findText(p) %>" x-show="hit($el)">
+              <td class="text-nowrap"><a class="font-monospace jt-row-link" href="/visitors/passes/<%= p.id %>"><%= p.number %></a><span class="jt-sub"><%= when(p) %></span></td>
+              <td>
+                <span class="fw-semibold"><%= p.name %></span>
+                <span class="jt-sub"><%= [p.company, p.people > 1 ? `${p.people} people` : null, p.issued_by_name && `approved by ${p.issued_by_name}`].filter(Boolean).join(' · ') %></span>
+                <% if (p.vehicle_reg) { %><span class="d-block mt-1 small"><%- include('partials/plate', { reg: p.vehicle_reg }) %></span><% } %>
+              </td>
+              <td class="text-nowrap"><%= route(p) %></td>
+              <td><%= p.host ?? '—' %><span class="jt-sub"><%= p.purpose %></span></td>
+              <td class="text-nowrap"><%- include('partials/pill', { text: s.label, tone: s.tone }) %><% if (p.left_at && p.status === 'open') { %><span class="jt-sub">left <%= fmt.time(p.left_at) %></span><% } else if (p.arrived_at) { %><span class="jt-sub">in <%= fmt.time(p.arrived_at) %></span><% } %></td>
+              <td class="text-end"><% action(p) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="list-group list-group-flush d-lg-none">
+      <% list.forEach((p) => { const s = stages[stage(p)]; %>
+        <li class="list-group-item d-flex gap-3 align-items-start" data-find="<%= findText(p) %>" x-show="hit($el)">
+          <div class="flex-grow-1">
+            <a class="fw-semibold jt-row-link" href="/visitors/passes/<%= p.id %>"><%= p.name %></a>
+            <div class="small text-body-secondary"><%= [p.number, route(p), when(p), p.company, p.purpose].filter(Boolean).join(' · ') %></div>
+            <div class="small d-flex flex-wrap gap-2 mt-1 align-items-center">
+              <%- include('partials/pill', { text: s.label, tone: s.tone }) %>
+              <% if (p.vehicle_reg) { %><%- include('partials/plate', { reg: p.vehicle_reg }) %><% } %>
+            </div>
+          </div>
+          <div class="text-nowrap"><% action(p) %></div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>

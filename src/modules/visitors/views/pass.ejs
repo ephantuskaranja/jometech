@@ -1,0 +1,67 @@
+<%# One customer gate pass: who, from where to where, each step and who did it, and its history. %>
+<%
+  const visitLink = (id, number) => (canSeeVisits && id ? `<a href="/visitors/${id}">${number}</a>` : number);
+%>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Gate passes', href: '/visitors/passes' }, pass.number],
+  heading: pass.name,
+  sub: `${pass.from_site_name} → ${pass.to_site_name}${pass.company ? ` · ${pass.company}` : ''}`,
+  actions: pass.status === 'cancelled' ? [] : [{ label: 'Print pass', href: `/visitors/passes/${pass.id}/print`, icon: 'printer' }],
+}) %>
+
+<div class="row g-4">
+  <div class="col-lg-7 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <h2 class="h6 mb-0 me-auto">Customer gate pass <span class="font-monospace"><%= pass.number %></span></h2>
+        <%- include('partials/pill', { text: st.label, tone: st.tone }) %>
+      </div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>From</dt><dd><%= pass.from_site_name %></dd></div>
+          <div><dt>To</dt><dd><%= pass.to_site_name %></dd></div>
+          <div><dt>Why</dt><dd><%= pass.purpose %></dd></div>
+          <div><dt>Seeing</dt><dd><%= pass.host ?? '—' %></dd></div>
+          <div><dt>Phone</dt><dd><%- include('partials/masked', { value: pass.phone, kind: 'phone' }) %></dd></div>
+          <div><dt>People</dt><dd><%= pass.people %></dd></div>
+          <div><dt>Vehicle</dt><dd><% if (pass.vehicle_reg) { %><%- include('partials/plate', { reg: pass.vehicle_reg }) %><% } else { %>—<% } %></dd></div>
+          <% if (pass.notes) { %><div><dt>Notes</dt><dd style="white-space: pre-line"><%= pass.notes %></dd></div><% } %>
+        </dl>
+
+        <% if (pass.status === 'open' && (canSignIn || canCancel)) { %>
+          <div class="d-flex gap-2 flex-wrap mt-3 align-items-start" x-data="{ cancelling: false }">
+            <% if (canSignIn) { %><a class="btn btn-primary" href="/visitors/new?pass=<%= pass.id %>" x-show="!cancelling"><i class="bi bi-box-arrow-in-right"></i>Arrived: sign in</a><% } %>
+            <% if (canCancel) { %>
+              <button class="btn btn-outline-danger" type="button" x-show="!cancelling" @click="cancelling = true; $nextTick(() => $refs.why.focus())"><i class="bi bi-x-circle"></i>Cancel pass</button>
+              <form method="post" action="/visitors/passes/<%= pass.id %>/cancel" class="d-grid gap-2 w-100" x-show="cancelling" x-cloak style="max-width: 28rem">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <%- include('partials/field', { name: 'cancel_reason', label: 'Why is it cancelled?', placeholder: 'e.g. Customer went home instead', required: true, attrs: 'x-ref="why" maxlength="255"' }) %>
+                <div class="d-flex gap-2"><button class="btn btn-danger" type="submit">Cancel pass</button><button class="btn btn-link" type="button" @click="cancelling = false">Back</button></div>
+              </form>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-5 d-grid gap-4 align-content-start">
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">Steps</h2></div>
+      <div class="card-body">
+        <dl class="jt-kv">
+          <div><dt>Approved</dt><dd><%= fmt.dateTime(pass.issued_at) %><span class="d-block small text-body-secondary"><%= pass.issued_by_name ?? '' %>, from visit <%- visitLink(pass.visitor_id, pass.visitor_number) %></span></dd></div>
+          <div><dt>Left <%= pass.from_site_name %></dt><dd><% if (pass.left_at) { %><%= fmt.dateTime(pass.left_at) %><span class="d-block small text-body-secondary">cleared out by <%= pass.left_by_name ?? '—' %></span><% } else { %>Not yet<% } %></dd></div>
+          <div><dt>Arrived at <%= pass.to_site_name %></dt><dd><% if (pass.arrived_at) { %><%= fmt.dateTime(pass.arrived_at) %><span class="d-block small text-body-secondary">signed in by <%= pass.arrived_by_name ?? '—' %> (visit <%- visitLink(pass.arrived_visitor_id, pass.arrived_visitor_number) %>)</span><% } else { %>Not yet<% } %></dd></div>
+          <% if (pass.status === 'cancelled') { %>
+            <div><dt>Cancelled</dt><dd><%= pass.cancel_reason %><span class="d-block small text-body-secondary"><%= [pass.cancelled_by_name, fmt.dateTime(pass.cancelled_at)].filter(Boolean).join(', ') %></span></dd></div>
+          <% } %>
+        </dl>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="h6 mb-0">History</h2></div>
+      <div class="card-body"><%- include('partials/history', { entries, labels: {} }) %></div>
+    </section>
+  </div>
+</div>

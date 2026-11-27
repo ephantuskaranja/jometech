@@ -8,9 +8,13 @@
 <form method="post" action="/visitors" novalidate class="card" x-data="visitorForm({ purpose: <%= JSON.stringify(values.purpose ?? '') %> })">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <% if (booking) { %><input type="hidden" name="booking_id" value="<%= booking.id %>"><% } %>
+  <% if (locals.pass) { %><input type="hidden" name="pass_id" value="<%= pass.id %>"><% } %>
   <div class="card-body d-grid gap-4">
     <% if (booking) { %>
       <div class="jt-info-box"><i class="bi bi-calendar-check"></i><span>Expected: booked by <%= booking.booked_by_name ?? 'someone' %> (<%= booking.number %>)<%= booking.expected_time ? `, around ${booking.expected_time}` : '' %>. Check the details with the person and add their ID number.</span></div>
+    <% } %>
+    <% if (locals.pass) { %>
+      <div class="jt-info-box"><i class="bi bi-arrow-left-right"></i><span>From <%= pass.from_site_name %> with gate pass <%= pass.number %>, approved by <%= pass.issued_by_name ?? 'someone' %>. Check the paper pass (if they carry one) and the person match these details.</span></div>
     <% } %>
     <div class="jt-fields">
       <%- include('partials/field', { name: 'phone', label: 'Phone number', type: 'tel', value: values.phone, error: errors.phone, required: true,
