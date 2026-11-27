@@ -100,7 +100,11 @@ async function renderForm(req, res, { status = 200, values, errors = {}, phoneOw
 router.get('/visitors/new', signsIn, async (req, res) => {
   needSite(req);
   const booking = await bookingFrom(req, req.query.booking);
-  const values = { ...blank, ...(booking ? bookings.formValues(booking) : {}), at_reception: req.user.can('visitors.gate') ? '' : '1' };
+  // "Already at reception" starts ticked for Reception, including a receptionist who also holds
+  // the Gate role (one person on both): they sign in and receive in one step. Admins and managers
+  // can do both too but start unticked, as before.
+  const atReception = !req.user.can('visitors.gate') || req.user.roles.some((r) => r.key === 'reception');
+  const values = { ...blank, ...(booking ? bookings.formValues(booking) : {}), at_reception: atReception ? '1' : '' };
   await renderForm(req, res, { values, booking });
 });
 

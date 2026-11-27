@@ -289,3 +289,10 @@ test('a new guard with two sites sets their password first, then chooses the sit
   res = await agent.post('/choose-site').type('form').send({ _csrf: csrfFrom(choose.text), site_id: hq.id });
   assert.equal((await agent.get('/')).status, 200, 'then the dashboard');
 });
+
+test('reception doubling as the gate: “Already at reception” starts ticked; a guard’s starts unticked', async () => {
+  const both = await loginAs(app, await makeUser(99, ['gate', 'reception']));
+  const box = (html) => html.match(/<input[^>]*name="at_reception"[^>]*>/)?.[0];
+  assert.match(box((await both.get('/visitors/new').expect(200)).text), /checked/);
+  assert.doesNotMatch(box((await gate.get('/visitors/new').expect(200)).text) ?? '', /checked/);
+});
