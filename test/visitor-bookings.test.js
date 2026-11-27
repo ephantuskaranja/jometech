@@ -126,3 +126,12 @@ test('dashboards: expected today for the gate and sales; reception and sales get
   assert.match(salesHome, /Expected today/);
   assert.match(salesHome, /Book a visitor/);
 });
+
+test('Expected visitors is a tab of Visitors, not its own menu item; sales land on it from Visitors', async () => {
+  const sales = await loginAs(app, await makeUser(97, ['sales']));
+  const page = (await sales.get('/visitors/expected').expect(200)).text;
+  assert.doesNotMatch(page, /<span>Expected visitors<\/span>/);
+  assert.match(page, /<span>Visitors<\/span>/);
+  const res = await sales.get('/visitors').expect(302);
+  assert.equal(res.headers.location, '/visitors/expected');
+});

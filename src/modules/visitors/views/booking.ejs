@@ -1,7 +1,7 @@
 <%# One booking: details, what happened to it, and its history. %>
 <% const st = statuses[status]; %>
 <%- include('partials/page-header', {
-  crumb: [{ label: 'Expected visitors', href: '/visitors/expected' }, booking.number],
+  crumb: [{ label: 'Visitors', href: '/visitors' }, { label: 'Expected', href: '/visitors/expected' }, booking.number],
   heading: booking.name,
   sub: booking.company ?? '',
 }) %>

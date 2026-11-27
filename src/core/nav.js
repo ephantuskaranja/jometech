@@ -12,8 +12,8 @@ export const nav = [
       { label: 'Check-in', href: '/check-in', icon: 'truck', permission: 'checkin.manage', ready: true },
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress', 'jobs.manage'], ready: true },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage', ready: true },
-      { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
-      { label: 'Expected visitors', href: '/visitors/expected', icon: 'calendar-event', permission: ['visitors.book', 'visitors.gate', 'visitors.receive', 'visitors.view'], ready: true },
+      // Expected visitors and gate passes are tabs of Visitors (fewer menu items). Sales only book: Visitors opens Expected for them.
+      { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view', 'visitors.book'], ready: true },
       { label: 'Vehicles at the gate', href: '/gate/vehicles', icon: 'box-arrow-right', permission: ['checkin.gate', 'checkin.manage'], ready: true },
       { label: 'Goods at the gate', href: '/gate/goods', icon: 'box-seam', permission: 'goods.gate', ready: true },
     ],

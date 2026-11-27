@@ -47,7 +47,9 @@ async function loadVisitor(req) {
   return visitor;
 }
 
-router.get('/visitors', view, async (req, res) => {
+router.get('/visitors', canAny('visitors.view', 'visitors.gate', 'visitors.receive', 'visitors.book'), async (req, res) => {
+  // Only books visitors (sales): their part of Visitors is the expected list.
+  if (!['visitors.view', 'visitors.gate', 'visitors.receive'].some((p) => req.user.can(p))) return res.redirect('/visitors/expected');
   needSite(req);
   const tab = req.query.show === 'register' ? 'register' : 'now';
   const day = isDay(req.query.day) ? req.query.day : localDay();
