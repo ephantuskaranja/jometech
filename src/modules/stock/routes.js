@@ -146,7 +146,9 @@ router.post('/purchase-orders/:id/close', receive, async (req, res) => {
   res.redirect(`/purchase-orders/${order.id}`);
 });
 
-router.get('/goods-received', seeReceipts, async (req, res) => {
+router.get('/goods-received', canAny('purchasing.manage', 'purchasing.approve', 'inventory.manage', 'goods.gate'), async (req, res) => {
+  // The gate's part of Goods received is its At the gate tab.
+  if (!['purchasing.manage', 'purchasing.approve', 'inventory.manage'].some((p) => req.user.can(p))) return res.redirect('/goods-received/gate');
   const q = String(req.query.q ?? '').slice(0, 60);
   const siteIds = req.user.sites.map((s) => s.id);
   const waiting = await deliveries.waitingAt(siteIds);
@@ -156,6 +158,7 @@ router.get('/goods-received', seeReceipts, async (req, res) => {
   res.render('stock/views/receipts', {
     title: 'Goods received', q, waiting, orders, statuses: deliveries.STATUSES,
     canReceive: req.user.can('purchasing.manage'),
+    canGate: req.user.can('goods.gate'),
     list: await stock.listReceipts({ siteIds, q }),
   });
 });

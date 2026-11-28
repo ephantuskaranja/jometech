@@ -131,11 +131,11 @@ async function visitors(user, site, known = {}) {
   ];
   items.push({ label: 'Expected today', value: (await bookingCounts(site.id)).today, foot: 'booked, not yet arrived', icon: 'calendar-event', href: '/visitors/expected', tone: 'info' });
   if (can(user, 'checkin.gate')) {
-    items.push({ label: 'Waiting for check-in', value: known.arrivals_waiting ?? (await arrivalsWaiting(site.id)).length, foot: 'vehicles logged in here', icon: 'box-arrow-in-down', href: '/gate/vehicles', tone: 'warn', hideZero: true });
-    items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/gate/vehicles', tone: 'info' });
+    items.push({ label: 'Waiting for check-in', value: known.arrivals_waiting ?? (await arrivalsWaiting(site.id)).length, foot: 'vehicles logged in here', icon: 'box-arrow-in-down', href: '/check-in/gate', tone: 'warn', hideZero: true });
+    items.push({ label: 'Vehicles to release', value: (await waitingAtGate(site.id)).length, foot: 'waiting at the gate', icon: 'truck', href: '/check-in/gate', tone: 'info' });
   }
   if (can(user, 'goods.gate')) {
-    items.push({ label: 'Goods at the gate', value: (await goodsAtGate(site.id)).length + (await passesAtGate(site.id)).length, foot: 'to let out or log in', icon: 'box-seam', href: '/gate/goods', tone: 'info' });
+    items.push({ label: 'Goods at the gate', value: (await goodsAtGate(site.id)).length + (await passesAtGate(site.id)).length, foot: 'to let out or log in', icon: 'box-seam', href: '/goods-received/gate', tone: 'info' });
   }
   if (can(user, 'visitors.receive') && !atGate) {
     items.push({ label: 'Received today', value: c.received, foot: 'confirmed at reception', icon: 'person-check', href: '/visitors?show=register' });

@@ -102,8 +102,8 @@ test('only the receiving site receives; everything arriving lands in its stock',
   await post(bStore, `/inventory/transfers/${t.id}/receive`, all);
   assert.match((await bStore.get(`/inventory/transfers/${t.id}`)).text, /hasn’t been logged in at the gate yet/);
   await post(bGate, `/gate/transfers/${t.id}/in`);
-  assert.match((await bGate.get('/gate/goods')).text, /hasn’t left the other site’s gate yet/, 'can’t arrive before it leaves');
-  assert.match((await hqGate.get('/gate/goods')).text, new RegExp(t.number), 'on HQ’s gate list to let out');
+  assert.match((await bGate.get('/goods-received/gate')).text, /hasn’t left the other site’s gate yet/, 'can’t arrive before it leaves');
+  assert.match((await hqGate.get('/goods-received/gate')).text, new RegExp(t.number), 'on HQ’s gate list to let out');
   await throughGates(t.id);
   const logged = await db('stock_transfers').where({ id: t.id }).first();
   assert.ok(logged.gate_out_at && logged.gate_in_at);
@@ -160,7 +160,7 @@ test('the sender can cancel until it leaves the gate; the stock goes back', asyn
 });
 
 test('gate staff see the goods page; stores don’t act at the gate', async () => {
-  await hqGate.get('/gate/goods').expect(200);
+  await hqGate.get('/goods-received/gate').expect(200);
   assert.match((await hqGate.get('/')).text, /Goods at the gate/);
-  await hqStore.get('/gate/goods').expect(403);
+  await hqStore.get('/goods-received/gate').expect(403);
 });

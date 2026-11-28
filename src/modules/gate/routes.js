@@ -21,7 +21,7 @@ const text = (v, max) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, ma
 
 const BLANK = { order_id: '', supplier_name: '', delivery_note: '', vehicle_reg: '', driver_name: '', note: '' };
 
-async function renderGoods(req, res, { status = 200, values = BLANK, errors = {} } = {}) {
+async function renderGoods(req, res, { status = 200, values = BLANK, errors = {}, showForm = false } = {}) {
   const list = await transfers.atGate(req.site.id);
   res.status(status).render('gate/views/goods', {
     title: 'Goods at the gate',
@@ -32,13 +32,19 @@ async function renderGoods(req, res, { status = 200, values = BLANK, errors = {}
     today: await deliveries.loggedToday(req.site.id),
     statuses: deliveries.STATUSES,
     values, errors,
+    // Lists first; the delivery form opens from "Log a delivery", or when it comes back with a problem.
+    showForm: showForm || status !== 200,
+    canReceipts: ['purchasing.manage', 'purchasing.approve', 'inventory.manage'].some((p) => req.user.can(p)),
   });
 }
 
-router.get('/gate/goods', gate, async (req, res) => {
+// Goods received → At the gate (the gate's tab of Goods received; it was its own menu item).
+router.get('/goods-received/gate', gate, async (req, res) => {
   needSite(req);
-  await renderGoods(req, res);
+  await renderGoods(req, res, { showForm: req.query.log === '1' });
 });
+// The old address (bookmarks, the dashboard) leads there.
+router.get('/gate/goods', gate, (req, res) => res.redirect(`/goods-received/gate${req.query.log === '1' ? '?log=1' : ''}`));
 
 /** A supplier's truck has arrived: log it against the open order, or as no order. */
 router.post('/gate/deliveries', gate, async (req, res) => {
@@ -62,7 +68,7 @@ router.post('/gate/deliveries', gate, async (req, res) => {
       note: text(values.note, 255),
     }, req);
     req.session.flash = { type: 'success', text: `${number} logged in${order ? ` against ${order.number}` : ''}. Stores can receive it now.` };
-    res.redirect('/gate/goods');
+    res.redirect('/goods-received/gate');
   } catch (err) {
     if (!err.field) throw err;
     await renderGoods(req, res, { status: 422, values, errors: { [err.field]: err.message } });
@@ -78,7 +84,7 @@ async function step(req, res, fn, done) {
     if (![403, 409].includes(err.status)) throw err;
     req.session.flash = { type: 'warning', text: err.message };
   }
-  res.redirect(req.body.back === 'transfer' ? `/inventory/transfers/${req.params.id}` : '/gate/goods');
+  res.redirect(req.body.back === 'transfer' ? `/inventory/transfers/${req.params.id}` : '/goods-received/gate');
 }
 
 router.post('/gate/transfers/:id/out', gate, (req, res) => step(req, res,
@@ -99,5 +105,5 @@ router.post('/gate/issues/:id/out', gate, async (req, res) => {
     if (![403, 404, 409].includes(err.status)) throw err;
     req.session.flash = { type: 'warning', text: err.message };
   }
-  res.redirect('/gate/goods');
+  res.redirect('/goods-received/gate');
 });

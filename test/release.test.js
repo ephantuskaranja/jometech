@@ -115,28 +115,28 @@ test('allowed: the collector signs and the vehicle leaves; the note says “on c
 
 test('the gate sees released vehicles, clears them out, and is named on the release note', async () => {
   const sales = await loginAs(app, await makeUser(90, ['sales']));
-  await sales.get('/gate/vehicles').expect(403);
-  let res = await gate.get('/gate/vehicles');
+  await sales.get('/check-in/gate').expect(403);
+  let res = await gate.get('/check-in/gate');
   if (res.status === 302) { // a guard chooses the site at login
     const page = await gate.get('/choose-site');
     await gate.post('/choose-site').type('form').send({ _csrf: csrfFrom(page.text), site_id: hq.id });
-    res = await gate.get('/gate/vehicles');
+    res = await gate.get('/check-in/gate');
   }
   assert.equal(res.status, 200);
   assert.match(res.text, /KEB 851C/);
   assert.match(res.text, /Peter Kamau/);
   assert.match(res.text, /RN-\d{4}-\d{4}/);
-  assert.match(res.text, /href="\/gate\/vehicles"/, 'in the guard’s menu');
+  assert.match(res.text, /href="\/check-in"[^>]*>\s*<i[^>]*><\/i><span>Check-in<\/span>/, 'Check-in is in the guard’s menu (its At the gate tab)');
 
   const csrf = csrfFrom(res.text);
   res = await gate.post(`/check-in/${owing.checkin}/clear`).type('form').send({ _csrf: csrf });
-  assert.equal(res.headers.location, '/gate/vehicles');
+  assert.equal(res.headers.location, '/check-in/gate');
   const c = await db('checkins').where({ id: owing.checkin }).first();
   assert.equal(c.status, 'checked_out');
   assert.ok(c.checked_out_at);
   assert.equal(c.checked_out_by, (await db('users').where({ phone: '+254700000089' }).first('id')).id);
-  await gate.get('/gate/vehicles'); // shows (and clears) the "KEB 851C cleared out" message
-  assert.doesNotMatch((await gate.get('/gate/vehicles')).text, /KEB 851C/);
+  await gate.get('/check-in/gate'); // shows (and clears) the "KEB 851C cleared out" message
+  assert.doesNotMatch((await gate.get('/check-in/gate')).text, /KEB 851C/);
   assert.equal((await gate.post(`/check-in/${owing.checkin}/clear`).type('form').send({ _csrf: csrf })).status, 409, 'once only');
   assert.equal((await gate.post(`/check-in/${paidUp.checkin}/clear`).type('form').send({ _csrf: csrf })).status, 409, 'not released yet');
 

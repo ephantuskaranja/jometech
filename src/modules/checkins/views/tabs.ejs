@@ -1,0 +1,13 @@
+<%#
+  Check-in's tabs: a vehicle's whole stay in one place. At the gate (arriving, leaving, moving between
+  sites: the gate's tab, and the only one the gate sees) · In the workshop · Checked out · Movements.
+  Locals: tab ('gate' | 'in' | 'out' | 'moves'), inCount (optional), hasOtherSites, canManage, canGate.
+%>
+<% const tabLink = (key, href, label, badge = null) => { const on = tab === key; %>
+  <a class="nav-link<%= on ? ' active' : '' %>" href="<%= href %>"<%- on ? ' aria-current="page"' : '' %>><%= label %><% if (badge !== null && badge !== undefined) { %> <span class="badge rounded-pill"><%= badge %></span><% } %></a>
+<% } %>
+<nav class="nav nav-tabs jt-tabs<%= locals.standalone ? ' mb-4' : '' %>">
+  <% if (canGate) { tabLink('gate', '/check-in/gate', 'At the gate'); } %>
+  <% if (canManage) { tabLink('in', '/check-in', 'In the workshop', locals.inCount); tabLink('out', '/check-in?show=out', 'Checked out'); } %>
+  <% if (canManage && hasOtherSites) { tabLink('moves', '/check-in?show=moves', 'Movements'); } %>
+</nav>

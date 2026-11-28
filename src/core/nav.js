@@ -9,13 +9,12 @@ export const nav = [
     label: 'Workshop',
     items: [
       { label: 'Dashboard', href: '/', icon: 'grid-1x2', ready: true },
-      { label: 'Check-in', href: '/check-in', icon: 'truck', permission: 'checkin.manage', ready: true },
+      // Check-in holds the vehicle's whole stay, the gate's part included (At the gate tab).
+      { label: 'Check-in', href: '/check-in', icon: 'truck', permission: ['checkin.manage', 'checkin.gate'], ready: true },
       { label: 'Jobs', href: '/jobs', icon: 'wrench-adjustable', permission: ['jobs.view', 'jobs.progress', 'jobs.manage'], ready: true },
       { label: 'Quality checks', href: '/qc', icon: 'shield-check', permission: 'qc.manage', ready: true },
       // Expected visitors and gate passes are tabs of Visitors (fewer menu items). Sales only book: Visitors opens Expected for them.
       { label: 'Visitors', href: '/visitors', icon: 'person-badge', permission: ['visitors.gate', 'visitors.receive', 'visitors.view', 'visitors.book'], ready: true },
-      { label: 'Vehicles at the gate', href: '/gate/vehicles', icon: 'box-arrow-right', permission: ['checkin.gate', 'checkin.manage'], ready: true },
-      { label: 'Goods at the gate', href: '/gate/goods', icon: 'box-seam', permission: 'goods.gate', ready: true },
     ],
   },
   {
@@ -36,7 +35,8 @@ export const nav = [
       { label: 'Inventory', href: '/inventory', icon: 'stack', permission: ['inventory.manage', 'stores.issue', 'purchasing.manage', 'purchasing.approve'], ready: true },
       { label: 'Purchase requests', href: '/purchase-requests', icon: 'inbox', permission: ['purchasing.request', 'purchasing.manage', 'purchasing.approve'], ready: true },
       { label: 'Purchase orders', href: '/purchase-orders', icon: 'cart', permission: ['purchasing.manage', 'purchasing.approve'], ready: true },
-      { label: 'Goods received', href: '/goods-received', icon: 'box-arrow-in-down', permission: ['purchasing.manage', 'purchasing.approve', 'inventory.manage'], ready: true },
+      // Goods received holds the gate's part too (At the gate tab): supplier trucks, transfers, materials going out.
+      { label: 'Goods received', href: '/goods-received', icon: 'box-arrow-in-down', permission: ['purchasing.manage', 'purchasing.approve', 'inventory.manage', 'goods.gate'], ready: true },
       { label: 'Suppliers', href: '/suppliers', icon: 'building', permission: ['purchasing.manage', 'purchasing.approve'], ready: true },
     ],
   },

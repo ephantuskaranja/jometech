@@ -54,8 +54,11 @@
           : { icon: 'search', heading: q ? 'No visitors found' : 'No visitors that day', text: q ? 'Try part of the name, or the phone number.' : 'Pick another day, or search.' }) %>
   <% } else { %>
     <% const actions = (v) => { %>
-      <% if (v.status !== 'cleared' && (canReceive || canClear)) { %>
+      <% const canSendThis = canSend && v.status !== 'cleared' && !going.get(v.id); %>
+      <% if (v.status !== 'cleared' && (canReceive || canClear || canSendThis)) { %>
         <div class="jt-visitor-actions">
+          <%# To the other site, right from the list (sheet): highlighted in its own colour. %>
+          <% if (canSendThis) { %><a class="btn btn-send btn-sm" href="/visitors/<%= v.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a><% } %>
           <% if (canReceive && v.status === 'arrived') { %>
             <form method="post" action="/visitors/<%= v.id %>/receive"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2-circle"></i>Received</button></form>

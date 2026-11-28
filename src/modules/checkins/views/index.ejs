@@ -36,14 +36,9 @@
   </section>
 <% } %>
 
+<% const rowSend = tab === 'in' && canCheckIn && hasOtherSites; %>
 <section class="card">
-  <nav class="nav nav-tabs jt-tabs">
-    <a class="nav-link<%= tab === 'in' ? ' active' : '' %>" href="/check-in"<%- tab === 'in' ? ' aria-current="page"' : '' %>>In the workshop <span class="badge rounded-pill"><%= inCount %></span></a>
-    <a class="nav-link<%= tab === 'out' ? ' active' : '' %>" href="/check-in?show=out"<%- tab === 'out' ? ' aria-current="page"' : '' %>>Checked out</a>
-    <% if (hasOtherSites) { %>
-      <a class="nav-link<%= tab === 'moves' ? ' active' : '' %>" href="/check-in?show=moves"<%- tab === 'moves' ? ' aria-current="page"' : '' %>>Movements</a>
-    <% } %>
-  </nav>
+  <%- include('checkins/views/tabs', { tab, inCount, hasOtherSites, canManage: true, canGate: canGateTab }) %>
 
   <% if (tab === 'moves') { %>
     <% if (moves.length === 0) { %>
@@ -81,7 +76,7 @@
   <% } else { %>
     <div class="table-responsive">
       <table class="table jt-table">
-        <thead><tr><th>Vehicle</th><th>Check-in</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th><th>Arrived</th><% if (tab === 'out') { %><th>Left</th><% } %><th class="text-end">Days in</th></tr></thead>
+        <thead><tr><th>Vehicle</th><th>Check-in</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th><th>Arrived</th><% if (tab === 'out') { %><th>Left</th><% } %><th class="text-end">Days in</th><% if (rowSend) { %><th class="text-end"><span class="visually-hidden">Actions</span></th><% } %></tr></thead>
         <tbody>
           <% list.forEach((c) => { %>
             <tr>
@@ -97,6 +92,8 @@
               <td class="text-nowrap"><%= fmt.dateTime(c.checked_in_at) %></td>
               <% if (tab === 'out') { %><td class="text-nowrap"><%= fmt.dateTime(c.checked_out_at) %></td><% } %>
               <td class="text-end text-nowrap jt-num"><%= daysIn(c.checked_in_at, c.checked_out_at ?? new Date()) %></td>
+              <%# To the other site, right from the list (sheet): highlighted in its own colour. %>
+              <% if (rowSend) { %><td class="text-end"><% if (c.status === 'in_workshop' && !c.moving_to) { %><a class="btn btn-send btn-sm text-nowrap" href="/check-in/<%= c.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a><% } %></td><% } %>
             </tr>
           <% }) %>
         </tbody>

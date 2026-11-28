@@ -1,0 +1,9 @@
+<%#
+  Goods received's tabs: At the gate (supplier trucks, stock transfers and materials going out: the gate's tab,
+  the only one the gate sees) · Received (GRNs, for stores and managers).
+  Locals: tab ('gate' | 'received'), canGate, canReceipts.
+%>
+<nav class="nav nav-tabs jt-tabs<%= locals.standalone ? ' mb-4' : '' %>">
+  <% if (canGate) { %><a class="nav-link<%= tab === 'gate' ? ' active' : '' %>" href="/goods-received/gate"<%- tab === 'gate' ? ' aria-current="page"' : '' %>>At the gate</a><% } %>
+  <% if (canReceipts) { %><a class="nav-link<%= tab === 'received' ? ' active' : '' %>" href="/goods-received"<%- tab === 'received' ? ' aria-current="page"' : '' %>>Received</a><% } %>
+</nav>

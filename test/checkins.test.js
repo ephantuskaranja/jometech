@@ -423,9 +423,9 @@ test('a check-in is made from the gate’s arrival, or gives a reason', async ()
 test('the gate logs a vehicle in; the workshop checks it in from there, or it is closed with a reason', async () => {
   const vehicle = await ownVehicle('KZY 351C');
   const gate = await loginAs(app, await makeUser(63, ['gate']));
-  const csrf = csrfFrom((await gate.get('/gate/vehicles').expect(200)).text);
+  const csrf = csrfFrom((await gate.get('/check-in/gate').expect(200)).text);
   const log = (fields) => gate.post('/gate/arrivals').type('form').send({ _csrf: csrf, ...fields });
-  await sales.get('/gate/vehicles').expect(403);
+  await sales.get('/check-in/gate').expect(403);
 
   let res = await log({ vehicle_text: '', driver_name: '', purpose: '' });
   assert.equal(res.status, 422);
@@ -450,7 +450,7 @@ test('the gate logs a vehicle in; the workshop checks it in from there, or it is
   assert.equal(unknown.vehicle_id, null);
 
   // Both wait on the gate page and the check-in list.
-  assert.match((await gate.get('/gate/vehicles')).text, /Logged in, waiting for check-in[\s\S]*New Hino 500 chassis/);
+  assert.match((await gate.get('/check-in/gate')).text, /Logged in, waiting for check-in[\s\S]*New Hino 500 chassis/);
   const list = (await supervisor.get('/check-in')).text;
   assert.ok(list.includes(`href="/check-in/new?arrival=${known.id}"`));
   assert.ok(list.includes(`href="/check-in/new?arrival=${unknown.id}"`));
@@ -487,7 +487,7 @@ test('the gate logs a vehicle in; the workshop checks it in from there, or it is
   const closed = await db('vehicle_arrivals').where({ id: unknown.id }).first();
   assert.equal(closed.status, 'closed');
   assert.equal(closed.close_reason, 'Driver left; back on Monday');
-  assert.doesNotMatch((await gate.get('/gate/vehicles')).text, /New Hino 500 chassis/);
+  assert.doesNotMatch((await gate.get('/check-in/gate')).text, /New Hino 500 chassis/);
   assert.doesNotMatch((await supervisor.get('/')).text, /at the gate over 2 hours/);
 });
 
@@ -499,4 +499,16 @@ test('a check-in without the gate says so, with the reason', async () => {
   assert.equal((await db('checkins').where({ id }).first()).no_arrival_reason, 'Gate not manned on Sunday');
   assert.match((await supervisor.get(`/check-in/${id}`)).text, /Not logged at the gate[\s\S]*Gate not manned on Sunday/);
   await db('checkins').where({ id }).delete();
+});
+
+test('Check-in holds the gate: At the gate is its first tab; the old address leads there; the gate sees only that tab', async () => {
+  const guard = await loginAs(app, await makeUser(58, ['gate']));
+  // The menu: Check-in, no separate Vehicles at the gate.
+  const page = (await guard.get('/check-in/gate').expect(200)).text;
+  assert.match(page, /<span>Check-in<\/span>/);
+  assert.doesNotMatch(page, /<span>Vehicles at the gate<\/span>/);
+  assert.match(page, /At the gate/);
+  assert.doesNotMatch(page, /In the workshop/, 'the gate sees only its tab');
+  assert.equal((await guard.get('/check-in').expect(302)).headers.location, '/check-in/gate');
+  assert.equal((await guard.get('/gate/vehicles?log=1').expect(302)).headers.location, '/check-in/gate?log=1');
 });

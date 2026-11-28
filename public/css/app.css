@@ -802,3 +802,24 @@ button.jt-site-pill:hover { background: var(--bs-tertiary-bg); }
 .jt-next-actions .btn i { margin-right: .35rem; }
 @media (max-width: 575.98px) { .jt-next-actions { width: 100%; } .jt-next-actions .btn { flex: 1 1 auto; } }
 @media print { .jt-next { display: none; } }
+
+/* "Send to another site" on list rows (sheet: highlighted in its own colour, apart from the row's other buttons). */
+.btn-send {
+  --bs-btn-color: #0f766e;
+  --bs-btn-border-color: #14b8a6;
+  --bs-btn-bg: #f0fdfa;
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-bg: #0d9488;
+  --bs-btn-hover-border-color: #0d9488;
+  --bs-btn-active-color: #ffffff;
+  --bs-btn-active-bg: #0f766e;
+  --bs-btn-active-border-color: #0f766e;
+}
+[data-bs-theme="dark"] .btn-send {
+  --bs-btn-color: #5eead4;
+  --bs-btn-border-color: #2dd4bf;
+  --bs-btn-bg: rgba(20, 184, 166, 0.12);
+  --bs-btn-hover-color: #042f2e;
+  --bs-btn-hover-bg: #2dd4bf;
+  --bs-btn-hover-border-color: #2dd4bf;
+}

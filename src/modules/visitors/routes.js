@@ -76,6 +76,7 @@ router.get('/visitors', canAny('visitors.view', 'visitors.gate', 'visitors.recei
     canSignIn: req.user.can('visitors.gate') || req.user.can('visitors.receive'),
     canClear: req.user.can('visitors.gate'),
     canReceive: req.user.can('visitors.receive'),
+    canSend: req.user.can('visitors.book') && tab === 'now', // "Send" to another site, on each row
   });
 });
 

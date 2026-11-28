@@ -87,7 +87,7 @@ test('the move prints as a vehicle gate pass, at either site; the gate sees how 
     const elsewhere = await loginAs(app, await makeUser(75, ['supervisor'], { siteIds: [other.id] }));
     await elsewhere.get(`/movements/${move.id}/print`).expect(404);
   }
-  assert.match((await hq.get('/gate/vehicles')).text, /People<\/dt><dd>3/);
+  assert.match((await hq.get('/check-in/gate')).text, /People<\/dt><dd>3/);
 });
 
 test('it passes both gates before Site B can receive it', async () => {
@@ -99,7 +99,7 @@ test('it passes both gates before Site B can receive it', async () => {
   assert.equal((await openMove(id)).gate_in_at, null);
   // Only the sending site's gate clears it out
   assert.equal((await post(siteB, `/movements/${move.id}/gate-out`)).status, 403);
-  assert.match((await hq.get('/gate/vehicles')).text, /Cleared out to Site B/);
+  assert.match((await hq.get('/check-in/gate')).text, /Cleared out to Site B/);
   assert.equal((await post(hq, `/movements/${move.id}/gate-out`)).status, 302);
   assert.ok((await openMove(id)).gate_out_at);
   // Once it has left the gate it can't be cancelled
@@ -107,7 +107,7 @@ test('it passes both gates before Site B can receive it', async () => {
   assert.equal((await openMove(id)).status, 'in_transit');
   // Site B's gate logs it in; HQ's gate can't
   assert.equal((await post(hq, `/movements/${move.id}/gate-in`)).status, 403);
-  assert.match((await siteB.get('/gate/vehicles')).text, /Logged in at the gate/);
+  assert.match((await siteB.get('/check-in/gate')).text, /Logged in at the gate/);
   assert.equal((await post(siteB, `/movements/${move.id}/gate-in`, { gate_in_note: 'Arrived fine' })).status, 302);
   const logged = await openMove(id);
   assert.ok(logged.gate_in_at);
@@ -118,7 +118,7 @@ test('a gate guard logs it in but can’t confirm it was received', async () => 
   const guard = await loginAs(app, await makeUser(74, ['gate'], { siteIds: [bSite.id] }));
   const id = (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A') }).first('id')).id;
   const move = await openMove(id);
-  const csrf = csrfFrom((await guard.get('/gate/vehicles')).text);
+  const csrf = csrfFrom((await guard.get('/check-in/gate')).text);
   const res = await guard.post(`/movements/${move.id}/receive`).type('form').send({ _csrf: csrf });
   assert.equal(res.status, 403);
   assert.equal((await openMove(id)).status, 'in_transit');
@@ -169,17 +169,17 @@ test('Site B’s gate typing in a vehicle sent from HQ logs it in against the mo
   assert.match(res.text, /hasn’t cleared it out yet/);
   // The gate page opens on its lists, the move among them; the arrival form opens from "Log a vehicle in".
   await post(hq, `/movements/${move.id}/gate-out`);
-  const page = (await siteB.get('/gate/vehicles')).text;
+  const page = (await siteB.get('/check-in/gate')).text;
   assert.match(page, /To and from other sites/);
   assert.doesNotMatch(page, /Vehicle arriving/);
-  assert.match(page, /href="\/gate\/vehicles\?log=1"/);
-  assert.match((await siteB.get('/gate/vehicles?log=1')).text, /Vehicle arriving/);
+  assert.match(page, /href="\/check-in\/gate\?log=1"/);
+  assert.match((await siteB.get('/check-in/gate?log=1')).text, /Vehicle arriving/);
 
   res = await typeIn();
   assert.equal(res.status, 302);
   assert.ok((await openMove(id)).gate_in_at, 'logged in against the move');
   assert.equal(await db('vehicle_arrivals').count({ n: '*' }).first().then((r) => Number(r.n)), arrivalsBefore, 'no new arrival');
-  assert.match((await siteB.get('/gate/vehicles')).text, new RegExp(`logged in against that move`));
+  assert.match((await siteB.get('/check-in/gate')).text, new RegExp(`logged in against that move`));
 });
 
 test('“Send to another site” is a header action with its own page; Movements → “Send a vehicle” picks one', async () => {
@@ -202,4 +202,11 @@ test('“Send to another site” is a header action with its own page; Movements
   assert.match((await hq.get('/movements/new')).text, new RegExp(`href="/check-in/${id}/send"`));
   // Site B staff can't send HQ's vehicle.
   assert.equal((await siteB.get(`/check-in/${id}/send`)).status, 403);
+});
+
+test('each vehicle in the workshop has a highlighted Send button on the Check-in list', async () => {
+  const owner = await db('customers').where({ phone: '+254700000401' }).first('id');
+  await db('vehicles').insert({ reg_no: 'KZX 404A', customer_id: owner.id, type: 'truck' });
+  const id = await checkInAtHq('KZX 404A');
+  assert.match((await hq.get('/check-in')).text, new RegExp(`class="btn btn-send btn-sm text-nowrap" href="/check-in/${id}/send"`));
 });

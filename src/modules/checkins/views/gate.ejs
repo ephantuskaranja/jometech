@@ -6,17 +6,19 @@
   (then an admin, manager or supervisor confirms it was received).
 %>
 <%- include('partials/page-header', {
-  crumb: ['Workshop', 'Vehicles at the gate'],
+  crumb: ['Workshop', { label: 'Check-in', href: canManageTabs ? '/check-in' : '/check-in/gate' }, 'At the gate'],
   heading: 'Vehicles at the gate',
   sub: `At ${site.name}. Log every vehicle that comes in; for one leaving, check the vehicle and the person with it against what is shown here.`,
   // The lists come first; the form opens from the button (or by itself when it comes back with a problem).
-  actions: showForm ? [] : [{ label: 'Log a vehicle in', href: '/gate/vehicles?log=1', icon: 'box-arrow-in-down', primary: true }],
+  actions: showForm ? [] : [{ label: 'Log a vehicle in', href: '/check-in/gate?log=1', icon: 'box-arrow-in-down', primary: true }],
 }) %>
+
+<%- include('checkins/views/tabs', { tab: 'gate', hasOtherSites, canManage: canManageTabs, canGate: true, standalone: true }) %>
 
 <% if (showForm) { %>
 <%# ---------- Arriving: logged in here, checked in by the workshop ---------- %>
 <section class="card mb-4" id="arriving">
-  <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto"><i class="bi bi-box-arrow-in-down"></i> Vehicle arriving</h2><a class="btn btn-link btn-sm" href="/gate/vehicles">Close</a></div>
+  <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto"><i class="bi bi-box-arrow-in-down"></i> Vehicle arriving</h2><a class="btn btn-link btn-sm" href="/check-in/gate">Close</a></div>
   <form method="post" action="/gate/arrivals" novalidate class="card-body d-grid gap-3">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="jt-fields">

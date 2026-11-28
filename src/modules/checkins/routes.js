@@ -110,7 +110,10 @@ function needSite(req) {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) before checking a vehicle in.');
 }
 
-router.get('/check-in', view, async (req, res) => {
+// Check-in's tabs: At the gate (vehicles arriving, leaving, moving between sites) · In the workshop ·
+// Checked out · Movements. The gate sees only At the gate.
+router.get('/check-in', canAny(...VIEW_CUSTOMERS, 'checkin.gate'), async (req, res) => {
+  if (!VIEW_CUSTOMERS.some((p) => req.user.can(p))) return res.redirect('/check-in/gate');
   needSite(req);
   const tab = ['out', 'moves'].includes(req.query.show) ? req.query.show : 'in';
   res.render('checkins/views/index', {
@@ -124,6 +127,7 @@ router.get('/check-in', view, async (req, res) => {
     inCount: await checkins.countInWorkshop(req.site.id),
     vehicleLabel, daysIn: checkins.daysIn, purposeLabel: checkins.purposeLabel,
     canCheckIn: req.user.can('checkin.manage'),
+    canGateTab: req.user.can('checkin.gate') || req.user.can('checkin.manage'),
   });
 });
 
@@ -184,6 +188,8 @@ router.post('/check-in', manage, async (req, res) => {
     renderForm(res, { status: 422, values, rows, errors: { [err.field]: err.message }, existingId: err.existingId });
   }
 });
+
+router.get('/check-in/gate', canAny('checkin.gate', 'checkin.manage'), (req, res) => renderGate(req, res, { showForm: req.query.log === '1' }));
 
 router.get('/check-in/:id', view, async (req, res) => {
   const checkin = await loadCheckin(req);
@@ -327,6 +333,8 @@ async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, erro
     moves: canRelease ? await movements.atGate(req.site.id) : { leaving: [], arriving: [] }, // to and from the other sites
     waiting: await arrivals.waitingAt(req.site.id), // logged in, not yet checked in
     canCheckIn: req.user.can('checkin.manage'), canRelease,
+    // Check-in's tabs: the workshop ones for those who see check-ins, not for the gate.
+    canManageTabs: VIEW_CUSTOMERS.some((p) => req.user.can(p)), hasOtherSites: (await movements.otherSites(req.site.id)).length > 0,
     purposes: checkins.PURPOSES, warnHours: arrivals.WAIT_WARN_HOURS,
     values, errors,
     // Lists first; the arrival form opens from "Log a vehicle in", or when it comes back with a problem.
@@ -334,7 +342,8 @@ async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, erro
   });
 }
 
-router.get('/gate/vehicles', logsArrivals, (req, res) => renderGate(req, res, { showForm: req.query.log === '1' }));
+// The old address (bookmarks, the dashboard) leads to Check-in → At the gate.
+router.get('/gate/vehicles', logsArrivals, (req, res) => res.redirect(`/check-in/gate${req.query.log === '1' ? '?log=1' : ''}`));
 
 router.post('/gate/arrivals', logsArrivals, async (req, res) => {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
@@ -354,14 +363,14 @@ router.post('/gate/arrivals', logsArrivals, async (req, res) => {
     }
     await movements.gateIn(move.id, data.note, req);
     req.session.flash = { type: 'success', text: `${vehicleLabel(known)} is the vehicle sent from ${move.from_site_name} (${move.number}): logged in against that move. A supervisor confirms it was received.` };
-    return res.redirect('/gate/vehicles');
+    return res.redirect('/check-in/gate');
   }
   try {
     const a = await arrivals.logArrival({ siteId: req.site.id, vehicleText: data.vehicle_text, driverName: data.driver_name, driverPhone: data.driver_phone, purpose: data.purpose, note: data.note }, req);
     req.session.flash = a.existed
       ? { type: 'info', text: `${a.number}: already logged in, waiting for check-in.` }
       : { type: 'success', text: `Logged in as ${a.number}${a.vehicle ? ` (${vehicleLabel(a.vehicle)}, ${a.vehicle.customer_name})` : ''}. The workshop checks it in next.` };
-    res.redirect(req.body.back === 'checkin' ? `/check-in/new?arrival=${a.id}` : '/gate/vehicles');
+    res.redirect(req.body.back === 'checkin' ? `/check-in/new?arrival=${a.id}` : '/check-in/gate');
   } catch (err) {
     if (!err.field) throw err;
     renderGate(req, res, { status: 422, values, errors: { [err.field]: err.message } });
@@ -374,17 +383,17 @@ router.post('/gate/arrivals/:id/close', logsArrivals, async (req, res) => {
   if (!a) throw httpError(404, 'That arrival doesn’t exist.');
   if (reason.length < 3 || reason.length > 255) {
     req.session.flash = { type: 'danger', text: `Say why ${a.number} is being closed (3 to 255 characters).` };
-    return res.redirect('/gate/vehicles');
+    return res.redirect('/check-in/gate');
   }
   await arrivals.closeArrival(a.id, reason, req);
   req.session.flash = { type: 'success', text: `${a.number} closed: ${reason}` };
-  res.redirect(req.body.back === 'checkin' ? '/check-in' : '/gate/vehicles');
+  res.redirect(req.body.back === 'checkin' ? '/check-in' : '/check-in/gate');
 });
 
 router.post('/check-in/:id/clear', gate, async (req, res) => {
   const c = await release.clearAtGate(Number(req.params.id), req);
   req.session.flash = { type: 'success', text: `${vehicleLabel(c)} cleared out. Checked out ${fmt.dateTime(new Date())}.` };
-  res.redirect(req.body.back === 'checkin' ? `/check-in/${c.id}` : '/gate/vehicles');
+  res.redirect(req.body.back === 'checkin' ? `/check-in/${c.id}` : '/check-in/gate');
 });
 
 // The release note: an A4 page to print or save as PDF. Money only as "paid" or "on credit": the gate and driver see it.

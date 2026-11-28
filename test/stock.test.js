@@ -98,7 +98,7 @@ test('only an approved order can receive goods; those who can’t buy can’t re
   await store.get(`/purchase-orders/${id}/receive`).expect(409);
   await supervisor.get(`/purchase-orders/${id}/receive`).expect(403);
   await supervisor.get('/inventory').expect(403);
-  await supervisor.get('/goods-received').expect(403);
+  assert.equal((await supervisor.get('/goods-received').expect(302)).headers.location, '/goods-received/gate', 'a supervisor at the gate sees its tab, not the GRNs');
   await store.get('/inventory').expect(200);
   await store.get('/goods-received').expect(200);
 });

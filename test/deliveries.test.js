@@ -67,7 +67,7 @@ async function receive(orderId, deliveryId, qty, extra = {}) {
 test('the gate logs a truck in against the open order; stores receive it, once', async () => {
   const id = await approvedOrder(10);
   const order = await db('purchase_orders').where({ id }).first();
-  const page = (await gate.get('/gate/goods')).text;
+  const page = (await gate.get('/goods-received/gate?log=1')).text; // the delivery form, from "Log a delivery"
   assert.match(page, new RegExp(order.number), 'the open order is on the gate’s list');
   assert.doesNotMatch(page, /&#34;unit_price&#34;|40\.00/, 'no prices at the gate');
   assert.match((await manager.get(`/purchase-orders/${id}`)).text, /once the gate logs the delivery in/);
@@ -78,7 +78,7 @@ test('the gate logs a truck in against the open order; stores receive it, once',
   assert.equal(d.order_id, id);
   assert.equal(d.status, 'waiting');
   assert.equal(d.vehicle_reg, 'KCB 123A');
-  assert.match((await gate.get('/gate/goods')).text, /Deliveries logged today \(\d+\)[\s\S]*Test Dlv Supplies/);
+  assert.match((await gate.get('/goods-received/gate')).text, /Deliveries logged today \(\d+\)[\s\S]*Test Dlv Supplies/);
 
   assert.match((await store.get('/goods-received')).text, new RegExp(d.number), 'waiting for stores');
   assert.match((await store.get(`/purchase-orders/${id}`)).text, new RegExp(`/receive\\?delivery=${d.id}`));

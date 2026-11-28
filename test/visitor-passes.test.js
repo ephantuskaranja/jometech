@@ -203,3 +203,12 @@ test('“New gate pass” sits on the Gate passes list and lists who is on site 
   await postExpect(302, receptionHQ, `/visitors/${v.id}/send`, { to_site_id: siteB.id, purpose: 'Customer', host: 'Reception' });
   assert.doesNotMatch((await receptionHQ.get('/visitors/passes/new').expect(200)).text, new RegExp(`/visitors/${v.id}/send`));
 });
+
+test('each visitor on site has a highlighted Send button on the list; gone once sent', async () => {
+  const v = await visitorAtHQ('0700 000 608', 'Kamau Njenga');
+  const list = (await receptionHQ.get('/visitors').expect(200)).text;
+  assert.match(list, new RegExp(`class="btn btn-send btn-sm" href="/visitors/${v.id}/send"`));
+  assert.doesNotMatch((await gateHQ.get('/visitors').expect(200)).text, /btn-send/, 'not for the gate');
+  await postExpect(302, receptionHQ, `/visitors/${v.id}/send`, { to_site_id: siteB.id, purpose: 'Customer', host: 'Reception' });
+  assert.doesNotMatch((await receptionHQ.get('/visitors').expect(200)).text, new RegExp(`/visitors/${v.id}/send`));
+});

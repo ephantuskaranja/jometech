@@ -269,10 +269,10 @@ test('leaving the site: a gate pass the guard lets out; stores can cancel it bef
   res = await send({ leaves_site: '1', destination: 'Test customer yard, Athi River' });
   assert.equal(res.status, 302, res.text);
   const id = idOf(res.headers.location);
-  const gatePage = (await hqGate.get('/gate/goods')).text;
+  const gatePage = (await hqGate.get('/goods-received/gate')).text;
   assert.match(gatePage, /Materials going out[\s\S]*Test customer yard, Athi River[\s\S]*Test Gate Bracket/);
   assert.doesNotMatch(gatePage, /100\.00/, 'no costs at the gate');
-  assert.doesNotMatch((await hqGate.get('/gate/goods')).text, new RegExp(`/gate/issues/${stays.id}/out`));
+  assert.doesNotMatch((await hqGate.get('/goods-received/gate')).text, new RegExp(`/gate/issues/${stays.id}/out`));
   assert.match((await store.get(`/stores/issue/${id}`)).text, /Waiting at the gate/);
 
   assert.equal((await post(store, `/gate/issues/${id}/out`)).status, 403, 'stores don’t let it out');
@@ -291,7 +291,7 @@ test('leaving the site: a gate pass the guard lets out; stores can cancel it bef
   await post(store, `/stores/issue/${later}/cancel-pass`, { reason: 'Customer will collect next week' });
   const cancelled = await db('material_issues').where({ id: later }).first();
   assert.ok(cancelled.pass_cancelled_at);
-  assert.doesNotMatch((await hqGate.get('/gate/goods')).text, /Test outside fabricator/);
+  assert.doesNotMatch((await hqGate.get('/goods-received/gate')).text, /Test outside fabricator/);
   await post(hqGate, `/gate/issues/${later}/out`);
   assert.equal((await db('material_issues').where({ id: later }).first()).gate_out_at, null);
 });

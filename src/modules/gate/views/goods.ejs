@@ -7,10 +7,12 @@
   const unitOf = (l) => (l.size_key ? (Number(l.quantity) === 1 ? 'piece' : 'pieces') : l.unit);
 %>
 <%- include('partials/page-header', {
-  crumb: ['Gate', 'Goods at the gate'],
+  crumb: ['Stores', { label: 'Goods received', href: canReceipts ? '/goods-received' : '/goods-received/gate' }, 'At the gate'],
   heading: 'Goods at the gate',
   sub: `At ${site.name}. Check what is on the truck against the list, then tap the button.`,
+  actions: showForm ? [] : [{ label: 'Log a delivery', href: '/goods-received/gate?log=1', icon: 'box-arrow-in-left', primary: true }],
 }) %>
+<%- include('stock/views/receipt-tabs', { tab: 'gate', canGate: true, canReceipts, standalone: true }) %>
 
 <%# One transfer card: what it carries, and the guard's button. %>
 <% const card = (t) => { %>
@@ -49,20 +51,13 @@
   </section>
 <% } %>
 
-<%# A supplier's truck: logged against its open order, or as no order. Stores receive only what is logged here. %>
-<div class="row g-4 mb-4">
-  <div class="col-lg-6">
-    <section class="card" x-data="{ open: <%= Object.keys(errors).length > 0 %> }">
-      <div class="card-body d-grid gap-3">
-        <div class="d-flex align-items-center gap-3">
-          <i class="bi bi-truck fs-3 text-body-secondary" aria-hidden="true"></i>
-          <div class="me-auto">
-            <div class="fw-semibold">Supplier delivery</div>
-            <div class="small text-body-secondary">A truck with goods we bought. Log it in before it goes to the store.</div>
-          </div>
-        </div>
-        <button type="button" class="btn btn-primary btn-lg w-100" x-show="!open" @click="open = true"><i class="bi bi-box-arrow-in-left"></i>Log a delivery in</button>
-        <form method="post" action="/gate/deliveries" class="d-grid gap-3" novalidate x-show="open" x-cloak
+<%# A supplier's truck: logged against its open order, or as no order. Stores receive only what is logged here.
+    The form opens from "Log a delivery" in the header (or by itself when it comes back with a problem); the lists come first. %>
+<% if (showForm) { %>
+  <section class="card mb-4">
+    <div class="card-header d-flex align-items-center"><h2 class="h6 mb-0 me-auto"><i class="bi bi-truck"></i> Supplier delivery</h2><a class="btn btn-link btn-sm" href="/goods-received/gate">Close</a></div>
+    <div class="card-body">
+      <form method="post" action="/gate/deliveries" class="d-grid gap-3" novalidate
               x-data="gateDelivery(<%= JSON.stringify({ orders, value: values.order_id }) %>)">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <input type="hidden" name="order_id" :value="order_id">
@@ -91,34 +86,12 @@
           <%- include('partials/field', { name: 'note', label: 'Note', value: values.note, error: errors.note, placeholder: 'Optional, e.g. two sheets bent', attrs: 'maxlength="255"' }) %>
           <div class="d-flex gap-2">
             <button class="btn btn-primary btn-lg flex-grow-1" type="submit"><i class="bi bi-box-arrow-in-left"></i>Logged in at the gate</button>
-            <button class="btn btn-link" type="button" @click="open = false">Close</button>
+            <a class="btn btn-link" href="/goods-received/gate">Close</a>
           </div>
         </form>
-      </div>
-    </section>
-  </div>
-  <div class="col-lg-6">
-    <section class="card">
-      <div class="card-header"><h2 class="h6 mb-0">Deliveries logged today (<%= today.length %>)</h2></div>
-      <% if (!today.length) { %>
-        <div class="card-body small text-body-secondary">None yet today.</div>
-      <% } else { %>
-        <ul class="list-group list-group-flush">
-          <% today.forEach((d) => { %>
-            <li class="list-group-item d-flex align-items-start gap-2">
-              <div class="me-auto">
-                <div class="fw-semibold"><%= d.supplier %></div>
-                <div class="small text-body-secondary"><span class="font-monospace"><%= d.number %></span> · <%= d.order_number ?? 'No order' %> · <%= fmt.time(d.arrived_at) %></div>
-                <div class="small text-body-secondary"><%= [d.driver_name, d.vehicle_reg].filter(Boolean).join(', ') %></div>
-              </div>
-              <%- include('partials/pill', { text: statuses[d.status].label, tone: statuses[d.status].tone }) %>
-            </li>
-          <% }) %>
-        </ul>
-      <% } %>
-    </section>
-  </div>
-</div>
+    </div>
+  </section>
+<% } %>
 
 <%# Materials issued to a job that leave the site: the guard checks the load and lets it out. %>
 <% if (passes.length) { %>
@@ -172,4 +145,27 @@
     <% } %>
     <% arriving.forEach(card) %>
   </div>
+</div>
+
+<%# Supplier deliveries logged today. %>
+<div class="mt-4">
+<section class="card">
+  <div class="card-header"><h2 class="h6 mb-0">Deliveries logged today (<%= today.length %>)</h2></div>
+  <% if (!today.length) { %>
+    <div class="card-body small text-body-secondary">None yet today.</div>
+  <% } else { %>
+    <ul class="list-group list-group-flush">
+      <% today.forEach((d) => { %>
+        <li class="list-group-item d-flex align-items-start gap-2">
+          <div class="me-auto">
+            <div class="fw-semibold"><%= d.supplier %></div>
+            <div class="small text-body-secondary"><span class="font-monospace"><%= d.number %></span> · <%= d.order_number ?? 'No order' %> · <%= fmt.time(d.arrived_at) %></div>
+            <div class="small text-body-secondary"><%= [d.driver_name, d.vehicle_reg].filter(Boolean).join(', ') %></div>
+          </div>
+          <%- include('partials/pill', { text: statuses[d.status].label, tone: statuses[d.status].tone }) %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
 </div>

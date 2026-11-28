@@ -123,7 +123,7 @@ router.get('/movements/:id/print', manageOrGate, async (req, res) => {
 // ---------- the gates ----------
 
 /** Back to where the guard was: the gate page, or the check-in. */
-const gateBack = (req, move) => (req.body.back === 'checkin' ? `/check-in/${move.checkin_id}` : '/gate/vehicles');
+const gateBack = (req, move) => (req.body.back === 'checkin' ? `/check-in/${move.checkin_id}` : '/check-in/gate');
 
 router.post('/movements/:id/gate-out', gate, async (req, res) => {
   const move = await movements.getMovement(Number(req.params.id));
