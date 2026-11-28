@@ -12,7 +12,11 @@
           <span><i class="bi bi-geo-alt"></i><%= checkin.site_name %></span>
         </div>
       </div>
-      <a class="btn btn-outline-secondary" href="/check-in/<%= checkin.id %>/print" target="_blank" rel="noopener"><i class="bi bi-printer"></i>Receiving note</a>
+      <div class="d-flex flex-wrap gap-2">
+        <%# Moving it to another site: its own page, from here (sheet: the action in the header, not inside a card). %>
+        <% if (sendTo.length) { %><a class="btn btn-outline-primary" href="/check-in/<%= checkin.id %>/send"><i class="bi bi-arrow-left-right"></i>Send to another site</a><% } %>
+        <a class="btn btn-outline-secondary" href="/check-in/<%= checkin.id %>/print" target="_blank" rel="noopener"><i class="bi bi-printer"></i>Receiving note</a>
+      </div>
     </div>
   </div>
 </section>
@@ -180,16 +184,14 @@
         </div>
       </section>
     <% } else if (canCheckOut) { %>
-      <% const sv = moveForm?.form === 'send' ? moveForm.values : {}; const se = moveForm?.form === 'send' ? moveForm.errors : {}; %>
-      <section class="card" x-data="{ open: '<%= moveForm?.form === 'send' || locals.openSend ? 'send' : '' %>' }">
+      <section class="card">
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <div class="me-auto">
               <div class="fw-semibold">In the workshop<%= daysIn === 'Today' ? ' since today' : ` for ${daysIn}` %></div>
               <div class="small text-body-secondary">Arrived <%= fmt.dateTime(checkin.checked_in_at) %></div>
             </div>
-            <div class="d-flex gap-2" x-show="!open">
-              <% if (sendTo.length) { %><button type="button" class="btn btn-outline-secondary" @click="open = 'send'"><i class="bi bi-arrow-left-right"></i>Send to another site</button><% } %>
+            <div class="d-flex gap-2">
               <% if (releaseList.ok || checkin.release_allowed_at) { %>
                 <a class="btn btn-outline-primary" href="/check-in/<%= checkin.id %>/release"><i class="bi bi-box-arrow-right"></i>Release vehicle</a>
               <% } else { %>
@@ -197,31 +199,6 @@
               <% } %>
             </div>
           </div>
-          <% if (sendTo.length) { %>
-            <div x-show="open === 'send'" x-cloak>
-              <form method="post" action="/check-in/<%= checkin.id %>/send" class="d-grid gap-3 mt-3" novalidate>
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <% if (sendTo.length === 1) { %>
-                  <input type="hidden" name="to_site_id" value="<%= sendTo[0].id %>">
-                  <p class="mb-0">Send to <strong><%= sendTo[0].name %></strong>. It stays on this site’s list until <%= sendTo[0].name %> receives it.</p>
-                  <% if (se.to_site_id) { %><div class="jt-error-text"><%= se.to_site_id %></div><% } %>
-                <% } else { %>
-                  <%- include('partials/field', { name: 'to_site_id', label: 'Send to', type: 'select', options: sendTo.map((s) => ({ value: s.id, label: s.name })), value: sv.to_site_id, error: se.to_site_id, blank: 'Choose the site', required: true }) %>
-                <% } %>
-                <div class="jt-fields">
-                  <%- include('partials/field', { name: 'driver_name', label: 'Driver', value: sv.driver_name, error: se.driver_name, required: true, autocomplete: 'off' }) %>
-                  <%- include('partials/field', { name: 'driver_phone', label: 'Driver’s phone', type: 'tel', value: sv.driver_phone, error: se.driver_phone, placeholder: '0712 345 678' }) %>
-                  <%- include('partials/field', { name: 'people', label: 'People in the vehicle', value: sv.people ?? '1', error: se.people, inputmode: 'numeric', hint: 'Driver included' }) %>
-                  <%- include('partials/field', { name: 'odometer_out', label: 'Odometer now', type: 'number', value: sv.odometer_out, error: se.odometer_out, inputmode: 'numeric', hint: 'Optional, km' }) %>
-                  <%- include('partials/field', { name: 'notes', label: 'Notes', value: sv.notes, error: se.notes, hint: 'Optional, e.g. why it is moving' }) %>
-                </div>
-                <div class="d-flex gap-2">
-                  <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i>Send it</button>
-                  <button class="btn btn-link" type="button" @click="open = ''">Cancel</button>
-                </div>
-              </form>
-            </div>
-          <% } %>
         </div>
       </section>
     <% } %>

@@ -1,9 +1,16 @@
 <%# One visitor: details, the three stages and who did each, and the history. %>
 <% const st = statuses[visitor.status]; %>
+<%
+  // Sending them to the other site is the page's action, in the header: a new pass, or printing the one they have.
+  const openPass = passes.out && passes.out.status === 'open' ? passes.out : null;
+  const actions = openPass ? [{ label: 'Print gate pass', href: `/visitors/passes/${openPass.id}/print`, icon: 'printer' }]
+    : canSend && visitor.status !== 'cleared' ? [{ label: 'Send to another site', href: `/visitors/${visitor.id}/send`, icon: 'arrow-left-right', primary: true }] : [];
+%>
 <%- include('partials/page-header', {
   crumb: [{ label: 'Visitors', href: '/visitors' }, visitor.number],
   heading: visitor.name,
   sub: visitor.company ?? '',
+  actions,
 }) %>
 
 <div class="row g-4">
@@ -28,12 +35,6 @@
           <% if (booking) { %><div><dt>Booked</dt><dd><a href="/visitors/expected/<%= booking.id %>"><%= booking.number %></a><span class="d-block small text-body-secondary">by <%= booking.booked_by_name ?? '—' %>, for <%= fmt.date(booking.expected_on) %></span></dd></div><% } %>
           <% if (visitor.notes) { %><div><dt>Notes</dt><dd style="white-space: pre-line"><%= visitor.notes %></dd></div><% } %>
         </dl>
-        <% if (canSend && visitor.status !== 'cleared' && !(passes.out && passes.out.status === 'open')) { %>
-          <div class="mt-3"><a class="btn btn-outline-primary" href="/visitors/<%= visitor.id %>/send"><i class="bi bi-arrow-left-right"></i>Send to another site</a>
-            <span class="d-block small text-body-secondary mt-1">Issues a customer gate pass: the other site sees them coming.</span></div>
-        <% } else if (passes.out && passes.out.status === 'open') { %>
-          <div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-outline-secondary" href="/visitors/passes/<%= passes.out.id %>/print"><i class="bi bi-printer"></i>Print gate pass</a></div>
-        <% } %>
       </div>
     </section>
   </div>

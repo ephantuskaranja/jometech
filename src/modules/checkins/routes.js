@@ -225,8 +225,6 @@ router.get('/check-in/:id', view, async (req, res) => {
     canGateOut: Boolean(move) && !move.gate_out_at && req.user.can('checkin.gate') && worksAt(req, move.from_site_id),
     canGateIn: Boolean(move?.gate_out_at) && !move.gate_in_at && req.user.can('checkin.gate') && worksAt(req, move.to_site_id),
     moveForm,
-    // From Movements → Send a vehicle: the send form opens straight away.
-    openSend: req.query.send === '1',
     jobs: visitJobs, jobStatuses: JOB_STATUSES,
     // One running job per vehicle: "New job" only when none is open or in progress.
     canStartJob: req.user.can('jobs.manage') && checkin.status === 'in_workshop' && !visitJobs.some((j) => ['open', 'in_progress'].includes(j.status)),

@@ -2,7 +2,7 @@
 <%- include('partials/page-header', {
   crumb: [{ label: 'Check-in', href: '/check-in' }, { label: 'Movements', href: '/check-in?show=moves' }, 'Send a vehicle'],
   heading: 'Send a vehicle to another site',
-  sub: others.length ? `Choose the vehicle. Its check-in opens with the send form: where to (${others.map((s) => s.name).join(', ')}), the driver and the people in it.` : 'There is no other site to send to.',
+  sub: others.length ? `Choose the vehicle. Then the send form: where to (${others.map((s) => s.name).join(', ')}), the driver and the people in it.` : 'There is no other site to send to.',
   sort: 'Latest checked in first',
 }) %>
 
@@ -18,7 +18,7 @@
             <div class="fw-semibold"><%= [c.make, c.model].filter(Boolean).join(' ') || 'Vehicle' %></div>
             <div class="small text-body-secondary"><%= c.customer_name %> · <span class="font-monospace"><%= c.number %></span> · in since <%= fmt.date(c.checked_in_at) %></div>
           </div>
-          <a class="btn btn-primary btn-sm" href="/check-in/<%= c.id %>?send=1"><i class="bi bi-send"></i>Send</a>
+          <a class="btn btn-primary btn-sm" href="/check-in/<%= c.id %>/send"><i class="bi bi-send"></i>Send</a>
         </li>
       <% }) %>
     </ul>

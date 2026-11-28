@@ -40,9 +40,9 @@ test('sending needs a driver, and a different site', async () => {
   const id = await checkInAtHq('KZX 401A');
   let res = await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: '' });
   assert.equal(res.status, 302);
-  assert.match((await hq.get(`/check-in/${id}`)).text, /Who is driving it\?/);
+  assert.match((await hq.get(`/check-in/${id}/send`)).text, /Who is driving it\?/);
   res = await post(hq, `/check-in/${id}/send`, { to_site_id: hqSite.id, driver_name: 'Juma Otieno' });
-  assert.match((await hq.get(`/check-in/${id}`)).text, /Choose the site it is going to/);
+  assert.match((await hq.get(`/check-in/${id}/send`)).text, /Choose the site it is going to/);
   assert.equal(await openMove(id), undefined);
 });
 
@@ -182,14 +182,24 @@ test('Site B’s gate typing in a vehicle sent from HQ logs it in against the mo
   assert.match((await siteB.get('/gate/vehicles')).text, new RegExp(`logged in against that move`));
 });
 
-test('“Send a vehicle” sits on the Movements list: pick a vehicle in the workshop, its send form opens', async () => {
-  const id = await checkInAtHq('KZX 401A').catch(() => null)
-    ?? (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A'), status: 'in_workshop' }).first('id'))?.id;
-  const moves = (await hq.get('/check-in?show=moves')).text;
-  assert.match(moves, /href="\/movements\/new"/);
-  const pick = (await hq.get('/movements/new')).text;
-  const anyId = /href="\/check-in\/(\d+)\?send=1"/.exec(pick)?.[1];
-  assert.ok(anyId, 'a vehicle in the workshop is offered');
-  assert.match((await hq.get(`/check-in/${anyId}?send=1`)).text, /x-data="\{ open: 'send' \}"/, 'the send form is open');
-  assert.ok(id === null || id > 0);
+test('“Send to another site” is a header action with its own page; Movements → “Send a vehicle” picks one', async () => {
+  const owner = await db('customers').where({ phone: '+254700000401' }).first('id');
+  await db('vehicles').insert({ reg_no: 'KZX 403A', customer_id: owner.id, type: 'truck' });
+  const id = await checkInAtHq('KZX 403A');
+  // The check-in page: the action in its header, opening the send page (no form inside the page's cards).
+  const page = (await hq.get(`/check-in/${id}`)).text;
+  assert.match(page, new RegExp(`href="/check-in/${id}/send"[^>]*>[\\s\\S]{0,80}Send to another site`));
+  assert.doesNotMatch(page, /name="driver_name"/, 'the form is on its own page');
+  const form = (await hq.get(`/check-in/${id}/send`)).text;
+  assert.match(form, /Send KZX 403A to another site/);
+  assert.match(form, /name="driver_name"/);
+  // A problem brings the send page back with it.
+  const res = await post(hq, `/check-in/${id}/send`, { to_site_id: bSite.id, driver_name: '' });
+  assert.equal(res.headers.location, `/check-in/${id}/send`);
+  assert.match((await hq.get(`/check-in/${id}/send`)).text, /Who is driving it\?/);
+  // Movements → Send a vehicle lists it, linking to that page.
+  assert.match((await hq.get('/check-in?show=moves')).text, /href="\/movements\/new"/);
+  assert.match((await hq.get('/movements/new')).text, new RegExp(`href="/check-in/${id}/send"`));
+  // Site B staff can't send HQ's vehicle.
+  assert.equal((await siteB.get(`/check-in/${id}/send`)).status, 403);
 });

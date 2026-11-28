@@ -40,8 +40,27 @@ const receiveSchema = z.object({
 /** Validation problems go back to the check-in page, which reopens the form with them. */
 function backWithErrors(req, res, checkinId, form, values, errors) {
   req.session.moveForm = { checkinId, form, values, errors };
-  res.redirect(`/check-in/${checkinId}`);
+  res.redirect(form === 'send' ? `/check-in/${checkinId}/send` : `/check-in/${checkinId}`);
 }
+
+// "Send to another site" (the check-in page's header): its own page, with the form.
+router.get('/check-in/:id/send', manage, async (req, res) => {
+  const checkin = await getCheckin(Number(req.params.id));
+  if (!checkin) throw httpError(404, 'That check-in doesn’t exist.');
+  if (!worksAt(req, checkin.site_id)) throw httpError(403, `Only staff at ${checkin.site_name} can send this vehicle.`);
+  const sendTo = await movements.otherSites(checkin.site_id);
+  const why = checkin.status !== 'in_workshop' ? `${checkin.number} is no longer in the workshop.`
+    : await movements.openMovement(checkin.id) ? `${vehicleLabel(checkin)} is already on its way to another site.`
+    : !sendTo.length ? 'There is no other site to send it to.' : null;
+  if (why) {
+    req.session.flash = { type: 'warning', text: why };
+    return res.redirect(`/check-in/${checkin.id}`);
+  }
+  // A form that came back with problems opens again with them.
+  const back = req.session.moveForm?.checkinId === checkin.id && req.session.moveForm.form === 'send' ? req.session.moveForm : null;
+  delete req.session.moveForm;
+  res.render('movements/views/send', { title: `Send ${vehicleLabel(checkin)}`, checkin, sendTo, vehicleLabel, values: back?.values ?? {}, errors: back?.errors ?? {} });
+});
 
 router.post('/check-in/:id/send', manage, async (req, res) => {
   const checkin = await getCheckin(Number(req.params.id));
