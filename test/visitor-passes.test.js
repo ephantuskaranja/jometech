@@ -189,3 +189,17 @@ test('typed in as a walk-in with the same phone, they are matched to their pass'
   assert.equal(visitB.pass_no, pass.number);
   assert.match((await gateB.get('/visitors').expect(200)).text, new RegExp(`Matched to gate pass ${pass.number}`));
 });
+
+test('“New gate pass” sits on the Gate passes list and lists who is on site to send', async () => {
+  const v = await visitorAtHQ('0700 000 607', 'Wanjiku Mwangi');
+  const list = (await receptionHQ.get('/visitors/passes').expect(200)).text;
+  assert.match(list, /href="\/visitors\/passes\/new"/);
+  assert.doesNotMatch((await gateHQ.get('/visitors/passes').expect(200)).text, /href="\/visitors\/passes\/new"/, 'the gate doesn’t issue passes');
+  await gateHQ.get('/visitors/passes/new').expect(403);
+  const pick = (await receptionHQ.get('/visitors/passes/new').expect(200)).text;
+  assert.match(pick, /Wanjiku Mwangi/);
+  assert.match(pick, new RegExp(`href="/visitors/${v.id}/send"`));
+  // Once sent, they are no longer offered.
+  await postExpect(302, receptionHQ, `/visitors/${v.id}/send`, { to_site_id: siteB.id, purpose: 'Customer', host: 'Reception' });
+  assert.doesNotMatch((await receptionHQ.get('/visitors/passes/new').expect(200)).text, new RegExp(`/visitors/${v.id}/send`));
+});

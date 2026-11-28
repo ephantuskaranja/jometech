@@ -47,7 +47,7 @@
             <% }) %>
           </div>
         <% } else { %>
-          <p class="small mb-0">No vehicle is waiting at the gate. <a href="/gate/vehicles#arriving">Log it in</a> first, or say why the gate didn’t.</p>
+          <p class="small mb-0">No vehicle is waiting at the gate. <a href="/gate/vehicles?log=1">Log it in</a> first, or say why the gate didn’t.</p>
         <% } %>
         <%- include('partials/field', { name: 'no_arrival_reason', label: 'Not logged at the gate? Say why', value: values.no_arrival_reason, error: errors.arrival_id,
               placeholder: 'e.g. Gate not manned on Sunday', hint: 'Only when the gate didn’t log it in. The check-in is marked “Not logged at the gate”.' }) %>

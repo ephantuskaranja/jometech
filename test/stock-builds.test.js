@@ -54,7 +54,7 @@ test('a stock tanker is registered as its build starts; its job is a stock build
 
   // The new-job form offers to open a stock build.
   assert.ok((await supervisor.get('/jobs/new')).text.includes(`/jobs/new?customer_id=${stock.id}"`));
-  const job = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'trailer', trailer_type: 'semi_trailer', vehicle_description: '40ft fuel tanker, 3 axle',
+  const job = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'tanker', vehicle_description: '40,000 L fuel, 3 axle',
     line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft fuel tanker'] });
   assert.equal(job.status, 302, job.text.slice(0, 500));
   const jobId = Number(job.headers.location.split('/')[2]);
@@ -136,29 +136,30 @@ test('the Stock value report lists stock builds waiting for a buyer; selling one
   assert.doesNotMatch((await supervisor.get('/jobs?show=stock')).text, new RegExp(sold.number));
 });
 
-test('a stock build made from scratch needs no vehicle: just what is being built', async () => {
-  // The form, opened as a stock build, asks what is being built; the chassis is optional.
+test('a stock body needs no vehicle: what it is and its specification', async () => {
+  // The form, opened as a stock build, asks what it is (Jome-Tech's four kinds) and its specification.
   const form = (await supervisor.get(`/jobs/new?customer_id=${stock.id}`)).text;
-  assert.match(form, /What is being built/);
-  assert.match(form, /A trailer or tanker/);
-  assert.match(form, /Semi-trailer/);
-  assert.doesNotMatch(form, /On a chassis here/);
-  assert.match(form, /A body only/);
+  assert.match(form, /Specification/);
+  for (const kind of ['Body', 'Tanker', 'Semi-trailer', 'Pulling']) assert.match(form, new RegExp(`jt-choice-label">${kind}<`));
+  assert.doesNotMatch(form, /On a chassis here|A trailer or tanker/);
 
-  let res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build trailer'] });
-  assert.equal(res.status, 422, 'says what is being built');
-  assert.match(res.text, /Say what is being built/);
+  let res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_description: 'Tipper', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build tipper'] });
+  assert.equal(res.status, 422, 'what it is must be chosen');
+  assert.match(res.text, /Choose what it is/);
+  res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'body', vehicle_description: '', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build tipper'] });
+  assert.equal(res.status, 422, 'and its specification');
+  assert.match(res.text, /Give its specification/);
 
-  res = await post(supervisor, '/jobs', { customer_id: stock.id, vehicle_id: '', vehicle_description: '40ft flatbed trailer', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft flatbed trailer'] });
+  res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'body', vehicle_description: 'Tipper for an FRR', line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build tipper body'] });
   assert.equal(res.status, 302, res.text.slice(0, 400));
   const id = Number(res.headers.location.split('/')[2]);
   const job = await db('jobs').where({ id }).first();
   assert.equal(job.vehicle_id, null);
-  assert.equal(job.vehicle_description, '40ft flatbed trailer');
+  assert.equal(job.vehicle_description, 'Body: Tipper for an FRR');
   assert.equal(job.stock_build, 1);
   assert.ok(job.materials_allowed_at);
   assert.match((await supervisor.get(`/jobs/${id}`)).text, /Built from scratch, no chassis/);
-  assert.match((await admin.get('/reports/stock-value')).text, /40ft flatbed trailer/);
+  assert.match((await admin.get('/reports/stock-value')).text, /Body: Tipper for an FRR/);
 
   // A customer's job still needs a checked-in vehicle.
   const [ownerId] = await db('customers').insert({ number: 'CUS-T615', name: 'Kariuki Movers', phone: '+254700000615', category: 'company' });
@@ -171,7 +172,7 @@ test('a stock build made from scratch needs no vehicle: just what is being built
 });
 
 test('stock builds are numbered SB-…; a stock trailer is registered and checked in as its build starts', async () => {
-  const res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'trailer', vehicle_description: '40ft skeletal trailer, 3 axle',
+  const res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'pulling', vehicle_description: '4 axles, tipper pulling',
     line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 40ft skeletal trailer'] });
   assert.equal(res.status, 302, res.text.slice(0, 400));
   const job = await db('jobs').where({ id: Number(res.headers.location.split('/')[2]) }).first();
@@ -194,7 +195,7 @@ test('stock builds are numbered SB-…; a stock trailer is registered and checke
 });
 
 test('a stock body sold to be fitted to the buyer’s checked-in truck goes with that truck', async () => {
-  let res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'body', vehicle_description: '20ft cargo body',
+  let res = await post(supervisor, '/jobs', { customer_id: stock.id, build_kind: 'body', vehicle_description: 'Tipper for an FVZ',
     line_quantity: ['1'], line_unit: ['Unit'], line_description: ['Build 20ft cargo body'] });
   assert.equal(res.status, 302, res.text.slice(0, 400));
   const jobId = Number(res.headers.location.split('/')[2]);

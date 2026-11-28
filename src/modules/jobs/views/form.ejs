@@ -41,18 +41,13 @@
         <% if (!job && locals.stockId && String(values.customer_id) !== String(stockId)) { %><a class="small" href="/jobs/new?customer_id=<%= stockId %>"><i class="bi bi-box"></i> No customer yet? Open it as a stock build</a><% } %>
       <% } %>
       <% if (stock && !job) { %>
-        <%# Stock build: Jome-Tech builds the chassis itself. A trailer or tanker is registered as its build starts; a body only has no vehicle. %>
-        <div x-data="{ kind: <%= JSON.stringify(values.build_kind || 'trailer') %> }" class="d-grid gap-3">
-          <%- include('partials/choices', { name: 'build_kind', label: 'What is it?', required: true, columns: 2, model: 'kind', value: values.build_kind || 'trailer', options: [
-                { value: 'trailer', label: 'A trailer or tanker', hint: 'Chassis built here. Registered from the start: a temporary tag until its chassis number is stamped' },
-                { value: 'body', label: 'A body only', hint: 'To fit on a buyer’s truck. No vehicle until it is sold' }] }) %>
-          <div x-show="kind === 'trailer'" x-cloak>
-            <%- include('partials/choices', { name: 'trailer_type', label: 'Registered as', columns: 2, value: values.trailer_type || 'trailer', options: [
-                  { value: 'trailer', label: 'Trailer', hint: 'Full trailer, on its own axles front and back' },
-                  { value: 'semi_trailer', label: 'Semi-trailer', hint: 'Rests on the prime mover’s fifth wheel (most tankers)' }] }) %>
-          </div>
-          <%- include('partials/field', { name: 'vehicle_description', label: 'What is being built', value: values.vehicle_description, error: errors.vehicle_description, required: true,
-                placeholder: 'e.g. 40ft fuel tanker, 3 axle; skeletal trailer; 20ft cargo body', hint: 'Shown on the job, the job card and Reports → Stock value.' }) %>
+        <%# Stock build: what it is, as Jome-Tech names them (jobs STOCK_KINDS), then its specification. Tanker, semi-trailer and pulling are registered from the start; a body has no vehicle until sold. %>
+        <div x-data="{ kind: <%= JSON.stringify(values.build_kind || '') %>, kinds: <%= JSON.stringify(Object.fromEntries(Object.entries(stockKinds).map(([k, v]) => [k, v.example]))) %> }" class="d-grid gap-3">
+          <%- include('partials/choices', { name: 'build_kind', label: 'What is it?', required: true, columns: 4, model: 'kind', value: values.build_kind, error: errors.build_kind,
+                options: Object.entries(stockKinds).map(([value, k]) => ({ value, label: k.label, hint: k.hint })) }) %>
+          <%- include('partials/field', { name: 'vehicle_description', label: 'Specification', value: values.vehicle_description, error: errors.vehicle_description, required: true,
+                placeholder: 'e.g. Tipper for an FVZ; 40,000 L fuel, 3 axle; 4 axles', hint: 'Shown with what it is on the job, the job card and Reports → Stock value, e.g. “Tanker: 40,000 L fuel, 3 axle”.',
+                attrs: `:placeholder="kind ? 'e.g. ' + kinds[kind] : 'Choose what it is first'"` }) %>
         </div>
       <% } else { %>
       <div class="jt-fields">

@@ -129,6 +129,18 @@ router.get('/visitors/passes', see, async (req, res) => {
     title: 'Customer gate passes', tab, q, list, counts,
     stages: passes.STAGES, stage: passes.stage,
     canSignIn: req.user.can('visitors.gate') || req.user.can('visitors.receive'),
+    canIssue: req.user.can('visitors.book'),
+  });
+});
+
+// Gate passes → "New gate pass": pick who is on site here; their Send to another site form opens.
+router.get('/visitors/passes/new', issue, async (req, res) => {
+  needSite(req);
+  const onSite = await visitors.onSite(req.site.id);
+  const going = await passes.openFor(onSite.map((v) => v.id));
+  res.render('visitors/views/pass-pick', {
+    title: 'New gate pass', others: await otherSites(req.site.id),
+    list: onSite.filter((v) => !going.has(v.id)).reverse(), // newest first
   });
 });
 

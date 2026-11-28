@@ -5,7 +5,7 @@ import { check, httpError, optionalPhone, optionalReading, optionalText } from '
 import { vehicleLabel } from '../../core/vehicle-format.js';
 import { config } from '../../config.js';
 import { staffSignatures } from '../../core/staff-signatures.js';
-import { getCheckin } from '../checkins/service.js';
+import { getCheckin, listCheckins } from '../checkins/service.js';
 import * as movements from './service.js';
 
 // Sending a checked-in vehicle to another site, and receiving it there. The forms live on the
@@ -78,6 +78,14 @@ router.post('/movements/:id/cancel', manage, async (req, res) => {
   await movements.cancelMovement(move.id, req);
   req.session.flash = { type: 'warning', text: `Move ${move.number} cancelled. The vehicle stays where it was.` };
   res.redirect(`/check-in/${move.checkin_id}`);
+});
+
+// Check-in → Movements → "Send a vehicle": pick one in the workshop here; its check-in opens with the send form.
+router.get('/movements/new', manage, async (req, res) => {
+  if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
+  const others = await movements.otherSites(req.site.id);
+  const list = (await listCheckins(req.site.id, 'on_site')).filter((c) => c.status === 'in_workshop' && !c.moving_to);
+  res.render('movements/views/pick', { title: 'Send a vehicle to another site', list, others, vehicleLabel });
 });
 
 // The printed vehicle gate pass: either site's staff or gate, while it moves or afterwards.

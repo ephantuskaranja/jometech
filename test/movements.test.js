@@ -167,14 +167,29 @@ test('Site B’s gate typing in a vehicle sent from HQ logs it in against the mo
   let res = await typeIn();
   assert.equal(res.status, 422);
   assert.match(res.text, /hasn’t cleared it out yet/);
-  // The move comes before the arrival form on the gate page.
+  // The gate page opens on its lists, the move among them; the arrival form opens from "Log a vehicle in".
   await post(hq, `/movements/${move.id}/gate-out`);
   const page = (await siteB.get('/gate/vehicles')).text;
-  assert.ok(page.indexOf('To and from other sites') < page.indexOf('Vehicle arriving'));
+  assert.match(page, /To and from other sites/);
+  assert.doesNotMatch(page, /Vehicle arriving/);
+  assert.match(page, /href="\/gate\/vehicles\?log=1"/);
+  assert.match((await siteB.get('/gate/vehicles?log=1')).text, /Vehicle arriving/);
 
   res = await typeIn();
   assert.equal(res.status, 302);
   assert.ok((await openMove(id)).gate_in_at, 'logged in against the move');
   assert.equal(await db('vehicle_arrivals').count({ n: '*' }).first().then((r) => Number(r.n)), arrivalsBefore, 'no new arrival');
   assert.match((await siteB.get('/gate/vehicles')).text, new RegExp(`logged in against that move`));
+});
+
+test('“Send a vehicle” sits on the Movements list: pick a vehicle in the workshop, its send form opens', async () => {
+  const id = await checkInAtHq('KZX 401A').catch(() => null)
+    ?? (await db('checkins').where({ vehicle_id: await vehicleId('KZX 401A'), status: 'in_workshop' }).first('id'))?.id;
+  const moves = (await hq.get('/check-in?show=moves')).text;
+  assert.match(moves, /href="\/movements\/new"/);
+  const pick = (await hq.get('/movements/new')).text;
+  const anyId = /href="\/check-in\/(\d+)\?send=1"/.exec(pick)?.[1];
+  assert.ok(anyId, 'a vehicle in the workshop is offered');
+  assert.match((await hq.get(`/check-in/${anyId}?send=1`)).text, /x-data="\{ open: 'send' \}"/, 'the send form is open');
+  assert.ok(id === null || id > 0);
 });

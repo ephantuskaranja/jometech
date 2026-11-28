@@ -38,10 +38,8 @@ const jobSchema = z.object({
   customer_id: optionalId().refine((v) => v !== null, 'Choose the customer'),
   vehicle_id: optionalId(),
   vehicle_description: optionalText(150),
-  // A stock build: a trailer or tanker (chassis built here; registered from the start, as a trailer or a
-  // semi-trailer), or a body only.
-  build_kind: z.enum(['trailer', 'body']).optional().catch(undefined),
-  trailer_type: z.enum(['trailer', 'semi_trailer']).optional().catch(undefined),
+  // A stock build: body, tanker, semi-trailer or pulling (jobs.STOCK_KINDS).
+  build_kind: z.enum(Object.keys(jobs.STOCK_KINDS)).optional().catch(undefined),
   supervisor_id: optionalId(),
   responsible_name: optionalText(100),
   due_on: z.string().trim().optional().refine((v) => !v || isDay(v), 'Check the date').transform((v) => v || null),
@@ -69,7 +67,7 @@ function readLines(body) {
   return { rows, lines, error };
 }
 
-const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', build_kind: 'trailer', trailer_type: 'trailer', supervisor_id: '', responsible_name: '', due_on: '', instructions: '' });
+const blank = () => ({ job_type_id: '', customer_id: '', vehicle_id: '', vehicle_description: '', build_kind: '', supervisor_id: '', responsible_name: '', due_on: '', instructions: '' });
 const blankRow = () => ({ quantity: '1', unit: 'Unit', description: '' });
 const worksAt = (req, siteId) => req.user.sites.some((s) => s.id === siteId);
 
@@ -143,6 +141,7 @@ async function renderForm(req, res, { status = 200, job = null, values, rows = [
     canCheckIn: req.user.can('checkin.manage'),
     categories: customers.CATEGORIES, // "Add new customer" window
     stockId: (await customers.stockCustomer())?.id ?? null,
+    stockKinds: jobs.STOCK_KINDS,
   });
 }
 

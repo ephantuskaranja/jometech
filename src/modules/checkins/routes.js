@@ -225,6 +225,8 @@ router.get('/check-in/:id', view, async (req, res) => {
     canGateOut: Boolean(move) && !move.gate_out_at && req.user.can('checkin.gate') && worksAt(req, move.from_site_id),
     canGateIn: Boolean(move?.gate_out_at) && !move.gate_in_at && req.user.can('checkin.gate') && worksAt(req, move.to_site_id),
     moveForm,
+    // From Movements → Send a vehicle: the send form opens straight away.
+    openSend: req.query.send === '1',
     jobs: visitJobs, jobStatuses: JOB_STATUSES,
     // One running job per vehicle: "New job" only when none is open or in progress.
     canStartJob: req.user.can('jobs.manage') && checkin.status === 'in_workshop' && !visitJobs.some((j) => ['open', 'in_progress'].includes(j.status)),
@@ -318,7 +320,7 @@ const arrivalSchema = z.object({
   note: optionalText(255),
 });
 
-async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, errors = {} } = {}) {
+async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, errors = {}, showForm = false } = {}) {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');
   const canRelease = req.user.can('checkin.gate');
   res.status(status).render('checkins/views/gate', {
@@ -329,10 +331,12 @@ async function renderGate(req, res, { status = 200, values = ARRIVAL_BLANK, erro
     canCheckIn: req.user.can('checkin.manage'), canRelease,
     purposes: checkins.PURPOSES, warnHours: arrivals.WAIT_WARN_HOURS,
     values, errors,
+    // Lists first; the arrival form opens from "Log a vehicle in", or when it comes back with a problem.
+    showForm: showForm || status !== 200,
   });
 }
 
-router.get('/gate/vehicles', logsArrivals, (req, res) => renderGate(req, res));
+router.get('/gate/vehicles', logsArrivals, (req, res) => renderGate(req, res, { showForm: req.query.log === '1' }));
 
 router.post('/gate/arrivals', logsArrivals, async (req, res) => {
   if (!req.site) throw httpError(400, 'Choose the site you’re working at (top right) first.');

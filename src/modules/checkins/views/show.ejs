@@ -181,7 +181,7 @@
       </section>
     <% } else if (canCheckOut) { %>
       <% const sv = moveForm?.form === 'send' ? moveForm.values : {}; const se = moveForm?.form === 'send' ? moveForm.errors : {}; %>
-      <section class="card" x-data="{ open: '<%= moveForm?.form === 'send' ? 'send' : '' %>' }">
+      <section class="card" x-data="{ open: '<%= moveForm?.form === 'send' || locals.openSend ? 'send' : '' %>' }">
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <div class="me-auto">

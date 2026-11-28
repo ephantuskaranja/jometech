@@ -13,7 +13,9 @@
   heading: headings[tab][0],
   sub: headings[tab][1],
   sort: { in: 'Latest checked in first', out: 'Latest checked out first', moves: 'Newest first' }[tab],
-  actions: canCheckIn ? [{ label: 'Check a vehicle in', href: '/check-in/new', icon: 'box-arrow-in-right', primary: true }] : [],
+  // On Movements: start a move from here (pick a vehicle in the workshop); elsewhere: check a vehicle in.
+  actions: !canCheckIn ? [] : tab === 'moves' && hasOtherSites ? [{ label: 'Send a vehicle', href: '/movements/new', icon: 'arrow-left-right', primary: true }]
+    : [{ label: 'Check a vehicle in', href: '/check-in/new', icon: 'box-arrow-in-right', primary: true }],
 }) %>
 
 <%- include('checkins/views/arrivals-waiting', { waiting: atGate, back: 'checkin' }) %>

@@ -1,0 +1,27 @@
+<%# Gate passes → "New gate pass": who is on site here and can be sent; each opens their Send to another site form. %>
+<%- include('partials/page-header', {
+  crumb: [{ label: 'Visitors', href: '/visitors' }, { label: 'Gate passes', href: '/visitors/passes' }, 'New'],
+  heading: 'New gate pass',
+  sub: others.length ? `Who is going? Only visitors signed in at ${site.name} and not yet cleared out. Not signed in yet? Sign them in first.` : 'There is no other site to send anyone to.',
+  sort: 'Latest signed in first',
+  actions: [{ label: 'Sign a visitor in', href: '/visitors/new', icon: 'person-plus' }],
+}) %>
+
+<section class="card">
+  <% if (!list.length || !others.length) { %>
+    <%- include('partials/empty', { icon: 'person-badge', heading: 'Nobody to send', text: 'A gate pass is for someone on site now: sign them in first, then send them.', action: { label: 'Sign a visitor in', href: '/visitors/new' } }) %>
+  <% } else { %>
+    <ul class="list-group list-group-flush">
+      <% list.forEach((v) => { %>
+        <li class="list-group-item d-flex flex-wrap gap-3 align-items-center">
+          <div class="flex-grow-1">
+            <div class="fw-semibold"><%= v.name %></div>
+            <div class="small text-body-secondary"><%= [v.company, v.purpose, `in since ${fmt.time(v.arrived_at)}`].filter(Boolean).join(' · ') %></div>
+          </div>
+          <% if (v.vehicle_reg) { %><%- include('partials/plate', { reg: v.vehicle_reg }) %><% } %>
+          <a class="btn btn-primary btn-sm" href="/visitors/<%= v.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>

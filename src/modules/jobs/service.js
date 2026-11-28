@@ -172,16 +172,18 @@ export async function vehicleChoices(customerId, siteId, keepId = null) {
 export async function createJob(input, actor) {
   return db.transaction(async (trx) => {
     // A stock build (sheet row 58): no customer to price it for yet, so stores issue to it from the start.
-    // What it is (build_kind), Jome-Tech building the chassis itself: a trailer or tanker, registered from the
-    // start (a trailer or semi-trailer with a temporary tag until its chassis number is stamped, checked in here
-    // as built here) so it is released and cleared like any vehicle once sold; or a body only, with no vehicle
-    // until a buyer's truck is chosen. A stock build is never opened on a vehicle that came in.
+    // What it is (build_kind, STOCK_KINDS), with its specification: a tanker, semi-trailer or pulling trailer
+    // (chassis built here) is registered from the start (a temporary tag until its chassis number is stamped,
+    // checked in here as built here) so it is released and cleared like any vehicle once sold; a body has no
+    // vehicle until a buyer's truck is chosen. A stock build is never opened on a vehicle that came in.
     const stock = Boolean((await trx('customers').where({ id: input.customer_id }).first('is_stock'))?.is_stock);
-    const kind = stock ? (input.build_kind ?? 'body') : null;
-    if (stock) input = { ...input, vehicle_id: null };
+    const kind = stock ? STOCK_KINDS[input.build_kind] : null;
+    if (stock && !kind) throw err(422, 'Choose what it is', 'build_kind');
+    if (stock && !input.vehicle_description) throw err(422, `Give its specification, e.g. ${kind.example}`, 'vehicle_description');
+    // "Tanker: 40,000 L fuel, 3 axle": what it is, then its specification, on the job, job card and reports.
+    if (stock) input = { ...input, vehicle_id: null, vehicle_description: `${kind.label}: ${input.vehicle_description}`.slice(0, 150) };
     if (!input.vehicle_id && !stock) throw err(422, 'Choose the vehicle. It must be checked in here first.', 'vehicle_id');
-    if (!input.vehicle_id && !input.vehicle_description) throw err(422, `Say what is being built, e.g. ${kind === 'body' ? '20ft cargo body' : '40ft flatbed trailer'}`, 'vehicle_description');
-    if (kind === 'trailer') input = { ...input, vehicle_id: await registerTrailer(trx, input, actor) };
+    if (kind?.type) input = { ...input, vehicle_id: await registerTrailer(trx, input, kind, actor) };
     else if (input.vehicle_id) {
       const owner = await trx('vehicles').where({ id: input.vehicle_id }).first('customer_id');
       if (owner?.customer_id !== input.customer_id) throw err(422, 'Choose one of this customer’s vehicles', 'vehicle_id');
@@ -211,10 +213,11 @@ export async function createJob(input, actor) {
  * stamped (added on the vehicle later), owned by stock, and checked in here as built here (no gate arrival,
  * no driver). Sold, it goes to its buyer and leaves through the normal release and gate. Returns its id.
  */
-async function registerTrailer(trx, input, actor) {
+async function registerTrailer(trx, input, kind, actor) {
   const tag = await nextNumber(trx, 'temp_tag');
-  const [vehicleId] = await trx('vehicles').insert({ temp_tag: tag, customer_id: input.customer_id, type: input.trailer_type ?? 'trailer', model: input.vehicle_description.slice(0, 60), created_by: actor.user.id });
-  await audit(trx, actor, { entity: 'vehicle', id: vehicleId, action: 'create', summary: `Stock ${input.trailer_type === 'semi_trailer' ? 'semi-trailer' : 'trailer'} ${tag}: ${input.vehicle_description}` });
+  const [vehicleId] = await trx('vehicles').insert({ temp_tag: tag, customer_id: input.customer_id, type: kind.type, body_type: kind.label,
+    model: input.vehicle_description.slice(0, 60), created_by: actor.user.id });
+  await audit(trx, actor, { entity: 'vehicle', id: vehicleId, action: 'create', summary: `Stock build ${tag}: ${input.vehicle_description}` });
   const number = await nextNumber(trx, 'checkin');
   const [checkinId] = await trx('checkins').insert({
     number, site_id: actor.site.id, vehicle_id: vehicleId, purpose: 'fabrication', customer_id: input.customer_id,
@@ -303,6 +306,17 @@ export async function assignCustomer(jobId, customerId, actor, mountId = null) {
     return buyer;
   });
 }
+
+/**
+ * What a stock build is (sheet row 58), as Jome-Tech names them. A type: registered as that kind of vehicle
+ * from the start (a pulling trailer is a full trailer on its own axles; tankers ride on a prime mover).
+ */
+export const STOCK_KINDS = {
+  body: { label: 'Body', hint: 'To fit on a buyer’s truck. No vehicle until it is sold', example: 'Tipper for an FVZ or FRR' },
+  tanker: { label: 'Tanker', type: 'semi_trailer', hint: 'Registered from the start, as a semi-trailer', example: '40,000 L fuel, 3 axle' },
+  semi_trailer: { label: 'Semi-trailer', type: 'semi_trailer', hint: 'Registered from the start', example: '40ft skeletal, 3 axle' },
+  pulling: { label: 'Pulling', type: 'trailer', hint: 'A pulling (drawbar) trailer, registered from the start', example: '4 axles, tipper pulling' },
+};
 
 /** Why stores may issue to a stock build without a proforma (shown where the go-ahead is shown). */
 export const STOCK_REASON = 'Stock build: no customer yet';
