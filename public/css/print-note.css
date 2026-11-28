@@ -179,6 +179,14 @@ footer { display: flex; justify-content: space-between; margin-top: 16px; paddin
   .pf-lines th, .pf-lines td { padding-left: 4px; padding-right: 4px; }
   .pf-bank td:first-child { width: auto; }
   .pf-sign-line { width: 100%; max-width: 60mm; }
+  /* Customer and vehicle gate passes: logo and title side by side, the stamp centred under them,
+     so nothing runs past the right edge of the sheet (Android, sheet row: "misaligned"). */
+  .gp-company { font-size: 15pt; }
+  .gp-head { grid-template-columns: auto 1fr; gap: 8px; }
+  .gp-logo { height: 11mm; }
+  .gp-stamp { grid-column: 1 / -1; justify-self: center; }
+  .gp-stamp .jt-stamp { width: 44mm; }
+  .gp-grid td { height: auto; }
 }
 
 /* Quality inspection report (qc/views/print.ejs) */

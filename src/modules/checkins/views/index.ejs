@@ -76,12 +76,14 @@
   <% } else { %>
     <div class="table-responsive">
       <table class="table jt-table">
-        <thead><tr><th>Vehicle</th><th>Check-in</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th><th>Arrived</th><% if (tab === 'out') { %><th>Left</th><% } %><th class="text-end">Days in</th><% if (rowSend) { %><th class="text-end"><span class="visually-hidden">Actions</span></th><% } %></tr></thead>
+        <thead><tr><th>Vehicle</th><th>Check-in</th><th>Owner</th><th class="d-none d-lg-table-cell">Brought in by</th><th>Arrived</th><% if (tab === 'out') { %><th>Left</th><% } %><th class="text-end">Days in</th><% if (rowSend) { %><th class="text-end d-none d-md-table-cell"><span class="visually-hidden">Actions</span></th><% } %></tr></thead>
         <tbody>
           <% list.forEach((c) => { %>
             <tr>
               <td><a class="jt-row-link" href="/check-in/<%= c.id %>"><%- vehicleCell(c) %></a>
-                <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %></td>
+                <% if (c.make || c.model) { %><span class="jt-sub"><%= [c.make, c.model].filter(Boolean).join(' ') %></span><% } %>
+                <%# Phones: the table scrolls sideways, so Send sits under the vehicle instead of in the last column. %>
+                <% if (rowSend && c.status === 'in_workshop' && !c.moving_to) { %><a class="btn btn-send btn-sm mt-2 d-md-none" href="/check-in/<%= c.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a><% } %></td>
               <td><span class="font-monospace small"><%= c.number %></span>
                 <% if (purposeLabel(c.purpose)) { %><span class="jt-sub"><%= purposeLabel(c.purpose) %></span><% } %>
                 <% if (tab === 'in' && c.moving_to) { %><span class="d-block mt-1"><%- include('partials/pill', { text: `On the way to ${c.moving_to}`, tone: 'info' }) %></span><% } %>
@@ -93,7 +95,7 @@
               <% if (tab === 'out') { %><td class="text-nowrap"><%= fmt.dateTime(c.checked_out_at) %></td><% } %>
               <td class="text-end text-nowrap jt-num"><%= daysIn(c.checked_in_at, c.checked_out_at ?? new Date()) %></td>
               <%# To the other site, right from the list (sheet): highlighted in its own colour. %>
-              <% if (rowSend) { %><td class="text-end"><% if (c.status === 'in_workshop' && !c.moving_to) { %><a class="btn btn-send btn-sm text-nowrap" href="/check-in/<%= c.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a><% } %></td><% } %>
+              <% if (rowSend) { %><td class="text-end d-none d-md-table-cell"><% if (c.status === 'in_workshop' && !c.moving_to) { %><a class="btn btn-send btn-sm text-nowrap" href="/check-in/<%= c.id %>/send"><i class="bi bi-arrow-left-right"></i>Send</a><% } %></td><% } %>
             </tr>
           <% }) %>
         </tbody>
